@@ -28,7 +28,16 @@ function readIsDirty(): boolean {
   try {
     // Any staged/unstaged/untracked change vs HEAD counts as dirty — a build made while the
     // working tree doesn't match HEAD must never claim to be exactly that commit.
-    return execSync('git status --porcelain', { cwd: rootDir }).toString().trim().length > 0;
+    const lines = execSync('git status --porcelain', { cwd: rootDir })
+      .toString()
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      // Vite bundles this very config file into a transient sibling temp file
+      // (vite.config.ts.timestamp-*.mjs) while evaluating it and deletes it right after —
+      // ignore that self-inflicted untracked artifact so a genuinely clean tree isn't
+      // misreported as dirty just because this code happened to run.
+      .filter((line) => !/vite\.config\.ts\.timestamp-.*\.mjs$/.test(line.trim()));
+    return lines.length > 0;
   } catch {
     return false;
   }
