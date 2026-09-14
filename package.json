@@ -1,0 +1,31 @@
+{
+  "name": "game-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/game-core.iife.js",
+  "module": "./dist/game-core.es.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/game-core.es.js",
+      "default": "./dist/game-core.iife.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "build": "vite build",
+    "sync:word-tide": "node scripts/sync-word-tide.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8",
+    "vite-plugin-dts": "^4.2.4",
+    "vitest": "^2.1.2"
+  }
+}
