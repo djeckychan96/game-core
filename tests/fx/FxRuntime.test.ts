@@ -170,6 +170,248 @@ describe('FxRuntime', () => {
     });
   });
 
+  test('registerPool throws a clear error on a duplicate key instead of silently replacing it', () => {
+    const { runtime } = createRuntime(2);
+    expect(() =>
+      runtime.registerPool(poolKey, {
+        createNode: () => createFakeNode(999),
+        maxSize: 2
+      })
+    ).toThrowError(/already/i);
+  });
+
+  test('a throwing onImpact is caught, reported, and does not stop the other effect from updating', () => {
+    const errors: unknown[] = [];
+    let nextId = 1;
+    const runtime = new FxRuntime<FakeNode>(createFakeSurface(), {
+      onEffectError: (error, context) => {
+        errors.push({ error, context });
+      }
+    });
+    runtime.registerPool(poolKey, {
+      createNode: () => createFakeNode(nextId++),
+      maxSize: 4,
+      prewarm: 4
+    });
+
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      impactT: 0.5,
+      onImpact: () => {
+        throw new Error('boom in onImpact');
+      }
+    });
+    let otherEffectAdvanced = false;
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 100, y: 0 },
+      durationMs: 100,
+      onComplete: () => {
+        otherEffectAdvanced = true;
+      }
+    });
+
+    expect(() => runtime.update(100)).not.toThrow();
+
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { context: { phase: string } }).context.phase).toBe('onImpact');
+    // the second effect still reached completion in the very same update() call that had the
+    // first effect's onImpact throw — the throw never aborted the rest of the frame.
+    expect(otherEffectAdvanced).toBe(true);
+  });
+
+  test('a throwing onComplete is caught and release still happens (no effect left active forever)', () => {
+    const errors: unknown[] = [];
+    let nextId = 1;
+    const runtime = new FxRuntime<FakeNode>(createFakeSurface(), {
+      onEffectError: (error, context) => errors.push({ error, context })
+    });
+    runtime.registerPool(poolKey, { createNode: () => createFakeNode(nextId++), maxSize: 2, prewarm: 2 });
+
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 20,
+      onComplete: () => {
+        throw new Error('boom in onComplete');
+      }
+    });
+
+    expect(() => runtime.update(20)).not.toThrow();
+
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { context: { phase: string } }).context.phase).toBe('onComplete');
+    expect(runtime.getStats()).toMatchObject({ activeEffects: 0, poolReleases: 1 });
+  });
+
+  test('a throwing onCancel is caught and the node is still released', () => {
+    const errors: unknown[] = [];
+    let nextId = 1;
+    const runtime = new FxRuntime<FakeNode>(createFakeSurface(), {
+      onEffectError: (error, context) => errors.push({ error, context })
+    });
+    runtime.registerPool(poolKey, { createNode: () => createFakeNode(nextId++), maxSize: 2, prewarm: 2 });
+
+    const handle = runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      onCancel: () => {
+        throw new Error('boom in onCancel');
+      }
+    });
+
+    expect(() => handle?.cancel()).not.toThrow();
+    expect(errors).toHaveLength(1);
+    expect((errors[0] as { context: { phase: string } }).context.phase).toBe('onCancel');
+    expect(runtime.getStats()).toMatchObject({ activeEffects: 0, poolReleases: 1 });
+  });
+
+  test('onCancel fires exactly once, onComplete/onCancel are mutually exclusive, and double cancel is a no-op', () => {
+    let completions = 0;
+    let cancellations = 0;
+    const { runtime } = createRuntime(1);
+
+    const handle = runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      onComplete: () => {
+        completions += 1;
+      },
+      onCancel: () => {
+        cancellations += 1;
+      }
+    });
+
+    expect(handle?.cancel()).toBe(true);
+    expect(handle?.cancel()).toBe(false); // already cancelled: no-op, not a second onCancel
+    expect(cancellations).toBe(1);
+    expect(completions).toBe(0); // a cancelled effect never completes
+
+    runtime.update(1000); // nothing left to update; must not resurrect the cancelled effect
+    expect(completions).toBe(0);
+    expect(cancellations).toBe(1);
+  });
+
+  test('an effect that completes normally never fires onCancel', () => {
+    let completions = 0;
+    let cancellations = 0;
+    const { runtime } = createRuntime(1);
+
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 20,
+      onComplete: () => {
+        completions += 1;
+      },
+      onCancel: () => {
+        cancellations += 1;
+      }
+    });
+
+    runtime.update(20);
+
+    expect(completions).toBe(1);
+    expect(cancellations).toBe(0);
+  });
+
+  test('cancelScope fires onCancel exactly once per effect it actually cancels', () => {
+    let cancelled: number[] = [];
+    const { runtime } = createRuntime(4);
+
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      scope: 'level-complete',
+      onCancel: ({ id }) => cancelled.push(id)
+    });
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      scope: 'other-scope',
+      onCancel: ({ id }) => cancelled.push(id)
+    });
+
+    const count = runtime.cancelScope('level-complete');
+
+    expect(count).toBe(1);
+    expect(cancelled).toHaveLength(1);
+    expect(runtime.getStats().activeEffects).toBe(1); // the other-scope effect is still active
+  });
+
+  test('cancelAll fires onCancel exactly once for every still-active effect', () => {
+    const cancelled: number[] = [];
+    const { runtime } = createRuntime(4);
+
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      onCancel: ({ id }) => cancelled.push(id)
+    });
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      onCancel: ({ id }) => cancelled.push(id)
+    });
+
+    const count = runtime.cancelAll();
+
+    expect(count).toBe(2);
+    expect(cancelled).toHaveLength(2);
+    expect(runtime.getStats().activeEffects).toBe(0);
+  });
+
+  test('dispose cancels active effects and really destroys every pool node', () => {
+    let nextId = 1;
+    const surface = createFakeSurface();
+    const runtime = new FxRuntime<FakeNode>(surface);
+    const nodes: FakeNode[] = [];
+    runtime.registerPool(poolKey, {
+      createNode: () => {
+        const node = createFakeNode(nextId++);
+        nodes.push(node);
+        return node;
+      },
+      maxSize: 2,
+      prewarm: 2
+    });
+
+    let cancelled = false;
+    runtime.addProjectile({
+      poolKey,
+      from: { x: 0, y: 0 },
+      to: { x: 10, y: 0 },
+      durationMs: 100,
+      onCancel: () => {
+        cancelled = true;
+      }
+    });
+
+    runtime.dispose();
+
+    expect(cancelled).toBe(true);
+    expect(runtime.getStats().activeEffects).toBe(0);
+    for (const node of nodes) expect(node.destroyed).toBe(true);
+  });
+
   test('prewarmed capacity prevents node creation and misses during a burst', () => {
     const { runtime } = createRuntime(4, 4);
     const before = runtime.getStats();

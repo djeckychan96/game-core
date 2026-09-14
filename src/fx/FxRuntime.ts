@@ -9,11 +9,15 @@ import {
 } from './easing';
 import {
   createQuadraticControlPoint,
-  quadraticBezierPoint,
-  quadraticBezierTangentAngle
+  quadraticBezierPointInto,
+  quadraticBezierTangentAngleInto
 } from './trajectories';
 import type {
+  FxEffectCallback,
   FxEffectCallbackContext,
+  FxEffectCallbackPhase,
+  FxEffectErrorContext,
+  FxEffectErrorHandler,
   FxEffectHandle,
   FxPoint,
   FxPoolKey,
@@ -25,8 +29,25 @@ import type {
   FxScope
 } from './types';
 
-interface FxRuntimeOptions {
+interface FxRuntimeOptions<TNode extends object = object> {
   random?: () => number;
+  /**
+   * Called whenever a host callback (onImpact/onComplete/onCancel) throws. Defaults to a
+   * console.error fallback so failures are never silently swallowed even when FxRuntime is
+   * used standalone. Wire this to a shared error boundary (e.g. CoreRuntime.reportError) when
+   * this runtime is registered as a CoreRuntime module. This handler itself is never allowed
+   * to propagate an exception back into update()/cancel().
+   */
+  onEffectError?: FxEffectErrorHandler<TNode>;
+}
+
+function defaultOnEffectError<TNode extends object>(
+  error: unknown,
+  context: FxEffectErrorContext<TNode>
+): void {
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    console.error('[FxRuntime] effect callback threw', context, error);
+  }
 }
 
 type RuntimeEffect<TNode extends object> = ProjectileEffect<TNode> | RadialBurstParticleEffect<TNode>;
@@ -59,6 +80,7 @@ interface ProjectileEffect<TNode extends object> extends RuntimeEffectBase<TNode
   alphaKeyframes: FxScalarKeyframe[];
   onImpact?: (context: FxEffectCallbackContext<TNode>) => void;
   onComplete?: (context: FxEffectCallbackContext<TNode>) => void;
+  onCancel?: (context: FxEffectCallbackContext<TNode>) => void;
 }
 
 interface RadialBurstParticleEffect<TNode extends object> extends RuntimeEffectBase<TNode> {
@@ -96,18 +118,26 @@ export class FxRuntime<TNode extends object = object> {
   private readonly pools = new Map<FxPoolKey, FxPool<TNode>>();
   private readonly effects = new Map<number, RuntimeEffect<TNode>>();
   private readonly random: () => number;
+  private readonly onEffectError: FxEffectErrorHandler<TNode>;
   private nextEffectId = 1;
   private droppedEffects = 0;
   private lastUpdateMs = 0;
   private maxUpdateMs = 0;
   private needsRender = false;
+  // Reused every applyProjectile() call so trajectory math allocates no {x,y} objects per frame.
+  private readonly scratchPoint: FxPoint = { x: 0, y: 0 };
+  private readonly scratchDerivative: FxPoint = { x: 0, y: 0 };
 
-  constructor(surface: FxSurface<TNode>, options: FxRuntimeOptions = {}) {
+  constructor(surface: FxSurface<TNode>, options: FxRuntimeOptions<TNode> = {}) {
     this.surface = surface;
     this.random = options.random ?? Math.random;
+    this.onEffectError = options.onEffectError ?? defaultOnEffectError;
   }
 
   registerPool(key: FxPoolKey, registration: FxPoolRegistration<TNode>): FxPool<TNode> {
+    if (this.pools.has(key)) {
+      throw new Error(`FxRuntime: a pool registered under key "${key}" already exists`);
+    }
     const poolOptions = {
       surface: this.surface,
       createNode: registration.createNode,
@@ -170,6 +200,7 @@ export class FxRuntime<TNode extends object = object> {
     if (options.scope !== undefined) effect.scope = options.scope;
     if (options.onImpact) effect.onImpact = options.onImpact;
     if (options.onComplete) effect.onComplete = options.onComplete;
+    if (options.onCancel) effect.onCancel = options.onCancel;
 
     pool.surface.attach(node);
     this.applyProjectile(effect, 0);
@@ -296,7 +327,7 @@ export class FxRuntime<TNode extends object = object> {
         this.applyProjectile(effect, progress);
         if (!effect.impactFired && progress >= effect.impactT) {
           effect.impactFired = true;
-          effect.onImpact?.(createContext(effect, progress));
+          this.invokeEffectCallback(effect, effect.onImpact, 'onImpact', progress);
         }
       } else {
         this.applyRadialBurstParticle(effect, progress);
@@ -314,10 +345,12 @@ export class FxRuntime<TNode extends object = object> {
       if (effect.kind === 'projectile') {
         if (!effect.impactFired) {
           effect.impactFired = true;
-          effect.onImpact?.(createContext(effect, 1));
+          this.invokeEffectCallback(effect, effect.onImpact, 'onImpact', 1);
         }
-        effect.onComplete?.(createContext(effect, 1));
+        this.invokeEffectCallback(effect, effect.onComplete, 'onComplete', 1);
       }
+      // Callbacks above never throw past invokeEffectCallback, so cleanup below always runs
+      // even if onImpact/onComplete failed.
       this.releaseEffect(effect);
       this.effects.delete(id);
       changed = true;
@@ -331,8 +364,8 @@ export class FxRuntime<TNode extends object = object> {
     let cancelled = 0;
     for (const effect of Array.from(this.effects.values())) {
       if (effect.scope !== scope) continue;
-      this.releaseEffect(effect);
-      this.effects.delete(effect.id);
+      if (!this.effects.has(effect.id)) continue; // already cancelled by a reentrant call above
+      this.cancelEffect(effect);
       cancelled += 1;
     }
     if (cancelled > 0) this.needsRender = true;
@@ -340,13 +373,27 @@ export class FxRuntime<TNode extends object = object> {
   }
 
   cancelAll(): number {
-    const total = this.effects.size;
+    let cancelled = 0;
     for (const effect of Array.from(this.effects.values())) {
-      this.releaseEffect(effect);
+      if (!this.effects.has(effect.id)) continue; // already cancelled by a reentrant call above
+      this.cancelEffect(effect);
+      cancelled += 1;
     }
-    this.effects.clear();
-    if (total > 0) this.needsRender = true;
-    return total;
+    if (cancelled > 0) this.needsRender = true;
+    return cancelled;
+  }
+
+  /**
+   * Tears down every registered pool's owned nodes (via FxSurface.destroyNode) and clears all
+   * active effects. Intended for permanent shutdown, not for routine scene/level transitions
+   * (use cancelScope/cancelAll for those, which keep the pools reusable).
+   */
+  dispose(): void {
+    this.cancelAll();
+    for (const pool of this.pools.values()) {
+      pool.clear();
+    }
+    this.pools.clear();
   }
 
   getStats(): FxRuntimeStats {
@@ -386,7 +433,7 @@ export class FxRuntime<TNode extends object = object> {
 
   private applyProjectile(effect: ProjectileEffect<TNode>, progress: number): void {
     const eased = easeInOutCubic01(progress);
-    const point = quadraticBezierPoint(effect.from, effect.control, effect.to, eased);
+    const point = quadraticBezierPointInto(this.scratchPoint, effect.from, effect.control, effect.to, eased);
     const scale = effect.scaleKeyframes.length > 0
       ? interpolateKeyframes(progress, effect.scaleKeyframes, effect.endScale)
       : lerp(effect.startScale, effect.endScale, easeOutCubic01(progress));
@@ -396,7 +443,10 @@ export class FxRuntime<TNode extends object = object> {
     effect.pool.surface.setScale(effect.node, Math.max(0.0001, scale));
     effect.pool.surface.setAlpha(effect.node, Math.max(0, alpha));
     if (effect.rotationMode === 'trajectory') {
-      effect.pool.surface.setRotation(effect.node, quadraticBezierTangentAngle(effect.from, effect.control, effect.to, eased));
+      effect.pool.surface.setRotation(
+        effect.node,
+        quadraticBezierTangentAngleInto(effect.from, effect.control, effect.to, eased, this.scratchDerivative)
+      );
     } else if (effect.rotationMode === 'spin') {
       effect.pool.surface.setRotation(effect.node, lerp(effect.startRotation, effect.endRotation, eased));
     } else {
@@ -423,14 +473,53 @@ export class FxRuntime<TNode extends object = object> {
     effect.pool.release(effect.node);
   }
 
+  /**
+   * Cancels one effect: removes it from the active map FIRST (so a reentrant cancel of the same
+   * id from inside onCancel itself is a safe no-op instead of firing/releasing twice), then fires
+   * onCancel (projectile only, never onImpact/onComplete), then always releases the node — even
+   * if onCancel threw.
+   */
+  private cancelEffect(effect: RuntimeEffect<TNode>): void {
+    this.effects.delete(effect.id);
+    if (effect.kind === 'projectile') {
+      this.invokeEffectCallback(effect, effect.onCancel, 'onCancel', this.currentProgress(effect));
+    }
+    this.releaseEffect(effect);
+  }
+
+  private currentProgress(effect: RuntimeEffect<TNode>): number {
+    return clamp01((effect.elapsedMs - effect.delayMs) / effect.durationMs);
+  }
+
+  private invokeEffectCallback(
+    effect: RuntimeEffect<TNode>,
+    callback: FxEffectCallback<TNode> | undefined,
+    phase: FxEffectCallbackPhase,
+    progress: number
+  ): void {
+    if (!callback) return;
+    try {
+      callback(createContext(effect, progress));
+    } catch (error) {
+      this.reportEffectError(error, effect, phase);
+    }
+  }
+
+  private reportEffectError(error: unknown, effect: RuntimeEffect<TNode>, phase: FxEffectCallbackPhase): void {
+    try {
+      this.onEffectError(error, { id: effect.id, kind: effect.kind, phase, node: effect.node });
+    } catch {
+      // the error handler itself must never be able to take down update()/cancel()
+    }
+  }
+
   private createHandle(id: number): FxEffectHandle {
     return {
       id,
       cancel: () => {
         const effect = this.effects.get(id);
         if (!effect) return false;
-        this.releaseEffect(effect);
-        this.effects.delete(id);
+        this.cancelEffect(effect);
         this.needsRender = true;
         return true;
       }

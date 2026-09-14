@@ -23,6 +23,22 @@ export interface FxEffectCallbackContext<TNode extends object> {
 
 export type FxEffectCallback<TNode extends object> = (context: FxEffectCallbackContext<TNode>) => void;
 
+export type FxEffectKind = 'projectile' | 'radial-burst-particle';
+
+export type FxEffectCallbackPhase = 'onImpact' | 'onComplete' | 'onCancel';
+
+export interface FxEffectErrorContext<TNode extends object> {
+  id: number;
+  kind: FxEffectKind;
+  phase: FxEffectCallbackPhase;
+  node: TNode;
+}
+
+export type FxEffectErrorHandler<TNode extends object> = (
+  error: unknown,
+  context: FxEffectErrorContext<TNode>
+) => void;
+
 export interface FxProjectileOptions<TNode extends object> {
   poolKey: FxPoolKey;
   from: FxPoint;
@@ -42,6 +58,8 @@ export interface FxProjectileOptions<TNode extends object> {
   alphaKeyframes?: FxScalarKeyframe[];
   onImpact?: FxEffectCallback<TNode>;
   onComplete?: FxEffectCallback<TNode>;
+  /** Fires exactly once if the effect is cancelled (handle.cancel/cancelScope/cancelAll) instead of completing normally. Never fires together with onComplete for the same effect. */
+  onCancel?: FxEffectCallback<TNode>;
   scope?: FxScope;
 }
 

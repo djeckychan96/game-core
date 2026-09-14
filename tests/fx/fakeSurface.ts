@@ -10,6 +10,8 @@ export interface FakeNode {
   rotation: number;
   alpha: number;
   visible: boolean;
+  destroyed: boolean;
+  destroyCallCount: number;
 }
 
 export function createFakeNode(id: number): FakeNode {
@@ -22,7 +24,9 @@ export function createFakeNode(id: number): FakeNode {
     scaleY: 1,
     rotation: 0,
     alpha: 1,
-    visible: false
+    visible: false,
+    destroyed: false,
+    destroyCallCount: 0
   };
 }
 
@@ -50,6 +54,10 @@ export function createFakeSurface(): FxSurface<FakeNode> {
     },
     setVisible(node, visible) {
       node.visible = visible;
+    },
+    destroyNode(node) {
+      node.destroyed = true;
+      node.destroyCallCount += 1;
     }
   };
 }

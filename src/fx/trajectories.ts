@@ -13,24 +13,46 @@ export function createQuadraticControlPoint(
   };
 }
 
-export function quadraticBezierPoint(from: FxPoint, control: FxPoint, to: FxPoint, t: number): FxPoint {
+/**
+ * Allocation-free variant of the quadratic Bezier point: writes into `out` and returns it.
+ * `out` is caller-owned scratch storage, reused across frames/effects.
+ */
+export function quadraticBezierPointInto(
+  out: FxPoint,
+  from: FxPoint,
+  control: FxPoint,
+  to: FxPoint,
+  t: number
+): FxPoint {
   const p = clamp01(t);
   const inv = 1 - p;
-  return {
-    x: inv * inv * from.x + 2 * inv * p * control.x + p * p * to.x,
-    y: inv * inv * from.y + 2 * inv * p * control.y + p * p * to.y
-  };
+  out.x = inv * inv * from.x + 2 * inv * p * control.x + p * p * to.x;
+  out.y = inv * inv * from.y + 2 * inv * p * control.y + p * p * to.y;
+  return out;
 }
 
-export function quadraticBezierDerivative(from: FxPoint, control: FxPoint, to: FxPoint, t: number): FxPoint {
+/** Allocation-free variant of the quadratic Bezier derivative: writes into `out` and returns it. */
+export function quadraticBezierDerivativeInto(
+  out: FxPoint,
+  from: FxPoint,
+  control: FxPoint,
+  to: FxPoint,
+  t: number
+): FxPoint {
   const p = clamp01(t);
-  return {
-    x: 2 * (1 - p) * (control.x - from.x) + 2 * p * (to.x - control.x),
-    y: 2 * (1 - p) * (control.y - from.y) + 2 * p * (to.y - control.y)
-  };
+  out.x = 2 * (1 - p) * (control.x - from.x) + 2 * p * (to.x - control.x);
+  out.y = 2 * (1 - p) * (control.y - from.y) + 2 * p * (to.y - control.y);
+  return out;
 }
 
-export function quadraticBezierTangentAngle(from: FxPoint, control: FxPoint, to: FxPoint, t: number): number {
-  const derivative = quadraticBezierDerivative(from, control, to, t);
-  return Math.atan2(derivative.y, derivative.x);
+/** Allocation-free variant of the tangent angle: uses `scratch` for the intermediate derivative point. */
+export function quadraticBezierTangentAngleInto(
+  from: FxPoint,
+  control: FxPoint,
+  to: FxPoint,
+  t: number,
+  scratch: FxPoint
+): number {
+  quadraticBezierDerivativeInto(scratch, from, control, to, t);
+  return Math.atan2(scratch.y, scratch.x);
 }

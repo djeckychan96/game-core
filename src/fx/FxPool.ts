@@ -85,9 +85,17 @@ export class FxPool<TNode extends object> {
     return true;
   }
 
+  /**
+   * Real teardown: permanently destroys every node this pool owns (active and idle) via
+   * `surface.destroyNode`, then resets bookkeeping so the pool can be refilled from scratch.
+   * Unlike `release()`, this never returns nodes to `available` for reuse.
+   */
   clear(): void {
     for (const node of this.active) {
-      this.resetNode(node);
+      this.destroyNode(node);
+    }
+    for (const node of this.available) {
+      this.destroyNode(node);
     }
     this.active.clear();
     this.available.length = 0;
@@ -119,5 +127,10 @@ export class FxPool<TNode extends object> {
     this.surface.setPosition(node, 0, 0);
     this.surface.setScale(node, 1, 1);
     this.surface.setRotation(node, 0);
+  }
+
+  private destroyNode(node: TNode): void {
+    this.surface.detach(node);
+    this.surface.destroyNode(node);
   }
 }

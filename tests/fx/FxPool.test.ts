@@ -44,7 +44,7 @@ describe('FxPool', () => {
     });
   });
 
-  test('release detaches and resets node state before reuse', () => {
+  test('release detaches and resets node state before reuse, and does NOT destroy the node', () => {
     let nextId = 1;
     const surface = createFakeSurface();
     const pool = new FxPool({
@@ -75,7 +75,9 @@ describe('FxPool', () => {
       scaleY: 1,
       rotation: 0,
       alpha: 1,
-      visible: false
+      visible: false,
+      destroyed: false,
+      destroyCallCount: 0
     });
     expect(pool.stats()).toMatchObject({
       releases: 1,
@@ -106,7 +108,7 @@ describe('FxPool', () => {
     });
   });
 
-  test('clear releases active and idle nodes without destroying capacity accounting', () => {
+  test('clear resets pool bookkeeping (active/idle counts drop to zero, capacity unchanged)', () => {
     let nextId = 1;
     const pool = new FxPool({
       surface: createFakeSurface(),
@@ -149,5 +151,51 @@ describe('FxPool', () => {
       active: 2,
       misses: 1
     });
+  });
+
+  test('clear real-destroys every active and idle node exactly once via surface.destroyNode', () => {
+    let nextId = 1;
+    const created: ReturnType<typeof createFakeNode>[] = [];
+    const pool = new FxPool({
+      surface: createFakeSurface(),
+      createNode: () => {
+        const node = createFakeNode(nextId++);
+        created.push(node);
+        return node;
+      },
+      maxSize: 3
+    });
+    pool.prewarm(3); // 3 idle nodes
+    const active = pool.acquire(); // one of them becomes active, two stay idle
+    expect(active).not.toBeNull();
+    expect(created).toHaveLength(3);
+    for (const node of created) expect(node.destroyed).toBe(false);
+
+    pool.clear();
+
+    for (const node of created) {
+      expect(node.destroyed).toBe(true);
+      expect(node.destroyCallCount).toBe(1);
+    }
+    expect(pool.stats()).toMatchObject({ active: 0, available: 0 });
+  });
+
+  test('calling clear twice never double-destroys a node', () => {
+    let nextId = 1;
+    const pool = new FxPool({
+      surface: createFakeSurface(),
+      createNode: () => createFakeNode(nextId++),
+      maxSize: 2
+    });
+    pool.prewarm(2);
+    const node = pool.acquire();
+    expect(node).not.toBeNull();
+    if (!node) return;
+
+    pool.clear();
+    expect(node.destroyCallCount).toBe(1);
+
+    pool.clear(); // pool is already empty; must not touch already-destroyed nodes again
+    expect(node.destroyCallCount).toBe(1);
   });
 });
