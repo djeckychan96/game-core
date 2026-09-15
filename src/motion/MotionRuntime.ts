@@ -243,48 +243,88 @@ export class MotionRuntime implements SequenceHost {
       }
     }
 
-    const progress = clamp01(localMs / op.durationMs);
-    const eased = op.ease(progress);
+    // How many FULL passes' worth of time localMs spans, counted from op's current pass. 0 means
+    // still mid-pass (the common case, exactly one update() worth of progress). >=1 means this
+    // single call's deltaMs was large enough to fully consume one or more passes (a long-paused
+    // tab waking up, or repeat with a small durationMs relative to a frame) — handled below with
+    // bounded scalar arithmetic, never a per-pass loop, and never a per-skipped-pass callback
+    // (v0.2 has no onRepeat; only the final landed onUpdate this call, and onComplete exactly
+    // once if this call's overshoot reaches exhaustion).
+    const passesCompleted = Math.floor(localMs / op.durationMs);
 
-    try {
-      for (let i = 0; i < op.bindingSpecs.length; i++) {
-        const binding = op.bindingSpecs[i];
-        const from = op.resolvedFrom[i];
-        if (!binding || from === undefined) continue;
-        const passStart = op.direction === 1 ? from : binding.to;
-        const passEnd = op.direction === 1 ? binding.to : from;
-        binding.set(lerp(passStart, passEnd, eased));
+    if (passesCompleted === 0) {
+      const progress = localMs / op.durationMs;
+      const eased = op.ease(progress);
+      try {
+        this.applyEasedValue(op, eased);
+      } catch (error) {
+        return this.failTween(op, error, 'binding-set');
       }
-    } catch (error) {
-      return this.failTween(op, error, 'binding-set');
+      this.invokeUpdateCallback(op, progress);
+      return 'running';
     }
 
-    this.invokeUpdateCallback(op, progress);
+    const remainderMs = localMs - passesCompleted * op.durationMs;
+    const lastCompletedPassIndex = op.passIndex + passesCompleted - 1;
 
-    if (progress < 1) return 'running';
-
-    if (op.passIndex < op.repeat) {
-      // More passes remain: snap to this pass's exact end, flip direction if yoyo, and let any
-      // overshoot carry into the next pass on a later update()/advance call (no per-frame
-      // allocation, no same-frame multi-pass loop needed for ordinary frame deltas).
+    if (op.repeat !== Infinity && lastCompletedPassIndex >= op.repeat) {
+      // Exhausted partway through this overshoot: the tween ends at the pass whose index equals
+      // `repeat`, regardless of how much further overshoot time there was beyond that — any
+      // remainder past exhaustion is simply discarded, matching normal (non-overshooting)
+      // exhaustion, which also never looks at leftover time.
+      const transitionsToExhaustion = op.repeat - op.passIndex; // pass completions from here through `repeat`, inclusive
+      if (op.yoyo && transitionsToExhaustion % 2 === 1) {
+        op.direction = op.direction === 1 ? -1 : 1;
+      }
       try {
         this.snapToPassEnd(op);
       } catch (error) {
         return this.failTween(op, error, 'binding-set');
       }
-      op.elapsedMs -= op.durationMs;
-      op.passIndex += 1;
-      if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1;
+      this.invokeUpdateCallback(op, 1);
+      this.invokeCallback(op.onComplete, op.kind, 'onComplete');
+      return 'completed';
+    }
+
+    if (remainderMs === 0) {
+      // Landed exactly on a pass boundary, not exhausted: render the pass that just finished, at
+      // its own end, using the direction that was active DURING that pass — deferring entry into
+      // the next pass's own content to a later call, exactly like the ordinary (non-overshooting)
+      // single-pass case already does. (Only matters for non-yoyo, where a new pass restarts
+      // from `from` rather than continuing from where the previous one ended.)
+      const transitionsIntoLastCompleted = passesCompleted - 1;
+      if (op.yoyo && transitionsIntoLastCompleted % 2 === 1) {
+        op.direction = op.direction === 1 ? -1 : 1;
+      }
+      try {
+        this.snapToPassEnd(op);
+      } catch (error) {
+        return this.failTween(op, error, 'binding-set');
+      }
+      op.passIndex = lastCompletedPassIndex + 1;
+      op.elapsedMs = op.delayMs;
+      if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1; // now entering the next pass
+      this.invokeUpdateCallback(op, 1);
       return 'running';
     }
 
+    // Genuine overshoot past the boundary: land directly inside pass `passIndex + passesCompleted`
+    // at `remainderMs`, without ever observably stopping at any intermediate pass's endpoint
+    // (nothing callback-visible happens there, so nothing needs to be applied there either).
+    if (op.yoyo && passesCompleted % 2 === 1) {
+      op.direction = op.direction === 1 ? -1 : 1;
+    }
+    op.passIndex += passesCompleted;
+    op.elapsedMs = op.delayMs + remainderMs;
+    const progress = remainderMs / op.durationMs; // in (0, 1)
+    const eased = op.ease(progress);
     try {
-      this.snapToPassEnd(op);
+      this.applyEasedValue(op, eased);
     } catch (error) {
       return this.failTween(op, error, 'binding-set');
     }
-    this.invokeCallback(op.onComplete, op.kind, 'onComplete');
-    return 'completed';
+    this.invokeUpdateCallback(op, progress);
+    return 'running';
   }
 
   advanceDelayFrame(op: RuntimeDelay, deltaMs: number): SequenceStatus {
@@ -348,12 +388,25 @@ export class MotionRuntime implements SequenceHost {
     return delayOp;
   }
 
+  // Direct assignment (no lerp) so a true completion lands on the bit-exact `to`/`from` value,
+  // never a floating-point-lerp approximation of it.
   private snapToPassEnd(op: RuntimeTween): void {
     for (let i = 0; i < op.bindingSpecs.length; i++) {
       const binding = op.bindingSpecs[i];
       const from = op.resolvedFrom?.[i];
       if (!binding || from === undefined) continue;
       binding.set(op.direction === 1 ? binding.to : from);
+    }
+  }
+
+  private applyEasedValue(op: RuntimeTween, unit: number): void {
+    for (let i = 0; i < op.bindingSpecs.length; i++) {
+      const binding = op.bindingSpecs[i];
+      const from = op.resolvedFrom?.[i];
+      if (!binding || from === undefined) continue;
+      const passStart = op.direction === 1 ? from : binding.to;
+      const passEnd = op.direction === 1 ? binding.to : from;
+      binding.set(lerp(passStart, passEnd, unit));
     }
   }
 

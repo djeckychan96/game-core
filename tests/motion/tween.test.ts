@@ -610,3 +610,106 @@ describe('MotionRuntime error isolation', () => {
     }
   });
 });
+
+describe('MotionRuntime large frame deltas across repeat/yoyo passes', () => {
+  test('finite repeat: a single huge update() fully consumes all passes in one call', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 2, // 3 passes total
+      onComplete: () => { completions += 1; }
+    });
+
+    motion.update(350); // spans all 3 passes' worth of time in one call
+
+    expect(completions).toBe(1); // exactly once, in THIS update() call
+    expect(read()).toBe(100); // exact final endpoint (no yoyo: ends at `to`)
+
+    motion.update(0); // nothing left; must not fire again
+    expect(completions).toBe(1);
+  });
+
+  test('infinite repeat without yoyo: lands at the correct position inside the current pass immediately', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: Infinity
+    });
+
+    motion.update(350); // 3 full passes + 50ms into the 4th, in one call
+
+    // No yoyo: every pass goes from -> to, so 50ms into any pass is the same arithmetic midpoint.
+    expect(read()).toBe(50);
+  });
+
+  test('infinite repeat + yoyo: direction/parity and position reflect the real elapsed time immediately', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: Infinity,
+      yoyo: true
+    });
+
+    motion.update(350); // 3 full passes (0,1,2) + 50ms into pass 3, in one call
+    // pass 0: from->to (dir +1). pass 1: to->from (dir -1). pass 2: from->to (dir +1).
+    // pass 3 (the one we land inside, 50ms in): direction flipped 3 times from +1 -> -1 -> +1 -> -1.
+    // So pass 3 goes to->from; at its 50% mark the value is still the arithmetic midpoint (50).
+    expect(read()).toBe(50);
+
+    // Prove direction really is -1 (to->from) for pass 3, not +1: finish pass 3 and check the endpoint.
+    motion.update(50); // completes pass 3 (50ms remaining of its 100ms)
+    expect(read()).toBe(0); // pass 3 ends at `from` (0), not `to` (100)
+  });
+
+  test('exact pass boundary: a single update() landing exactly on a boundary does not double-complete or skip a pass', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: Infinity,
+      yoyo: true,
+      onComplete: () => { completions += 1; }
+    });
+
+    motion.update(100); // lands exactly on the pass-0/pass-1 boundary
+
+    expect(completions).toBe(0); // infinite repeat never completes naturally
+    expect(read()).toBe(100); // sitting exactly at the boundary value (`to`, end of pass 0 / start of pass 1)
+
+    motion.update(50); // 50ms into pass 1 (direction now -1: to -> from)
+    expect(read()).toBe(50); // arithmetic midpoint again
+
+    motion.update(50); // completes pass 1 exactly
+    expect(read()).toBe(0); // pass 1 ends at `from`
+  });
+
+  test('exact boundary with finite repeat does not overshoot into an extra pass', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 1, // 2 passes total (index 0 and 1)
+      onComplete: () => { completions += 1; }
+    });
+
+    motion.update(100); // exactly finishes pass 0, lands exactly at the start of pass 1
+
+    expect(completions).toBe(0); // pass 1 still remains
+    expect(read()).toBe(100);
+
+    motion.update(100); // exactly finishes pass 1 -> exhausted, completes
+    expect(completions).toBe(1);
+    expect(read()).toBe(100);
+  });
+});
