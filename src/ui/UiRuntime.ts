@@ -54,9 +54,9 @@ function defaultOnUiError(error: unknown, context: UiErrorContext): void {
 const BUTTON_SCOPE_PREFIX = 'ui:button:';
 const WINDOW_SCOPE_PREFIX = 'ui:window:';
 
-export class UiRuntime implements CoreRuntimeModule, UiHost {
-  readonly motion: UiMotionDriver;
-  readonly stats: UiMutableStats = {
+export class UiRuntime implements CoreRuntimeModule {
+  private readonly motion: UiMotionDriver;
+  private readonly stats: UiMutableStats = {
     presses: 0,
     taps: 0,
     cancelledPresses: 0,
@@ -68,19 +68,35 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     forcedHides: 0,
     callbackErrors: 0
   };
-  activeWindowImpl: WindowController<unknown> | null = null;
-
+  private active: WindowController<unknown> | null = null;
   private readonly onUiError: UiErrorHandler;
   private readonly onBlockingChangedHandler: ((blocking: boolean) => void) | null;
   private readonly buttons = new Map<string, ButtonControllerImpl>();
   private readonly windows = new Map<string, WindowController<unknown>>();
   private blocking = false;
   private disposed = false;
+  /** The internal seam handed to controllers; keeps every host member off the public class surface. */
+  private readonly host: UiHost;
 
   constructor(options: UiRuntimeOptions) {
     this.motion = options.motion;
     this.onUiError = options.onUiError ?? defaultOnUiError;
     this.onBlockingChangedHandler = options.onBlockingChanged ?? null;
+    const runtime = this;
+    this.host = {
+      motion: this.motion,
+      stats: this.stats,
+      get activeWindowImpl() {
+        return runtime.active;
+      },
+      set activeWindowImpl(value: WindowController<unknown> | null) {
+        runtime.active = value;
+      },
+      reportError: (kind, id, phase, error) => this.reportError(kind, id, phase, error),
+      recomputeBlocking: () => this.recomputeBlocking(),
+      unregisterButton: (id) => { this.buttons.delete(id); },
+      unregisterWindow: (id) => { this.windows.delete(id); }
+    };
   }
 
   createButton(options: ButtonControllerOptions): ButtonController {
@@ -88,7 +104,7 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     if (this.buttons.has(options.id)) {
       throw new Error(`UiRuntime: a button with id "${options.id}" is already registered`);
     }
-    const button = new ButtonControllerImpl(this, options);
+    const button = new ButtonControllerImpl(this.host, options);
     this.buttons.set(options.id, button);
     return button;
   }
@@ -98,14 +114,14 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     if (this.windows.has(options.id)) {
       throw new Error(`UiRuntime: a window with id "${options.id}" is already registered`);
     }
-    const window = new WindowControllerImpl<TParams>(this, options);
-    this.windows.set(options.id, window);
-    return window;
+    const controller = new WindowControllerImpl<TParams>(this.host, options);
+    this.windows.set(options.id, controller);
+    return controller;
   }
 
   /** The single window whose state is not 'hidden', or null. */
   get activeWindow(): WindowController<unknown> | null {
-    return this.activeWindowImpl;
+    return this.active;
   }
 
   /** The stored, last-published blocking value. Never re-derived on read. */
@@ -125,8 +141,8 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
   cancelScope(scope: UiScope): number {
     const button = this.buttonForScope(scope);
     if (button !== undefined) return button.cancel() ? 1 : 0;
-    const window = this.windowForScope(scope);
-    if (window !== undefined) return window.cancel() ? 1 : 0;
+    const win = this.windowForScope(scope);
+    if (win !== undefined) return win.cancel() ? 1 : 0;
     return 0;
   }
 
@@ -137,8 +153,8 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
    */
   cancelAll(): number {
     let count = 0;
-    for (const window of Array.from(this.windows.values())) {
-      if (window.cancel()) count += 1;
+    for (const win of Array.from(this.windows.values())) {
+      if (win.cancel()) count += 1;
     }
     for (const button of Array.from(this.buttons.values())) {
       if (button.cancel()) count += 1;
@@ -150,11 +166,11 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
   dispose(): void {
     if (this.disposed) return;
     this.cancelAll();
-    for (const window of Array.from(this.windows.values())) window.dispose();
+    for (const win of Array.from(this.windows.values())) win.dispose();
     for (const button of Array.from(this.buttons.values())) button.dispose();
     this.windows.clear();
     this.buttons.clear();
-    this.activeWindowImpl = null;
+    this.active = null;
     this.recomputeBlocking();
     this.disposed = true;
   }
@@ -164,7 +180,7 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     return {
       buttons: this.buttons.size,
       windows: this.windows.size,
-      activeWindowId: this.activeWindowImpl ? this.activeWindowImpl.id : null,
+      activeWindowId: this.active ? this.active.id : null,
       blocking: this.blocking,
       presses: s.presses,
       taps: s.taps,
@@ -179,9 +195,9 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     };
   }
 
-  // --- UiHost ---
+  // --- host seam implementation (private; reached by controllers through `this.host`) ---
 
-  reportError(kind: UiControllerKind, id: string, phase: UiErrorPhase, error: unknown): void {
+  private reportError(kind: UiControllerKind, id: string, phase: UiErrorPhase, error: unknown): void {
     this.stats.callbackErrors += 1;
     try {
       this.onUiError(error, { kind, id, phase });
@@ -194,8 +210,8 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
    * The only code that changes `blocking`. Reads the runtime's actual state, stores the new value
    * BEFORE the callback runs, and never publishes the same value twice in a row (spec §6.2).
    */
-  recomputeBlocking(): void {
-    const next = this.activeWindowImpl !== null && this.activeWindowImpl.blocksGameplay;
+  private recomputeBlocking(): void {
+    const next = this.active !== null && this.active.blocksGameplay;
     if (next === this.blocking) return;
     this.blocking = next;
     if (!this.onBlockingChangedHandler) return;
@@ -204,14 +220,6 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     } catch (error) {
       this.reportError('runtime', 'ui', 'onBlockingChanged', error);
     }
-  }
-
-  unregisterButton(id: string): void {
-    this.buttons.delete(id);
-  }
-
-  unregisterWindow(id: string): void {
-    this.windows.delete(id);
   }
 
   // --- internal helpers ---

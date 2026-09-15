@@ -32,3 +32,34 @@ export type {
   MotionRuntimeStats,
   MotionRuntimeOptions
 } from './motion/types';
+export { UiRuntime } from './ui/UiRuntime';
+export { computeLayout } from './ui/layout';
+export type {
+  UiRuntimeOptions,
+  UiRuntimeStats,
+  UiMotionDriver,
+  UiMotionTweenRequest,
+  UiMotionHandle,
+  UiScope,
+  ButtonController,
+  ButtonControllerOptions,
+  ButtonState,
+  ButtonCancelReason,
+  ButtonPointerCancelReason,
+  WindowController,
+  WindowControllerOptions,
+  WindowState,
+  WindowTransitionPhase,
+  WindowCloseReason,
+  WindowHiddenReason,
+  WindowCloseIntent,
+  LayoutInput,
+  LayoutResult,
+  LayoutRect,
+  LayoutInsets,
+  LayoutOrientation,
+  UiErrorContext,
+  UiErrorHandler,
+  UiErrorPhase,
+  UiControllerKind
+} from './ui/types';
