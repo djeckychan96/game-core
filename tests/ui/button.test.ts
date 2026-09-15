@@ -138,3 +138,132 @@ describe('ButtonController basic lifecycle', () => {
     spy.mockRestore();
   });
 });
+
+describe('ButtonController swipe, final-distance rule and threshold', () => {
+  test('movement beyond the threshold swipes; a later pointerUp returns false', () => {
+    const { button, cancels } = harness();
+    button.pointerDown(1, 0, 0);
+    expect(button.pointerMove(1, 30, 0)).toBe(true);
+    expect(cancels()).toEqual(['swipe']);
+    expect(button.state).toBe('idle');
+    expect(button.pointerUp(1, 30, 0, true)).toBe(false);
+  });
+
+  test('movement within the threshold keeps the press', () => {
+    const { button } = harness();
+    button.pointerDown(1, 0, 0);
+    button.pointerMove(1, 10, 10);
+    expect(button.state).toBe('pressed');
+  });
+
+  test('a fast flick without any pointerMove is still a swipe on release', () => {
+    const { button, cancels, count } = harness();
+    button.pointerDown(1, 0, 0);
+    button.pointerUp(1, 100, 0, true);
+    expect(cancels()).toEqual(['swipe']);
+    expect(count('tap')).toBe(0);
+  });
+
+  test('a release within the threshold is a tap; swipe takes precedence over outside', () => {
+    const { button, cancels, count } = harness();
+    button.pointerDown(1, 0, 0);
+    button.pointerUp(1, 10, 0, true);
+    expect(count('tap')).toBe(1);
+    button.pointerDown(1, 0, 0);
+    button.pointerUp(1, 100, 0, false);
+    expect(cancels()).toEqual(['swipe']);
+  });
+
+  test('setTapThreshold takes effect for the next check, including a press in progress', () => {
+    const { button } = harness();
+    button.pointerDown(1, 0, 0);
+    button.setTapThreshold(60);
+    expect(button.tapThreshold).toBe(60);
+    button.pointerMove(1, 40, 0);
+    expect(button.state).toBe('pressed');
+    button.pointerMove(1, 70, 0);
+    expect(button.state).toBe('idle');
+  });
+
+  test('an invalid threshold throws RangeError and keeps the old value; 0 is valid', () => {
+    const { button, cancels } = harness();
+    for (const bad of [Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      expect(() => button.setTapThreshold(bad)).toThrow(RangeError);
+      expect(button.tapThreshold).toBe(24);
+    }
+    button.setTapThreshold(0);
+    button.pointerDown(1, 0, 0);
+    button.pointerMove(1, 1, 0);
+    expect(cancels()).toEqual(['swipe']);
+  });
+
+  test('the gorodki resize formula changes the outcome of an identical gesture', () => {
+    const { button, cancels, count } = harness();
+    button.pointerDown(1, 0, 0);
+    button.pointerUp(1, 30, 0, true);
+    expect(cancels()).toEqual(['swipe']);
+    button.setTapThreshold(Math.max(24, Math.min(1280, 800) * 0.06)); // 48 on a desktop viewport
+    button.pointerDown(1, 0, 0);
+    button.pointerUp(1, 30, 0, true);
+    expect(count('tap')).toBe(1);
+  });
+});
+
+describe('ButtonController re-press and baseline', () => {
+  test('re-press during release continues from the current progress with no jump', () => {
+    const { driver, button, log } = harness();
+    button.pointerDown(1, 0, 0);
+    driver.advance(80);
+    button.pointerUp(1, 0, 0, true);
+    driver.advance(40);
+    expect(button.progress).toBe(0.5);
+
+    button.pointerDown(1, 0, 0);
+    const before = log.length;
+    driver.advance(1);
+    const first = Number(log[before]?.slice('progress:'.length));
+    expect(first).toBeGreaterThan(0.5);
+    expect(first).toBeLessThan(0.51);
+    driver.advance(79);
+    expect(button.progress).toBe(1);
+  });
+
+  test('the baseline never compounds over ten press/release cycles', () => {
+    const { driver, button } = harness();
+    for (let i = 0; i < 10; i++) {
+      button.pointerDown(1, 0, 0);
+      driver.advance(80);
+      expect(button.progress).toBe(1);
+      button.pointerUp(1, 0, 0, true);
+      driver.advance(80);
+      expect(button.progress).toBe(0);
+    }
+  });
+
+  test('a release interrupted by cancel() snaps to 0 with onProgress(0) and no onCancel', () => {
+    const { driver, button, log, cancels } = harness();
+    button.pointerDown(1, 0, 0);
+    driver.advance(80);
+    button.pointerUp(1, 0, 0, true);
+    driver.advance(20);
+    expect(button.cancel()).toBe(true);
+    expect(button.progress).toBe(0);
+    expect(log[log.length - 1]).toBe('progress:0');
+    expect(cancels()).toEqual([]);
+    expect(driver.activeCount).toBe(0);
+    button.pointerDown(1, 0, 0);
+    driver.advance(80);
+    expect(button.progress).toBe(1);
+  });
+
+  test('bindings are preallocated and reused; one tween per animated phase', () => {
+    const { driver, button } = harness();
+    button.pointerDown(1, 0, 0);
+    driver.advance(80);
+    button.pointerUp(1, 0, 0, true);
+    driver.advance(80);
+    expect(driver.requests.length).toBe(2);
+    expect(driver.bindingArrays[0]).toBe(driver.bindingArrays[1]);
+    expect(driver.bindingArrays[0]?.length).toBe(1);
+  });
+});
