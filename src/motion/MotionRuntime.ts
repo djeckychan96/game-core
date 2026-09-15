@@ -90,9 +90,6 @@ function defaultOnMotionError(error: unknown, context: MotionErrorContext): void
 export class MotionRuntime implements SequenceHost {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
-  // Reused every update() call so completing/cancelled operations don't allocate a new array
-  // per frame; update() only ever needs it to remember which top-level ids to delete afterward.
-  private readonly completedScratch: number[] = [];
   private readonly onMotionError: MotionErrorHandler;
   private callbackErrors = 0;
   private bindingErrors = 0;
@@ -136,32 +133,29 @@ export class MotionRuntime implements SequenceHost {
   update(frameMs: number): boolean {
     let changed = false;
     const deltaMs = Math.max(0, finiteOr(frameMs, 0));
-    this.completedScratch.length = 0;
+    // Operations created reentrantly during THIS call (e.g. from another operation's onComplete)
+    // get an id >= idBoundary (ids are a single monotonic counter, never reused) and are skipped
+    // this pass — they first tick on a later update() call. Scalar comparison, no allocation.
+    const idBoundary = this.nextId;
 
     for (const op of this.operations.values()) {
+      if (op.id >= idBoundary) continue;
       if (op.paused) continue;
 
       if (op.kind === 'tween') {
-        const result = this.advanceTweenFrame(op, deltaMs);
+        this.advanceTweenFrame(op, deltaMs);
         changed = true;
-        if (result !== 'running') this.completedScratch.push(op.id);
         continue;
       }
 
       if (op.kind === 'delay') {
-        const result = this.advanceDelayFrame(op, deltaMs);
-        if (result !== 'running') this.completedScratch.push(op.id);
+        this.advanceDelayFrame(op, deltaMs);
         continue;
       }
 
       // sequence
-      const result = advanceSequence(op, deltaMs, this);
+      advanceSequence(op, deltaMs, this);
       changed = true;
-      if (result !== 'running') this.completedScratch.push(op.id);
-    }
-
-    for (const id of this.completedScratch) {
-      this.operations.delete(id);
     }
 
     return changed;
@@ -228,6 +222,20 @@ export class MotionRuntime implements SequenceHost {
     return step.type === 'tween' ? this.buildTweenRecord(step) : this.buildDelayRecord(step);
   }
 
+  /** Removes a top-level operation (used by MotionSequenceRunner to finalize a sequence BEFORE
+   * its own terminal callback fires). A no-op if `id` was never a top-level entry (e.g. a
+   * sequence-internal step's own id, which is never inserted into `operations`). */
+  removeOperation(id: number): void {
+    this.operations.delete(id);
+  }
+
+  /** Whether a top-level operation is still present. Lets MotionSequenceRunner detect that a
+   * sequence was already finalized reentrantly (e.g. its own current step's callback cancelled
+   * the parent sequence) before proceeding with its own completion/cancellation handling. */
+  isOperationActive(id: number): boolean {
+    return this.operations.has(id);
+  }
+
   advanceTweenFrame(op: RuntimeTween, deltaMs: number): SequenceStatus {
     op.elapsedMs += deltaMs;
     const localMs = op.elapsedMs - op.delayMs;
@@ -281,6 +289,10 @@ export class MotionRuntime implements SequenceHost {
       } catch (error) {
         return this.failTween(op, error, 'binding-set');
       }
+      // Finalize BEFORE the terminal callback: a reentrant cancel()/cancelScope() triggered from
+      // inside onComplete (by this or a sibling operation processed later this same update())
+      // must see this operation as already gone, never re-cancellable after it has completed.
+      this.operations.delete(op.id);
       this.invokeUpdateCallback(op, 1);
       this.invokeCallback(op.onComplete, op.kind, 'onComplete');
       return 'completed';
@@ -331,6 +343,8 @@ export class MotionRuntime implements SequenceHost {
     op.elapsedMs += deltaMs;
     const progress = clamp01(op.elapsedMs / op.durationMs);
     if (progress < 1) return 'running';
+    // Finalize BEFORE onComplete — same reentrancy reasoning as advanceTweenFrame.
+    this.operations.delete(op.id);
     this.invokeCallback(op.onComplete, op.kind, 'onComplete');
     return 'completed';
   }
@@ -413,6 +427,8 @@ export class MotionRuntime implements SequenceHost {
   private failTween(op: RuntimeTween, error: unknown, phase: MotionErrorPhase): 'cancelled' {
     this.bindingErrors += 1;
     this.reportError(error, op.kind, phase);
+    // Finalize BEFORE onCancel, same reasoning as the completion path above.
+    this.operations.delete(op.id);
     this.invokeCallback(op.onCancel, op.kind, 'onCancel');
     return 'cancelled';
   }
