@@ -5,7 +5,8 @@ import { FakeMotionDriver } from './fakeMotionDriver';
 function harness() {
   const driver = new FakeMotionDriver();
   const log: string[] = [];
-  const ui = new UiRuntime({ motion: driver, onBlockingChanged: (value) => log.push(`blocking:${value}`) });
+  // a silent error sink: one test throws from onShow on purpose to move the callbackErrors counter
+  const ui = new UiRuntime({ motion: driver, onUiError: () => {}, onBlockingChanged: (value) => log.push(`blocking:${value}`) });
   const button = ui.createButton({
     id: 'btn',
     onProgress: (progress) => log.push(`progress:${progress}`),
