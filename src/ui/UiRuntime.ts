@@ -1,5 +1,6 @@
 import type { CoreRuntimeModule } from '../core/CoreRuntime';
 import { ButtonControllerImpl } from './ButtonController';
+import { WindowControllerImpl } from './WindowController';
 import type {
   ButtonController,
   ButtonControllerOptions,
@@ -10,7 +11,9 @@ import type {
   UiMotionDriver,
   UiRuntimeOptions,
   UiRuntimeStats,
-  UiScope
+  UiScope,
+  WindowController,
+  WindowControllerOptions
 } from './types';
 
 /** The counters of UiRuntimeStats, mutated in place by the controllers. Internal. */
@@ -27,14 +30,6 @@ export interface UiMutableStats {
   callbackErrors: number;
 }
 
-/** What the runtime needs from a window controller. Internal; WindowControllerImpl satisfies it structurally. */
-export interface UiWindowRecord {
-  readonly id: string;
-  readonly blocksGameplay: boolean;
-  cancel(): boolean;
-  dispose(): void;
-}
-
 /**
  * The seam the two controller classes use to talk to the runtime. Internal: never exported from
  * src/index.ts. The controllers import it as a type only, so there is no runtime cycle.
@@ -42,7 +37,7 @@ export interface UiWindowRecord {
 export interface UiHost {
   readonly motion: UiMotionDriver;
   readonly stats: UiMutableStats;
-  activeWindowImpl: UiWindowRecord | null;
+  activeWindowImpl: WindowController<unknown> | null;
   reportError(kind: UiControllerKind, id: string, phase: UiErrorPhase, error: unknown): void;
   recomputeBlocking(): void;
   unregisterButton(id: string): void;
@@ -73,12 +68,12 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     forcedHides: 0,
     callbackErrors: 0
   };
-  activeWindowImpl: UiWindowRecord | null = null;
+  activeWindowImpl: WindowController<unknown> | null = null;
 
   private readonly onUiError: UiErrorHandler;
   private readonly onBlockingChangedHandler: ((blocking: boolean) => void) | null;
   private readonly buttons = new Map<string, ButtonControllerImpl>();
-  private readonly windows = new Map<string, UiWindowRecord>();
+  private readonly windows = new Map<string, WindowController<unknown>>();
   private blocking = false;
   private disposed = false;
 
@@ -96,6 +91,21 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     const button = new ButtonControllerImpl(this, options);
     this.buttons.set(options.id, button);
     return button;
+  }
+
+  createWindow<TParams = void>(options: WindowControllerOptions<TParams>): WindowController<TParams> {
+    this.assertNotDisposed('createWindow');
+    if (this.windows.has(options.id)) {
+      throw new Error(`UiRuntime: a window with id "${options.id}" is already registered`);
+    }
+    const window = new WindowControllerImpl<TParams>(this, options);
+    this.windows.set(options.id, window);
+    return window;
+  }
+
+  /** The single window whose state is not 'hidden', or null. */
+  get activeWindow(): WindowController<unknown> | null {
+    return this.activeWindowImpl;
   }
 
   /** The stored, last-published blocking value. Never re-derived on read. */
@@ -175,7 +185,7 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     return scope.startsWith(BUTTON_SCOPE_PREFIX) ? this.buttons.get(scope.slice(BUTTON_SCOPE_PREFIX.length)) : undefined;
   }
 
-  protected windowForScope(scope: UiScope): UiWindowRecord | undefined {
+  protected windowForScope(scope: UiScope): WindowController<unknown> | undefined {
     return scope.startsWith(WINDOW_SCOPE_PREFIX) ? this.windows.get(scope.slice(WINDOW_SCOPE_PREFIX.length)) : undefined;
   }
 }
