@@ -118,6 +118,47 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     return false;
   }
 
+  /**
+   * CoreRuntimeModule: settles the one controller that owns `scope` — a button to idle, a window
+   * force-hidden (spec §11). Returns 1 if it changed anything, else 0; any other scope returns 0.
+   */
+  cancelScope(scope: UiScope): number {
+    const button = this.buttonForScope(scope);
+    if (button !== undefined) return button.cancel() ? 1 : 0;
+    const window = this.windowForScope(scope);
+    if (window !== undefined) return window.cancel() ? 1 : 0;
+    return 0;
+  }
+
+  /**
+   * CoreRuntimeModule: settles every controller (windows first, then buttons). Returns the number
+   * changed by this call; idempotent. Every route to a controller — this call, the motion module
+   * reaching the tween first, a direct motion.cancelAll() — ends in the same settle (spec §11).
+   */
+  cancelAll(): number {
+    let count = 0;
+    for (const window of Array.from(this.windows.values())) {
+      if (window.cancel()) count += 1;
+    }
+    for (const button of Array.from(this.buttons.values())) {
+      if (button.cancel()) count += 1;
+    }
+    return count;
+  }
+
+  /** cancelAll(), then disposes every controller (already settled) and clears the registries. */
+  dispose(): void {
+    if (this.disposed) return;
+    this.cancelAll();
+    for (const window of Array.from(this.windows.values())) window.dispose();
+    for (const button of Array.from(this.buttons.values())) button.dispose();
+    this.windows.clear();
+    this.buttons.clear();
+    this.activeWindowImpl = null;
+    this.recomputeBlocking();
+    this.disposed = true;
+  }
+
   getStats(): UiRuntimeStats {
     const s = this.stats;
     return {
@@ -181,11 +222,11 @@ export class UiRuntime implements CoreRuntimeModule, UiHost {
     }
   }
 
-  protected buttonForScope(scope: UiScope): ButtonControllerImpl | undefined {
+  private buttonForScope(scope: UiScope): ButtonControllerImpl | undefined {
     return scope.startsWith(BUTTON_SCOPE_PREFIX) ? this.buttons.get(scope.slice(BUTTON_SCOPE_PREFIX.length)) : undefined;
   }
 
-  protected windowForScope(scope: UiScope): WindowController<unknown> | undefined {
+  private windowForScope(scope: UiScope): WindowController<unknown> | undefined {
     return scope.startsWith(WINDOW_SCOPE_PREFIX) ? this.windows.get(scope.slice(WINDOW_SCOPE_PREFIX.length)) : undefined;
   }
 }
