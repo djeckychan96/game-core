@@ -167,6 +167,61 @@ export class MotionRuntime implements SequenceHost {
     return changed;
   }
 
+  /** Cancels every operation currently in `scope`. Returns the count actually cancelled. */
+  cancelScope(scope: MotionScope): number {
+    let count = 0;
+    for (const op of Array.from(this.operations.values())) {
+      if (op.scope !== scope) continue;
+      if (!this.operations.has(op.id)) continue; // already cancelled reentrantly above
+      this.cancelOperation(op);
+      count += 1;
+    }
+    return count;
+  }
+
+  /** Cancels every operation regardless of scope. Returns the count actually cancelled. */
+  cancelAll(): number {
+    let count = 0;
+    for (const op of Array.from(this.operations.values())) {
+      if (!this.operations.has(op.id)) continue; // already cancelled reentrantly above
+      this.cancelOperation(op);
+      count += 1;
+    }
+    return count;
+  }
+
+  /** Pauses every not-already-paused operation in `scope`. Returns the count actually transitioned. */
+  pauseScope(scope: MotionScope): number {
+    let count = 0;
+    for (const op of this.operations.values()) {
+      if (op.scope !== scope || op.paused) continue;
+      op.paused = true;
+      count += 1;
+    }
+    return count;
+  }
+
+  /** Resumes every paused operation in `scope`. Returns the count actually transitioned. */
+  resumeScope(scope: MotionScope): number {
+    let count = 0;
+    for (const op of this.operations.values()) {
+      if (op.scope !== scope || !op.paused) continue;
+      op.paused = false;
+      count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Permanent shutdown: cancels every still-active operation (onCancel fires for each, no
+   * onComplete). MotionRuntime owns no persistent resources beyond its own operations map, so
+   * this is defined as cancelAll() and nothing else — unlike FxRuntime.dispose(), there is no
+   * pool-owned render node to tear down.
+   */
+  dispose(): void {
+    this.cancelAll();
+  }
+
   // --- SequenceHost surface (called only from MotionSequenceRunner.advanceSequence) ---
 
   buildStepOperation(step: MotionSequenceStep): RuntimeTween | RuntimeDelay {
