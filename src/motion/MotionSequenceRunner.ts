@@ -22,8 +22,10 @@ export interface SequenceHost {
   ): void;
   /** Removes a top-level operation from the runtime — must be called BEFORE that operation's own
    * terminal callback (onComplete/onCancel) fires, so a reentrant cancel from within it (or a
-   * sibling processed later the same update()) can never re-finalize it a second time. */
-  removeOperation(id: number): void;
+   * sibling processed later the same update()) can never re-finalize it a second time. `outcome`
+   * records the sequence's own completedMotions/cancelledMotions count exactly once, regardless
+   * of how many steps it had. */
+  removeOperation(id: number, outcome: 'completed' | 'cancelled'): void;
   /** Whether a top-level operation is still present (not yet finalized by a reentrant call). */
   isOperationActive(id: number): boolean;
 }
@@ -40,7 +42,7 @@ export function advanceSequence(sequence: RuntimeSequence, deltaMs: number, host
     const step = sequence.steps[sequence.currentStepIndex];
     if (!step) {
       // No steps at all: an empty sequence completes immediately.
-      host.removeOperation(sequence.id);
+      host.removeOperation(sequence.id, 'completed');
       host.invokeCallback(sequence.onComplete, 'sequence', 'onComplete');
       return 'completed';
     }
@@ -67,7 +69,7 @@ export function advanceSequence(sequence: RuntimeSequence, deltaMs: number, host
 
   if (result === 'cancelled') {
     sequence.currentStepOperation = null;
-    host.removeOperation(sequence.id);
+    host.removeOperation(sequence.id, 'cancelled');
     host.invokeCallback(sequence.onCancel, 'sequence', 'onCancel');
     return 'cancelled';
   }
@@ -78,7 +80,7 @@ export function advanceSequence(sequence: RuntimeSequence, deltaMs: number, host
   sequence.currentStepOperation = null;
   const nextStep = sequence.steps[sequence.currentStepIndex];
   if (!nextStep) {
-    host.removeOperation(sequence.id);
+    host.removeOperation(sequence.id, 'completed');
     host.invokeCallback(sequence.onComplete, 'sequence', 'onComplete');
     return 'completed';
   }

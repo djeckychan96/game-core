@@ -11,12 +11,23 @@ import type {
   MotionErrorPhase,
   MotionHandle,
   MotionRuntimeOptions,
+  MotionRuntimeStats,
   MotionScope,
   MotionSequenceOptions,
   MotionSequenceStep,
   MotionTweenOptions,
   MotionUpdateCallback
 } from './types';
+
+// Same shape as FxRuntime.ts's own readNow — independently re-declared here (module boundary
+// rule). Exactly one call at the start and one at the end of update(), never inside the
+// per-operation loop.
+function readNow(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now();
+  }
+  return Date.now();
+}
 
 // Shared by every operation kind (tween/delay/sequence): identity, pause state, scope, and the
 // two outer lifecycle callbacks. Deliberately does NOT include elapsedMs/durationMs — a
@@ -93,6 +104,10 @@ export class MotionRuntime implements SequenceHost {
   private readonly onMotionError: MotionErrorHandler;
   private callbackErrors = 0;
   private bindingErrors = 0;
+  private completedMotions = 0;
+  private cancelledMotions = 0;
+  private lastUpdateMs = 0;
+  private maxUpdateMs = 0;
 
   constructor(options: MotionRuntimeOptions = {}) {
     this.onMotionError = options.onMotionError ?? defaultOnMotionError;
@@ -131,6 +146,7 @@ export class MotionRuntime implements SequenceHost {
   }
 
   update(frameMs: number): boolean {
+    const startedAt = readNow();
     let changed = false;
     const deltaMs = Math.max(0, finiteOr(frameMs, 0));
     // Operations created reentrantly during THIS call (e.g. from another operation's onComplete)
@@ -158,7 +174,45 @@ export class MotionRuntime implements SequenceHost {
       changed = true;
     }
 
+    this.recordUpdateDuration(startedAt);
     return changed;
+  }
+
+  /** Snapshot of current counts, running totals, and the last/max update() duration. Allocates one
+   * plain object per call (diagnostic, not part of the per-frame hot path) — never called from
+   * inside update() itself. */
+  getStats(): MotionRuntimeStats {
+    let activeTweens = 0;
+    let activeDelays = 0;
+    let activeSequences = 0;
+    let pausedMotions = 0;
+
+    for (const op of this.operations.values()) {
+      if (op.kind === 'tween') activeTweens += 1;
+      else if (op.kind === 'delay') activeDelays += 1;
+      else activeSequences += 1;
+      if (op.paused) pausedMotions += 1;
+    }
+
+    return {
+      activeMotions: this.operations.size,
+      activeTweens,
+      activeDelays,
+      activeSequences,
+      pausedMotions,
+      completedMotions: this.completedMotions,
+      cancelledMotions: this.cancelledMotions,
+      lastUpdateMs: this.lastUpdateMs,
+      maxUpdateMs: this.maxUpdateMs,
+      callbackErrors: this.callbackErrors,
+      bindingErrors: this.bindingErrors
+    };
+  }
+
+  private recordUpdateDuration(startedAt: number): void {
+    const elapsed = Math.max(0, readNow() - startedAt);
+    this.lastUpdateMs = elapsed;
+    if (elapsed > this.maxUpdateMs) this.maxUpdateMs = elapsed;
   }
 
   /** Cancels every operation currently in `scope`. Returns the count actually cancelled. */
@@ -223,10 +277,13 @@ export class MotionRuntime implements SequenceHost {
   }
 
   /** Removes a top-level operation (used by MotionSequenceRunner to finalize a sequence BEFORE
-   * its own terminal callback fires). A no-op if `id` was never a top-level entry (e.g. a
+   * its own terminal callback fires) and records the sequence's own completedMotions/
+   * cancelledMotions count exactly once. A no-op if `id` was never a top-level entry (e.g. a
    * sequence-internal step's own id, which is never inserted into `operations`). */
-  removeOperation(id: number): void {
-    this.operations.delete(id);
+  removeOperation(id: number, outcome: 'completed' | 'cancelled'): void {
+    if (!this.operations.delete(id)) return;
+    if (outcome === 'completed') this.completedMotions += 1;
+    else this.cancelledMotions += 1;
   }
 
   /** Whether a top-level operation is still present. Lets MotionSequenceRunner detect that a
@@ -292,9 +349,14 @@ export class MotionRuntime implements SequenceHost {
       // Finalize BEFORE the terminal callback: a reentrant cancel()/cancelScope() triggered from
       // inside onComplete (by this or a sibling operation processed later this same update())
       // must see this operation as already gone, never re-cancellable after it has completed.
-      this.operations.delete(op.id);
+      // Map.delete's own return value doubles as the "was this a top-level operation" check: a
+      // sequence-owned step (never inserted into `operations`) yields false here, so its own
+      // completion is correctly NOT counted as a top-level completedMotions (the sequence itself
+      // is counted once, separately, by MotionSequenceRunner via host.removeOperation).
+      const wasTopLevel = this.operations.delete(op.id);
       this.invokeUpdateCallback(op, 1);
       this.invokeCallback(op.onComplete, op.kind, 'onComplete');
+      if (wasTopLevel) this.completedMotions += 1;
       return 'completed';
     }
 
@@ -343,9 +405,11 @@ export class MotionRuntime implements SequenceHost {
     op.elapsedMs += deltaMs;
     const progress = clamp01(op.elapsedMs / op.durationMs);
     if (progress < 1) return 'running';
-    // Finalize BEFORE onComplete — same reentrancy reasoning as advanceTweenFrame.
-    this.operations.delete(op.id);
+    // Finalize BEFORE onComplete — same reentrancy reasoning as advanceTweenFrame; same
+    // wasTopLevel-via-delete-return-value stats guard.
+    const wasTopLevel = this.operations.delete(op.id);
     this.invokeCallback(op.onComplete, op.kind, 'onComplete');
+    if (wasTopLevel) this.completedMotions += 1;
     return 'completed';
   }
 
@@ -427,18 +491,22 @@ export class MotionRuntime implements SequenceHost {
   private failTween(op: RuntimeTween, error: unknown, phase: MotionErrorPhase): 'cancelled' {
     this.bindingErrors += 1;
     this.reportError(error, op.kind, phase);
-    // Finalize BEFORE onCancel, same reasoning as the completion path above.
-    this.operations.delete(op.id);
+    // Finalize BEFORE onCancel, same reasoning as the completion path above; same wasTopLevel
+    // stats guard (a step failing inside a sequence must not itself count — the sequence's own
+    // cancellation, counted once via MotionSequenceRunner, is what represents this to the host).
+    const wasTopLevel = this.operations.delete(op.id);
     this.invokeCallback(op.onCancel, op.kind, 'onCancel');
+    if (wasTopLevel) this.cancelledMotions += 1;
     return 'cancelled';
   }
 
   private cancelOperation(op: RuntimeOperation): void {
-    this.operations.delete(op.id);
+    const wasTopLevel = this.operations.delete(op.id);
     if (op.kind === 'sequence' && op.currentStepOperation) {
       this.invokeCallback(op.currentStepOperation.onCancel, op.currentStepOperation.kind, 'onCancel');
     }
     this.invokeCallback(op.onCancel, op.kind, 'onCancel');
+    if (wasTopLevel) this.cancelledMotions += 1;
   }
 
   private invokeUpdateCallback(op: RuntimeTween, progress: number): void {
