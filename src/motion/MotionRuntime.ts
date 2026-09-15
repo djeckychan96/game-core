@@ -54,6 +54,8 @@ function normalizeRepeat(repeat: number | undefined): number {
 export class MotionRuntime {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
+  // Reused every update() call so completing operations doesn't allocate a new array per frame.
+  private readonly completedScratch: number[] = [];
 
   constructor(_options: MotionRuntimeOptions = {}) {
     // options.onMotionError is wired in a later task (error isolation).
@@ -87,7 +89,7 @@ export class MotionRuntime {
   update(frameMs: number): boolean {
     let changed = false;
     const deltaMs = Math.max(0, finiteOr(frameMs, 0));
-    const completedIds: number[] = [];
+    this.completedScratch.length = 0;
 
     for (const op of this.operations.values()) {
       if (op.paused) continue;
@@ -132,12 +134,12 @@ export class MotionRuntime {
           op.passIndex += 1;
           if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1;
         } else {
-          completedIds.push(op.id);
+          this.completedScratch.push(op.id);
         }
       }
     }
 
-    for (const id of completedIds) {
+    for (const id of this.completedScratch) {
       const op = this.operations.get(id);
       if (!op) continue;
       for (let i = 0; i < op.bindingSpecs.length; i++) {
