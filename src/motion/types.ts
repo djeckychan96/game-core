@@ -54,7 +54,7 @@ export interface MotionSequenceOptions {
   onCancel?: MotionCancelCallback;
 }
 
-export type MotionErrorPhase = 'onUpdate' | 'onComplete' | 'onCancel' | 'binding-get' | 'binding-set';
+export type MotionErrorPhase = 'onUpdate' | 'onComplete' | 'onCancel' | 'binding-get' | 'binding-set' | 'ease';
 
 export interface MotionErrorContext {
   kind: 'tween' | 'delay' | 'sequence';
@@ -73,6 +73,7 @@ export interface MotionRuntimeStats {
   cancelledMotions: number;
   lastUpdateMs: number;
   maxUpdateMs: number;
+  /** Caught lifecycle callback and custom easing exceptions. */
   callbackErrors: number;
   bindingErrors: number;
 }

@@ -331,7 +331,12 @@ export class MotionRuntime {
 
     if (passesCompleted === 0) {
       const progress = localMs / op.durationMs;
-      const eased = op.ease(progress);
+      let eased: number;
+      try {
+        eased = op.ease(progress);
+      } catch (error) {
+        return this.failTween(op, error, 'ease');
+      }
       try {
         this.applyEasedValue(op, eased);
       } catch (error) {
@@ -405,7 +410,12 @@ export class MotionRuntime {
     op.passIndex += passesCompleted;
     op.elapsedMs = op.delayMs + remainderMs;
     const progress = remainderMs / op.durationMs; // in (0, 1)
-    const eased = op.ease(progress);
+    let eased: number;
+    try {
+      eased = op.ease(progress);
+    } catch (error) {
+      return this.failTween(op, error, 'ease');
+    }
     try {
       this.applyEasedValue(op, eased);
     } catch (error) {
@@ -505,8 +515,9 @@ export class MotionRuntime {
     }
   }
 
-  private failTween(op: RuntimeTween, error: unknown, phase: MotionErrorPhase): 'cancelled' {
-    this.bindingErrors += 1;
+  private failTween(op: RuntimeTween, error: unknown, phase: 'binding-get' | 'binding-set' | 'ease'): 'cancelled' {
+    if (phase === 'ease') this.callbackErrors += 1;
+    else this.bindingErrors += 1;
     this.reportError(error, op.kind, phase);
     // The error handler may already have cancelled this operation or its parent sequence.
     this.cancelOperation(op);
