@@ -6,11 +6,20 @@ export interface CoreRuntimeModule {
   update(frameMs: number): boolean;
   cancelScope?(scope: string): number;
   cancelAll?(): number;
+  pauseScope?(scope: string): number;
+  resumeScope?(scope: string): number;
   getStats?(): object;
   dispose?(): void;
 }
 
-export type CoreRuntimeErrorPhase = 'update' | 'cancelScope' | 'cancelAll' | 'getStats' | 'dispose';
+export type CoreRuntimeErrorPhase =
+  | 'update'
+  | 'cancelScope'
+  | 'cancelAll'
+  | 'pauseScope'
+  | 'resumeScope'
+  | 'getStats'
+  | 'dispose';
 
 export interface CoreRuntimeErrorContext {
   moduleName: string;
@@ -69,6 +78,28 @@ export class CoreRuntime {
     for (const [name, runtime] of this.modules) {
       if (!runtime.cancelAll) continue;
       const result = this.safeInvoke(name, 'cancelAll', () => runtime.cancelAll!());
+      if (typeof result === 'number') total += result;
+    }
+    return total;
+  }
+
+  /** Fans out to every module's pauseScope (modules without one are skipped) and sums the counts. */
+  pauseScope(scope: string): number {
+    let total = 0;
+    for (const [name, runtime] of this.modules) {
+      if (!runtime.pauseScope) continue;
+      const result = this.safeInvoke(name, 'pauseScope', () => runtime.pauseScope!(scope));
+      if (typeof result === 'number') total += result;
+    }
+    return total;
+  }
+
+  /** Fans out to every module's resumeScope (modules without one are skipped) and sums the counts. */
+  resumeScope(scope: string): number {
+    let total = 0;
+    for (const [name, runtime] of this.modules) {
+      if (!runtime.resumeScope) continue;
+      const result = this.safeInvoke(name, 'resumeScope', () => runtime.resumeScope!(scope));
       if (typeof result === 'number') total += result;
     }
     return total;
