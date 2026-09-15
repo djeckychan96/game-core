@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { MotionRuntime } from '../../src/motion/MotionRuntime';
+import type { MotionSequenceStep } from '../../src/motion/types';
 
 function makeNumberBinding(initial: number) {
   let value = initial;
@@ -151,6 +152,139 @@ describe('MotionRuntime update() lifecycle reentrancy-safety', () => {
     expect(cancellations).toBe(1);
     expect(handle.active).toBe(false);
   });
+});
+
+describe('MotionRuntime sequence step terminal reentrancy', () => {
+  describe.each(['delay', 'tween'] as const)('%s step', (kind) => {
+    describe.each(['cancel', 'cancelScope', 'cancelAll'] as const)('%s from onComplete', (method) => {
+      test.each([true, false])('completes only once when cancelling its parent (last step: %s)', (lastStep) => {
+        const motion = new MotionRuntime();
+        const events: string[] = [];
+        const { binding, read } = makeNumberBinding(0);
+        let nextStepWrites = 0;
+        let cancelResult: boolean | number | undefined;
+        const step: MotionSequenceStep = {
+          ...(kind === 'tween'
+            ? { type: 'tween' as const, bindings: [{ ...binding, to: 100 }] }
+            : { type: 'delay' as const }),
+          durationMs: 50,
+          onComplete: () => {
+            events.push('step:complete');
+            cancelResult = method === 'cancel' ? handle.cancel()
+              : method === 'cancelScope' ? motion.cancelScope('sequence') : motion.cancelAll();
+          },
+          onCancel: () => { events.push('step:cancel'); }
+        };
+        const handle = motion.sequence({
+          scope: 'sequence',
+          steps: lastStep ? [step] : [step, {
+            type: 'tween',
+            bindings: [{ get: () => 0, set: () => { nextStepWrites += 1; }, to: 100 }],
+            durationMs: 50,
+            onComplete: () => { events.push('next:complete'); },
+            onCancel: () => { events.push('next:cancel'); }
+          }],
+          onComplete: () => { events.push('sequence:complete'); },
+          onCancel: () => { events.push('sequence:cancel'); }
+        });
+
+        motion.update(50);
+        motion.update(1000);
+
+        expect(events).toEqual(['step:complete', 'sequence:cancel']);
+        expect(cancelResult).toBe(method === 'cancel' ? true : 1);
+        expect(handle.active).toBe(false);
+        expect(handle.cancel()).toBe(false);
+        expect(nextStepWrites).toBe(0);
+        if (kind === 'tween') expect(read()).toBe(100);
+        expect(motion.getStats()).toMatchObject({
+          activeMotions: 0, completedMotions: 0, cancelledMotions: 1
+        });
+      });
+    });
+  });
+
+  test('a tween step is already terminal during its final onUpdate callback', () => {
+    const motion = new MotionRuntime();
+    const events: string[] = [];
+    const handle = motion.sequence({
+      steps: [{
+        type: 'tween',
+        bindings: [{ get: () => 0, set: () => {}, to: 100 }],
+        durationMs: 50,
+        onUpdate: () => { handle.cancel(); },
+        onComplete: () => { events.push('step:complete'); },
+        onCancel: () => { events.push('step:cancel'); }
+      }],
+      onComplete: () => { events.push('sequence:complete'); },
+      onCancel: () => { events.push('sequence:cancel'); }
+    });
+
+    motion.update(50);
+    motion.update(50);
+
+    expect(events).toEqual(['sequence:cancel', 'step:complete']);
+    expect(motion.getStats()).toMatchObject({ completedMotions: 0, cancelledMotions: 1 });
+  });
+
+  test('cancelling a tween step from its final binding write prevents completion', () => {
+    const motion = new MotionRuntime();
+    const events: string[] = [];
+    const handle = motion.sequence({
+      steps: [{
+        type: 'tween',
+        bindings: [{ get: () => 0, set: () => { handle.cancel(); }, to: 100 }],
+        durationMs: 50,
+        onComplete: () => { events.push('step:complete'); },
+        onCancel: () => { events.push('step:cancel'); }
+      }],
+      onComplete: () => { events.push('sequence:complete'); },
+      onCancel: () => { events.push('sequence:cancel'); }
+    });
+
+    motion.update(50);
+    motion.update(50);
+
+    expect(events).toEqual(['step:cancel', 'sequence:cancel']);
+    expect(motion.getStats()).toMatchObject({ completedMotions: 0, cancelledMotions: 1 });
+  });
+
+  test.each(['onCancel', 'onMotionError'] as const)(
+    'a failed tween step cannot be cancelled twice by its %s handler', (callback) => {
+      const events: string[] = [];
+      let reports = 0;
+      const motion = new MotionRuntime({
+        onMotionError: () => {
+          reports += 1;
+          if (callback === 'onMotionError') handle.cancel();
+        }
+      });
+      const handle = motion.sequence({
+        steps: [{
+          type: 'tween',
+          bindings: [{ get: () => { throw new Error('binding failed'); }, set: () => {}, to: 100 }],
+          durationMs: 50,
+          onComplete: () => { events.push('step:complete'); },
+          onCancel: () => {
+            events.push('step:cancel');
+            if (callback === 'onCancel') handle.cancel();
+          }
+        }],
+        onComplete: () => { events.push('sequence:complete'); },
+        onCancel: () => { events.push('sequence:cancel'); }
+      });
+
+      expect(() => motion.update(50)).not.toThrow();
+      motion.update(50);
+
+      expect(events).toEqual(['step:cancel', 'sequence:cancel']);
+      expect(reports).toBe(1);
+      expect(handle.cancel()).toBe(false);
+      expect(motion.getStats()).toMatchObject({
+        activeMotions: 0, completedMotions: 0, cancelledMotions: 1, bindingErrors: 1
+      });
+    }
+  );
 });
 
 describe('MotionRuntime operations created during update() do not tick until the next update()', () => {
