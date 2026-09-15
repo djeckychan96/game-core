@@ -25,6 +25,7 @@ Nothing in this document is implemented. `UiRuntime` does not exist in `src/` as
 - does not attach browser event listeners — the host feeds it pointer events and close intents;
 - does not render and does not know what a "scale", "alpha", "opacity", or "transform" is;
 - animates through the existing `MotionRuntime` behind a small, explicit driver interface (section 5);
+- participates in `CoreRuntime`'s cancellation fan-out (`cancelScope`/`cancelAll`), so one `core.cancelAll()` leaves buttons, windows, blocking, and motions in one consistent state (section 11);
 - only ever advances because the host advances `MotionRuntime` through `CoreRuntime.update(frameMs)`.
 
 Game Core stays an infrastructure layer. It is not a replacement for PixiJS, Three.js, Rapier, or either game's own gameplay engine.
@@ -54,7 +55,7 @@ Both games were audited read-only before this spec. The design below is the smal
 ### 2.3 Invariants both games need
 
 1. A button's animation baseline is owned by the host and never derived from the animated visual — Game Core exposes only a `0..1` press progress.
-2. A window can only leave `entering`/`shown` through one funnel (`close(reason)`) that the host can veto, whatever the host's view technology does on `Escape`, backdrop tap, or hardware back.
+2. A window leaves `entering`/`shown` only through `close(reason)`, which the host can veto and which carries the business continuation, or through an explicit cancellation (`cancel()`, `core.cancelScope()`, `core.cancelAll()`), which unmounts the view and never runs a business continuation — whatever the host's view technology does on `Escape`, backdrop tap, or hardware back.
 3. "The UI is blocking gameplay" is a single boolean the frame loop can read, and it never pauses UI motion.
 4. Layout is arithmetic over numbers the host already has; Game Core never reads `window`, `document`, or CSS.
 
@@ -83,32 +84,36 @@ const core = new CoreRuntime();
 const motion = new MotionRuntime({ onMotionError });
 const ui = new UiRuntime({ motion, onUiError, onBlockingChanged });
 
-// Registration order is mandated: CoreRuntime disposes modules in registration order,
-// and UiRuntime must be disposed before MotionRuntime (section 11).
-core.registerRuntime('ui', ui);
 core.registerRuntime('motion', motion);
+core.registerRuntime('ui', ui);        // registration order does not matter (section 11)
 
 // host loop (Pixi ticker in trail_arrow, setAnimationLoop callback in gorodki):
 core.update(frameMs);
 
-// app teardown: ui.dispose() runs first and is silent; motion.dispose() then finds no ui: tween
+// global cancellation: every button settles, every window is force-hidden, no business flow runs
+core.cancelAll();
+
+// app teardown: the same settle, then every module is disposed
 core.dispose();
 ```
 
 `UiRuntime` implements exactly these `CoreRuntimeModule` members:
 
 - `update(frameMs): boolean` — **always returns `false` and does no work.** UI motion is advanced by `MotionRuntime.update()` (through the driver in section 5), which calls back into the controllers' bindings. `UiRuntime` has no timers, no queues, and no deferred notifications of its own, so there is nothing to tick.
+- `cancelScope(scope): number` and `cancelAll(): number` — settle the controller that owns `scope`, or every controller, into a safe resting state (section 11). This is what makes `core.cancelAll()` a complete, consistent operation for the whole Game Core rather than a motion-only one.
 - `getStats(): UiRuntimeStats` — section 13.
 - `dispose(): void` — section 11.
 
-`UiRuntime` deliberately does **not** implement `cancelScope`, `cancelAll`, `pauseScope`, or `resumeScope`. Every motion a UI controller starts lives in `MotionRuntime` under a `ui:`-prefixed scope (section 11), so `core.cancelScope(...)` and `core.cancelAll()` already reach it through the `motion` module. Controllers treat such external cancellation as a contract violation (sections 7.7 and 8.8): they never finalize a lifecycle on the driver's behalf. Implementing the fan-out methods on `UiRuntime` too would cancel the same motions twice and add nothing.
+`UiRuntime` does **not** implement `pauseScope`/`resumeScope`. Pausing a `ui:` scope through `core.pauseScope` pauses that tween inside `MotionRuntime` and nothing else: the controller stays in its current phase, fires nothing, and continues when the scope is resumed. It is harmless and unused by either game.
 
-**Why keep `update()` at all if it is a no-op?** `CoreRuntimeModule` requires it, and being a registered module is what gives `UiRuntime` the same `dispose`/`getStats`/error-boundary treatment as `fx` and `motion` without a second registration mechanism. The no-op is one early `return false`.
+**Why participate in the cancellation fan-out.** `CoreRuntime` is the shared lifecycle/cancellation layer: `core.cancelAll()` already reaches every UI tween through the `motion` module. If `UiRuntime` stayed out of the fan-out, a global cancel would leave a window `entering` with no tween, `activeWindow` set, and `isBlocking()` true — a half-alive UI behind an API that promises "cancel everything". Participating, and making every route to a controller converge on the controller's own settle path (sections 7.7, 8.8, 11), is the smallest fix that keeps `CoreRuntime` and `MotionRuntime` unchanged.
+
+**Why keep `update()` at all if it is a no-op?** `CoreRuntimeModule` requires it, and being a registered module is what gives `UiRuntime` the same `cancel`/`dispose`/`getStats`/error-boundary treatment as `fx` and `motion` without a second registration mechanism. The no-op is one early `return false`.
 
 **Clarifications:**
 
 - The host must register the **same** `MotionRuntime` instance in `CoreRuntime` that it passes to `UiRuntime` as `motion`. `UiRuntime` never ticks the driver itself; if the host forgets to register or update `MotionRuntime`, UI transitions with a non-zero duration never progress. This is a host wiring responsibility, stated here so it is tested in the integration proofs.
-- Registration order does not affect per-frame behavior (`ui.update` does nothing). It is mandated because of teardown: `'ui'` is registered before `'motion'` so that `core.dispose()` disposes `UiRuntime` first. A host that cannot control the registration order calls `ui.dispose()` explicitly before `core.dispose()`, `motion.dispose()`, or `core.cancelAll()`. Section 11 states the rule and its guarantees.
+- Registration order affects neither per-frame behavior (`ui.update` does nothing) nor the outcome of `core.cancelScope`, `core.cancelAll`, or `core.dispose` (section 11 proves the convergence). Section 4 shows `'motion'` before `'ui'` only because that is the natural reading order.
 - `UiRuntime` never calls `pauseScope`/`resumeScope` on anything. Blocking gameplay (section 9) is a flag the host reads; it is not a motion pause.
 
 ## 5. UiMotionDriver — the explicit, narrow dependency on MotionRuntime
@@ -159,14 +164,14 @@ Contract every driver must honour (these are exactly `MotionRuntime` v0.2 semant
 - Every controller calls `tween()` with **exactly one binding**. The type is `MotionBinding[]` only so that `MotionRuntime` satisfies the interface without an adapter.
 - `from` is never set on the binding; the driver reads `get()` at start, which is the controller's current progress. This is what makes "re-press during release" continue from the current visual value with no jump (section 7.5).
 - `UiRuntime` does not use `delay`, `sequence`, `pause`, `resume`, `pauseScope`, or `resumeScope`. They are not part of `UiMotionDriver` on purpose; adding them later is an additive interface change.
-- Controllers arm every `onComplete`/`onCancel` they pass to the driver with their lifecycle generation (section 6.1). A driver `onCancel` that arrives while the controller itself is replacing or settling its tween carries a stale generation and is ignored; one that arrives with the current generation is an external cancellation and is handled as a contract violation (sections 7.7 and 8.8). A fake driver in tests must fire `onCancel` synchronously inside `cancel()`/`cancelScope()`, exactly as `MotionRuntime` does, for this distinction to be tested faithfully.
+- Controllers arm every `onComplete`/`onCancel` they pass to the driver with their lifecycle generation (section 6.1). A driver `onCancel` that arrives while the controller itself is replacing or settling its tween carries a stale generation and is ignored; one that arrives with the current generation is a cancellation delivered through the driver (`core.cancelAll()` reaching the motion module first, or a direct `motion.cancelAll()`), and the controller settles itself exactly as `ui.cancelAll()` would (sections 7.7 and 8.8). A fake driver in tests must fire `onCancel` synchronously inside `cancel()`/`cancelScope()`, exactly as `MotionRuntime` does, for this distinction to be tested faithfully.
 
 ## 6. UiRuntime public API
 
 ```ts
 export interface UiRuntimeOptions {
   motion: UiMotionDriver;
-  /** Every host callback error and every ui: contract violation lands here. Defaults to a console.error fallback. See section 12. */
+  /** Every host callback error lands here. Defaults to a console.error fallback. See section 12. */
   onUiError?: UiErrorHandler;
   /** Fires only when isBlocking() changes value. See sections 6.2 and 9. */
   onBlockingChanged?: (blocking: boolean) => void;
@@ -185,8 +190,12 @@ export class UiRuntime implements CoreRuntimeModule {
 
   /** CoreRuntimeModule: always false, no per-frame work. */
   update(frameMs: number): boolean;
+  /** CoreRuntimeModule: settles the one controller that owns `scope` (section 11). Returns 1 if it changed anything, else 0. */
+  cancelScope(scope: UiScope): number;
+  /** CoreRuntimeModule: settles every controller — buttons to idle, windows force-hidden (section 11). Returns the number changed by this call; idempotent. */
+  cancelAll(): number;
   getStats(): UiRuntimeStats;
-  /** Disposes every controller, cancels every ui: scope, clears blocking. See section 11. */
+  /** cancelAll(), then disposes every controller and clears the registries. See section 11. */
   dispose(): void;
 }
 ```
@@ -204,7 +213,7 @@ Host callbacks run synchronously inside controller methods and inside the driver
 
 - Every controller keeps an integer **lifecycle generation**, incremented at each transition it performs: a change of `state`, a change of the pointer owner, becoming or ceasing to be the runtime's active window, and the start, replacement, or settle of its tween.
 - A controller method performs its own transition **first** (increment included), then runs its host callbacks in the documented order. After each callback returns, it compares `generation` with the value captured right after its own transition. If the value moved, the method returns immediately: the reentrant call has already carried the lifecycle forward and owns every remaining step. Nothing ever "resumes" an older transition after a callback.
-- Driver callbacks (`onComplete`, `onCancel`) are armed with the generation current when the tween started. A driver callback whose armed generation no longer matches is ignored. This is what guarantees that a stale completion can never restore `shown` after a reentrant `close()`, and what tells a controller-initiated replacement or settle (which increments the generation *before* calling `handle.cancel()`) apart from an external cancellation (sections 7.7 and 8.8) without any flag.
+- Driver callbacks (`onComplete`, `onCancel`) are armed with the generation current when the tween started. A driver callback whose armed generation no longer matches is ignored. This is what guarantees that a stale completion can never restore `shown` after a reentrant `close()`, and what tells a controller-initiated replacement or settle (which increments the generation *before* calling `handle.cancel()`) apart from a cancellation delivered through the driver (sections 7.7 and 8.8) without any flag.
 - A method that calls a host callback **before** performing any transition — `close()` calling `onBeforeClose` — captures the generation before the callback and abandons the whole operation, returning `false`, if the generation moved. `close()` additionally holds a private "evaluating close" flag while `onBeforeClose` runs; a nested `close()` on the same window during that evaluation returns `false` and counts as `rejectedCloses`, which rules out recursion.
 - Exactly one step is exempt from the "return if moved" rule: finalize-hidden always ends with `recomputeBlocking()` (section 6.2), because that call is an idempotent reconciliation of the runtime's actual state and is safe after any re-entry.
 - Return values report acceptance of a request, not the final state: `show()` returns `true` even if a callback closed the window again before `show()` returned; `close()` returns `true` as soon as leaving has started.
@@ -227,8 +236,8 @@ if next !== blocking:
 `blocking` is stored **before** the callback runs, so a reentrant `recomputeBlocking()` triggered from inside `onBlockingChanged` compares against the already-published value. `recomputeBlocking()` is called after every change of `activeWindow` (sections 8.3, 8.4, 8.5, 11) and always reads the runtime's current state, so a callback that showed another window before its caller resumed can never be undone by that caller. Consequences:
 
 - `onBlockingChanged` never receives the same value twice in a row.
-- If `A.onHidden` shows `B` and `B.blocksGameplay`, the host sees no `false` between `A` and `B`: the sequence is `[true]` at `A.show()`, nothing at the hand-over, `[false]` only after `B` is hidden.
-- If `A.onHidden` shows `B` and `B` does not block, the host sees exactly one `false`, published inside `B.show()` after `B.onShow`.
+- If `A.onHidden` or `A.onClosed` shows `B` and `B.blocksGameplay`, the host sees no `false` between `A` and `B`: the sequence is `[true]` at `A.show()`, nothing at the hand-over, `[false]` only after `B` is hidden.
+- If `A.onHidden` or `A.onClosed` shows `B` and `B` does not block, the host sees exactly one `false`, published inside `B.show()` after `B.onShow`.
 
 ## 7. ButtonController
 
@@ -295,7 +304,7 @@ export interface ButtonController {
   setEnabled(enabled: boolean): void;
   /** Replaces the threshold for every later distance check, including a press already in progress. RangeError on invalid input; the old value stays. */
   setTapThreshold(value: number): void;
-  /** Programmatic settle: stops any animation, releases the pointer, snaps progress to 0, then reports onCancel('programmatic') if a press was in progress. */
+  /** Settle: stops any animation, releases the pointer, snaps progress to 0, then reports onCancel('programmatic') if a press was in progress. Also the path taken by cancelScope/cancelAll and dispose (section 7.5). */
   cancel(): boolean;
   dispose(): void;
 }
@@ -338,8 +347,8 @@ Fail-fast rather than coercion, because the threshold is developer configuration
 | `setEnabled(false)` | — | `enabled = false`; if `pressed`: end press with `'disabled'` (which itself sets state = `disabled`); else state = `disabled` |
 | `setEnabled(true)` | — | `enabled = true`; if state is `disabled`: state = `idle` (the release animation, if any, keeps running to `0`) |
 | `setTapThreshold(v)` | valid `v` | store; no callback (section 7.4) |
-| `cancel()` | — | programmatic settle, defined below |
-| `dispose()` | — | transition: owner cleared, generation++; the tween is cancelled with no callback (stale generation); scope swept; removed from the runtime; every later call returns `false`/no-op |
+| `cancel()` | — | settle, defined below |
+| `dispose()` | — | settle exactly as `cancel()` (callbacks included), then scope swept, removed from the runtime, id freed; every later call returns `false`/no-op |
 
 **Ending a press** (`endPress(outcome)`), the one shared path for tap and every cancel reason:
 
@@ -351,13 +360,13 @@ Fail-fast rather than coercion, because the threshold is developer configuration
 
 **Re-press during release.** `pointerDown` while a release animation is active: the release tween is replaced (no snap), and the press tween starts from the current progress. No visual jump, no baseline drift.
 
-**Programmatic settle — `cancel()`:**
+**Settle — `cancel()`.** This is the one path for every cancellation that does not come from the pointer: the host's own `cancel()`, `ui.cancelScope`/`ui.cancelAll` and therefore `core.cancelScope`/`core.cancelAll`, a cancellation delivered through the driver (section 7.7), and `dispose()`:
 
-1. if disposed, or if state is not `pressed` and no tween is active: return `false`;
-2. transition: owner cleared; state = `idle` (`disabled` if `enabled` is `false`); generation++; the tween, if any, is cancelled (its `onCancel` carries a stale generation and is ignored); `setProgress(0)`, which may fire `onProgress(0)` — if that callback moved the generation, return `true`;
+1. if disposed, or if state is not `pressed` and no tween is active: return `false` (idempotent: a settled button settles to nothing);
+2. transition: owner cleared; state = `idle` (`disabled` if `enabled` is `false`); generation++; the tween, if any, is cancelled (its `onCancel` carries a stale generation and is ignored, and a tween the driver already cancelled returns `false` from `handle.cancel()` harmlessly); `setProgress(0)`, which may fire `onProgress(0)` — if that callback moved the generation, return `true`;
 3. if a press was in progress: `cancelledPresses`++ and fire `onCancel('programmatic')`; return `true`.
 
-The host therefore sees `onProgress(0)` before `onCancel('programmatic')`. This is the "close during release" case from the trail_arrow proof: a host calling `cancel()` from a window's cleanup gets a button that is already at its idle baseline when the callback runs.
+The host therefore sees `onProgress(0)` before `onCancel('programmatic')`. This is the "close during release" case from the trail_arrow proof: a host calling `cancel()` from a window's cleanup gets a button that is already at its idle baseline when the callback runs. `onProgress(0)` restores the host's visual baseline and `onCancel('programmatic')` tells it the press ended; neither is a user action, so both are safe during global cancellation and teardown.
 
 **No separate `onRelease`.** Every press ends in exactly one of `onTap` or `onCancel(reason)`; both animate to `0`. A host that wants a press sound uses `onPress`; a click sound and the action go in `onTap`. Three callbacks cover both games' needs; nothing else is added in v0.3.
 
@@ -371,15 +380,11 @@ The host therefore sees `onProgress(0)` before `onCancel('programmatic')`. This 
 - `onComplete` with a matching generation: clear the handle; if `progress !== target` (a non-`MotionRuntime` driver that forgot to snap), `setProgress(target)`. With a stale generation: ignored.
 - `onCancel` with a matching generation: external cancellation, section 7.7. With a stale generation: ignored.
 
-### 7.7 External cancellation is a contract violation
+### 7.7 Cancellation delivered through the driver
 
-The only supported ways to stop a button animation are the controller's own methods: a new press or release, `cancel()`, `setEnabled(false)`, `dispose()`, and the runtime's `dispose()`. A tween cancelled by anything else — `core.cancelScope('ui:button:<id>')`, `motion.cancelScope(...)`, `core.cancelAll()`, `motion.cancelAll()`, or `motion.dispose()` — reaches the controller as a driver `onCancel` whose armed generation is still current. The controller treats it as a **contract violation**:
+A driver `onCancel` whose armed generation is still current means the tween was cancelled by something other than this controller: `core.cancelScope`/`core.cancelAll` fanned out to the `motion` module before the `ui` module, or the host called `motion.cancelScope`/`motion.cancelAll`/`motion.dispose()` directly. The controller responds by running its own settle — `cancel()` from section 7.5 — with the handle already dead: pointer released, state `idle`, `onProgress(0)`, and `onCancel('programmatic')` if a press was in progress.
 
-- the handle is dropped; `progress`, `state`, and the pointer owner are left exactly as they are;
-- **no host callback fires** — not `onProgress`, not `onTap`, not `onCancel`;
-- `externalCancels` increments and the event is reported through `onUiError` with phase `'externalCancel'` (section 12).
-
-The controller never finalizes a lifecycle on the driver's behalf, so an app teardown that disposes `MotionRuntime` first cannot trigger a single button action (section 11). Recovery from a violation is `dispose()` and re-creation; a press whose animation was dropped can also simply be released by the host, which starts a fresh release animation.
+Nothing is reported: this is a supported route into exactly the state that `ui.cancelAll()` produces, which is what makes the fan-out order irrelevant (section 11). If `ui.cancelAll()` runs afterwards for the same controller it finds nothing left to settle and returns `0` for it. Calling `handle.cancel()` from inside the driver's own `onCancel` is safe with `MotionRuntime`: the operation is already removed, so the call returns `false` and nothing recurses.
 
 ### 7.8 Host mapping (documentation for the future adapters, not Core code)
 
@@ -418,7 +423,11 @@ The host maps progress to its view every time `onTransition(progress, phase)` fi
 ```ts
 export type WindowState = 'hidden' | 'entering' | 'shown' | 'leaving';
 export type WindowTransitionPhase = 'entering' | 'leaving';
+
+/** Reasons a host passes to close(). */
 export type WindowCloseReason = 'button' | 'background' | 'escape' | 'back' | 'programmatic';
+/** What onHidden receives: the close reason, or 'cancelled' for a force-hide (cancel(), cancelScope, cancelAll, dispose). */
+export type WindowHiddenReason = WindowCloseReason | 'cancelled';
 
 export interface WindowCloseIntent {
   readonly reason: WindowCloseReason;
@@ -439,8 +448,9 @@ export interface WindowControllerOptions<TParams = void> {
   onShown?: () => void;
   /** Return false to veto. A thrown error is reported and does NOT veto (section 12). */
   onBeforeClose?: (intent: WindowCloseIntent) => boolean | void;
-  /** Unmount. Fires once per completed close, after the last onTransition(0, 'leaving'). */
-  onHidden?: (reason: WindowCloseReason) => void;
+  /** View cleanup only: unmount. Fires once on EVERY path to hidden — a completed close and a force-hide alike.
+   *  Must not run business flow; that belongs to the close() continuation (section 8.4). */
+  onHidden?: (reason: WindowHiddenReason) => void;
 }
 
 export interface WindowController<TParams = void> {
@@ -452,12 +462,19 @@ export interface WindowController<TParams = void> {
   readonly disposed: boolean;
 
   show(params: TParams): boolean;
-  close(reason: WindowCloseReason): boolean;
+  /** Close intent. `onClosed` is the business continuation of THIS request: it runs once, after onHidden,
+   *  only if this close completes. A veto, a force-hide, or a dispose drops it. */
+  close(reason: WindowCloseReason, onClosed?: () => void): boolean;
+  /** Force-hide: no onBeforeClose, no veto, no onClosed; onHidden('cancelled') fires.
+   *  The path taken by cancelScope/cancelAll/dispose and by a cancellation delivered through the driver. */
+  cancel(): boolean;
   dispose(): void;
 }
 ```
 
 `TParams` defaults to `void`, so a window without parameters is shown as `w.show()`.
+
+**Two callbacks, two responsibilities.** `onHidden` is the view's cleanup and fires on every path to `hidden`, including the paths teardown and global cancellation take. The business continuation — next level, restart, reward, navigation — is bound to the user's or the host's explicit close request through `close(reason, onClosed)`, and only a close that actually completes runs it. A host can therefore never be tricked into "the user finished this window" by a cancellation, because a cancellation has no continuation to run.
 
 ### 8.3 `show(params)`
 
@@ -475,14 +492,14 @@ Otherwise, in this exact order:
 
 **Why `onShow` runs before blocking is published.** Both run synchronously inside `show()` with no frame between them, so the order has no visual effect. Mounting first guarantees that any close path triggered from a later callback finds a mounted view: `onHidden` never has to unmount something `onShow` never mounted.
 
-### 8.4 `close(reason)` and close intent
+### 8.4 `close(reason, onClosed?)`, close intent, and force-hide
 
-Returns `false` and changes nothing when the controller is disposed, its state is `hidden` or `leaving` (a duplicate close), or its own `onBeforeClose` is currently being evaluated (a nested close). Rejected closes increment `rejectedCloses`.
+Returns `false` and changes nothing when the controller is disposed, its state is `hidden` or `leaving` (a duplicate close), or its own `onBeforeClose` is currently being evaluated (a nested close). Rejected closes increment `rejectedCloses`; a rejected close never stores `onClosed`.
 
 Otherwise:
 
-1. build `intent = { reason, state }` (state is `'entering'` or `'shown'`); set the private evaluating-close flag; capture the generation; call `onBeforeClose(intent)` if provided; clear the flag. `false` vetoes: `vetoedCloses` increments, `close()` returns `false`, and nothing else changes — an enter tween that was running keeps running. If the generation moved during the callback (it disposed the window), `close()` returns `false`. Any other return value, and a thrown error, means "proceed";
-2. transition: state = `leaving`; generation++; `closes`++; a running enter tween is cancelled (its `onCancel` is stale and ignored);
+1. build `intent = { reason, state }` (state is `'entering'` or `'shown'`); set the private evaluating-close flag; capture the generation; call `onBeforeClose(intent)` if provided; clear the flag. `false` vetoes: `vetoedCloses` increments, `close()` returns `false`, `onClosed` is not stored, and nothing else changes — an enter tween that was running keeps running. If the generation moved during the callback (it disposed or cancelled the window), `close()` returns `false`. Any other return value, and a thrown error, means "proceed";
+2. transition: state = `leaving`; generation++; `closes`++; the `onClosed` continuation is stored; a running enter tween is cancelled (its `onCancel` is stale and ignored);
 3. `onTransition(progress, 'leaving')` with the current progress (`1` from `shown`, a mid value from `entering`). If the callback moved the generation, return `true`;
 4. animate to `0` (`leaveDurationMs`, `leaveEase`) through `animateTo` (section 7.6). If that starts a tween, it is armed with the current generation. If it completes synchronously instead (`leaveDurationMs <= 0`, or `progress` already `0` because the close came from the very start of `entering`), it may have fired `onTransition(0, 'leaving')` (if that moved the generation, return `true`), and `close()` finalizes hidden immediately;
 5. return `true`.
@@ -490,35 +507,47 @@ Otherwise:
 **Finalize hidden** (`finalizeHidden(reason)`) — reached from step 4 or from a leave tween completing with a matching generation:
 
 1. transition: state = `hidden`; `progress = 0`; if `ui.activeWindow === this`, clear it; generation++;
-2. `onHidden(reason)` — unmount. The host may show another window, or this one again, from inside this callback; both succeed because the window is already `hidden` and `activeWindow` is already clear;
-3. `recomputeBlocking()` — **always**, whatever `onHidden` did. It reads the runtime's actual state: it publishes `false` only if no blocking window is active now, and publishes nothing if `onHidden` already showed another blocking window.
+2. `onHidden(reason)` — view cleanup. The host may show another window, or this one again, from here; both succeed because the window is already `hidden` and `activeWindow` is already clear;
+3. if a stored `onClosed` continuation exists and the controller was not disposed during `onHidden`: clear it, then run it (phase `'onClosed'`, section 12). This is the business continuation of the completed close request. It may show the next window; because it runs before step 4, doing so publishes no `false`/`true` blocking flicker (section 6.2);
+4. `recomputeBlocking()` — **always**, whatever the callbacks did. It reads the runtime's actual state and publishes `false` only if no blocking window is active now.
+
+**Force-hide — `cancel()`.** Returns `false` if the controller is disposed or `hidden` (idempotent). Otherwise:
+
+1. transition: state = `hidden`; `progress = 0`; if `ui.activeWindow === this`, clear it; generation++; any tween is cancelled (its `onCancel` is stale and ignored; a tween the driver already cancelled returns `false` from `handle.cancel()` harmlessly); a stored `onClosed` continuation is dropped; `forcedHides`++;
+2. `onHidden('cancelled')` — the same view cleanup as a completed close, so the dialog closes or the container empties;
+3. `recomputeBlocking()`.
+
+No `onBeforeClose` (a cancellation is not an intent and cannot be vetoed), no `onTransition`, no `onShown`, no `onClosed`. This is the path taken by `ui.cancelScope`/`ui.cancelAll` — and therefore `core.cancelScope`/`core.cancelAll` — by a cancellation delivered through the driver (section 8.8), and by `dispose()`. `cancel()` returns `true` when it changed the state.
 
 **Clarification.** `setProgress` never fires `onTransition` for an unchanged value. When a phase's start and terminal values coincide — a close issued from inside `onShow`, where `progress` is still `0` — the host sees a single `onTransition(0, 'leaving')`, not two.
 
-**Why this closes the gorodki Escape bug.** The host's dialog adapter listens to the native `cancel` event, always calls `event.preventDefault()`, and calls `controller.close('escape')`. If `onBeforeClose` returns `false` (the result window requires an explicit "next" or "again" choice), the dialog stays open and gameplay state stays consistent. If it proceeds, `onHidden` is the one place that calls `dialog.close()` and resets the host state. Native UI can no longer close the window behind the game's back.
+**Why this closes the gorodki Escape bug.** The host's dialog adapter listens to the native `cancel` event, always calls `event.preventDefault()`, and calls `controller.close('escape')`. If `onBeforeClose` returns `false` (the result window requires an explicit "next" or "again" choice), the dialog stays open and gameplay state stays consistent. If a close proceeds, `onHidden` is the one place that calls `dialog.close()`, and the level change lives in the continuation the tapped button passed to `close('button', …)`. Native UI can no longer close the window behind the game's back, and no cancellation can start a level.
 
 ### 8.5 Cases the lifecycle must define
 
 | Situation | Behavior |
 |---|---|
 | `close()` during `entering` | intent state `'entering'`; if not vetoed, the enter tween is cancelled and leaving starts from the current progress |
-| duplicate `close()` (during `leaving` or when `hidden`) | `false`, counted in `rejectedCloses`, no callbacks |
+| duplicate `close()` (during `leaving` or when `hidden`) | `false`, counted in `rejectedCloses`, no callbacks, the first request's `onClosed` is kept |
 | nested `close()` from inside `onBeforeClose` | `false`, counted in `rejectedCloses`, no recursion; the outer `close()` proceeds or vetoes according to the callback's return value |
-| `dispose()` from inside `onBeforeClose` | the outer `close()` returns `false`; no leaving callbacks fire |
-| `close()` or `dispose()` from inside `onShow` | `show()` returns `true`; no enter tween starts; no later callback of that `show()` runs; a `close()` here runs the full close sequence (`onBeforeClose`, `onTransition(0, 'leaving')`, `onHidden`) against the view `onShow` just mounted |
+| `dispose()` or `cancel()` from inside `onBeforeClose` | the outer `close()` returns `false`; `onClosed` is never stored; no leaving callbacks fire |
+| `close()` or `dispose()` from inside `onShow` | `show()` returns `true`; no enter tween starts; no later callback of that `show()` runs; a `close()` here runs the full close sequence (`onBeforeClose`, `onTransition(0, 'leaving')`, `onHidden`, `onClosed`) against the view `onShow` just mounted |
 | `close()` from inside `onTransition(…, 'entering')` | the enter tween is cancelled; `onShown` never fires; leaving continues from that progress |
 | `close()` or `dispose()` from inside `onShown` | proceeds normally; nothing was pending after `onShown` |
-| `show()` during `entering`, `shown`, or `leaving` | `false`, counted in `rejectedShows`; params are **not** re-applied. A host that wants to replay the entrance closes first and shows again from `onHidden` |
+| `show()` during `entering`, `shown`, or `leaving` | `false`, counted in `rejectedShows`; params are **not** re-applied. A host that wants to replay the entrance closes first and shows again from `onClosed` or `onHidden` |
 | `show(B)` while `A` is active | `false` (section 8.6) |
-| `show(B)`, or `show(A)` again, from inside `A.onHidden` | accepted; `A`'s finalize then only reconciles blocking through `recomputeBlocking()` and never publishes a value that contradicts the new window (section 6.2) |
+| `show(B)`, or `show(A)` again, from inside `A.onHidden` or `A.onClosed` | accepted; `A`'s finalize then only reconciles blocking through `recomputeBlocking()` and never publishes a value that contradicts the new window (section 6.2) |
+| `dispose()` from inside `onHidden` | the pending `onClosed` is dropped; nothing else fires |
 | veto during `entering` | the entrance simply continues; the window still reaches `shown` and fires `onShown` |
-| `dispose()` while active | tween cancelled with no callback; state = `hidden`; `activeWindow` cleared; `recomputeBlocking()` (publishes `false` if the runtime was blocking); **no** `onHidden` |
-| external cancellation of the enter or leave tween | contract violation (section 8.8): state unchanged, no callback; `dispose()` recovers |
-| a tween completion arriving after a reentrant `close()`/`dispose()` | ignored — its armed generation is stale (section 6.1) |
+| `cancel()` during `entering` or `shown` | force-hide: tween dropped, `onHidden('cancelled')`, blocking reconciled; no `onBeforeClose`, no `onShown` |
+| `cancel()` during `leaving` | force-hide immediately: the leave tween is dropped, `onHidden('cancelled')` fires, the stored `onClosed` is **dropped** — the business flow the user asked for does not run |
+| `dispose()` while active | force-hide (`onHidden('cancelled')`, blocking reconciled), then unregistration |
+| `core.cancelScope('ui:window:<id>')` / `core.cancelAll()` / `motion.cancelAll()` | force-hide through whichever module reaches the controller first; identical outcome in every order (section 11) |
+| a tween completion arriving after a reentrant `close()`/`dispose()`/`cancel()` | ignored — its armed generation is stale (section 6.1) |
 
 ### 8.6 One active modal window
 
-`UiRuntime` holds at most one window whose state is not `hidden`. There is no stack, no queue, and no replacement: `show()` on any other window returns `false` until the active one has finalized hidden. The supported pattern for "open B after A" is to call `B.show(...)` from `A`'s `onHidden`, or from any later host code that checks `ui.activeWindow === null`. Both proof targets already behave this way: trail_arrow's `windows` layer holds one child, gorodki's dialogs are exclusive by `showModal()`.
+`UiRuntime` holds at most one window whose state is not `hidden`. There is no stack, no queue, and no replacement: `show()` on any other window returns `false` until the active one has finalized hidden. The supported pattern for "open B after A" is to call `B.show(...)` from the continuation passed to `A.close(reason, onClosed)` — the business step that follows a completed close — or, for pure view sequencing, from `A`'s `onHidden`, or from any later host code that checks `ui.activeWindow === null`. Both proof targets already behave this way: trail_arrow's `windows` layer holds one child, gorodki's dialogs are exclusive by `showModal()`.
 
 A host that needs an immediate replacement sets `leaveDurationMs: 0` on the outgoing window; then `A.close(...)` finalizes synchronously and `B.show(...)` on the next line succeeds. This is trail_arrow's actual close today.
 
@@ -526,22 +555,22 @@ A host that needs an immediate replacement sets `leaveDurationMs: 0` on the outg
 
 Identical mechanics to the button (section 7.6): one preallocated binding over `progress`, one tween at a time in scope `ui:window:<id>`, requests armed with the lifecycle generation, non-positive durations handled synchronously without the driver, `onTransition` errors caught inside `set()`, stale driver callbacks ignored.
 
-### 8.8 External cancellation is a contract violation
+### 8.8 Cancellation delivered through the driver
 
-Same rule as the button (section 7.7). A driver `onCancel` with a current generation means something outside the controller cancelled its tween. The controller drops the handle, leaves `progress` and `state` untouched (`entering` or `leaving`), fires **no** host callback — in particular neither `onShown` nor `onHidden` — increments `externalCancels`, and reports through `onUiError` with phase `'externalCancel'`.
-
-Recovery: `dispose()` always works and clears `activeWindow` and blocking without firing `onHidden`; a window stuck in `entering` can also be `close()`d normally, which starts a fresh leave transition; a window stuck in `leaving` can only be disposed. Because nothing semantic ever fires on this path, a teardown that reaches it by mistake cannot start a next level, a restart, or any other host action (section 11).
+Same rule as the button (section 7.7). A driver `onCancel` with a current generation means something outside the controller cancelled its tween — `core.cancelScope`/`core.cancelAll` reaching the `motion` module before the `ui` module, or a direct `motion.cancelScope`/`motion.cancelAll`/`motion.dispose()`. The controller responds with its own force-hide (`cancel()`, section 8.4): state `hidden`, `activeWindow` cleared, `onHidden('cancelled')`, the pending `onClosed` dropped, blocking reconciled. Nothing is reported, `onShown`/`onClosed` never fire, and a later `ui.cancelAll()` finds the controller already hidden. A window is therefore never left `entering` or `leaving` without a tween, whichever module a cancellation reaches first.
 
 ### 8.9 Host mapping (documentation for the future adapters)
 
 `trail_arrow` `LevelCompleteWindow`:
 
 - `WindowsSystem` keeps mounting the Pixi view and fitting it; the controller does not replace it. `onShow(params)` applies params and marks the window interactive. `onTransition(p, 'entering')` drives `alpha`, `y`, `scale` from the fit scale. `enterDurationMs: 440`, `enterEase: backOut(1.9)` as a host `EaseFn` (the built-in `'backOut'` uses overshoot `1.35`, which would change the look). `leaveDurationMs: 0`.
-- `btnClose` tap → `close('button')`; background tap → `close('background')`; continue / rewarded flows → `close('programmatic')`. `onBeforeClose` may return `false` while an interstitial is pending; this is optional for the proof, and today's "disable every button" workaround may stay as it is. `onHidden` runs the existing `closeWindowOnly` cleanup.
+- `onHidden` runs the existing `closeWindowOnly` cleanup only: remove the layer children, kill the fireworks, settle `btnClose`, drop the background listener. It never navigates.
+- `btnClose` tap → `close('button', () => closeToMain())`; background tap → `close('background', () => closeToMain())`; "continue" → `close('programmatic', () => continueFlow())`; rewarded → `close('programmatic', () => rewardThenMain())`. The navigation and the reward grant live in those continuations. `onBeforeClose` may return `false` while an interstitial is pending; this is optional for the proof, and today's "disable every button" workaround may stay as it is.
 
 `gorodki` `#result`:
 
-- `onShow(params)` writes stars/title/summary and calls `dialog.showModal()`. The dialog's native `cancel` event is intercepted as described in section 8.4. `next`/`again` → `close('button')`; `onHidden(reason)` calls `dialog.close()` and only then triggers the next level or restart, so the host never acts on a closed dialog whose game state was not resolved.
+- `onShow(params)` writes stars/title/summary and calls `dialog.showModal()`. The dialog's native `cancel` event is intercepted as described in section 8.4. `onHidden` does exactly one thing: `dialog.close()`.
+- `next` → `close('button', () => loadNextLevel())`; `again` → `close('button', () => restart())`. The level change lives in the continuation, never in `onHidden`, so `core.cancelAll()` or a teardown closes the dialog and changes nothing else.
 - `blocksGameplay: true`; the frame loop gates `step()` on `ui.isBlocking()` in addition to its existing conditions. `render()` and `core.update(frameMs)` keep running every frame.
 
 ## 9. Blocking state
@@ -554,7 +583,7 @@ onBlockingChanged?: (blocking: boolean) => void   // UiRuntimeOptions
 Semantics:
 
 - `isBlocking()` returns the runtime's stored `blocking` field (section 6.2). That field is recomputed as `activeWindow !== null && activeWindow.blocksGameplay` at every change of `activeWindow`; an active window is one in `entering`, `shown`, or `leaving`.
-- Blocking is published inside `show()` right after `onShow` (section 8.3 step 3) and withdrawn inside finalize-hidden right after `onHidden` (section 8.4 step 3) or inside `dispose()`.
+- Blocking is published inside `show()` right after `onShow` (section 8.3 step 3) and withdrawn at the end of finalize-hidden, after `onHidden` and `onClosed` (section 8.4), and at the end of every force-hide — `cancel()`, `cancelScope`, `cancelAll`, `dispose()`. After `core.cancelAll()` or any teardown, `isBlocking()` is `false`.
 - `onBlockingChanged` fires synchronously on every change of value and never twice in a row with the same value, including across a hand-over where `A.onHidden` shows `B`. It is guarded like every other host callback (section 12).
 - `isBlocking()` is a field read; a host may poll it every frame at no cost, which is the recommended wiring for gorodki's frame loop.
 
@@ -562,7 +591,7 @@ What blocking is **not**:
 
 - It is not a motion pause. `UiRuntime` never calls `pauseScope`/`resumeScope` and never touches the driver's clock. UI transitions run on the host's real frame time even while the host has stopped its physics and input. A gorodki modal with `blocksGameplay: true` therefore pauses Rapier stepping and gesture input while the dialog still animates in and out.
 - It is not an input filter. `UiRuntime` does not receive gameplay input and cannot swallow it. trail_arrow's background locker and gorodki's `closest('button, dialog')` guard stay where they are; `isBlocking()` is the flag gameplay systems read to decide whether to react at all.
-- It is not per-frame state. It only changes inside `show()`, finalize-hidden, and `dispose()`.
+- It is not per-frame state. It only changes inside `show()`, finalize-hidden, and force-hide.
 
 ## 10. Layout
 
@@ -637,30 +666,36 @@ Two kinds of input, two policies:
 
 With a valid design size, `computeLayout` never throws, every output is a finite number for every input, and the function is deterministic: equal inputs give structurally equal outputs.
 
-## 11. Scopes, lifecycle, and dispose
+## 11. Scopes, lifecycle, cancellation, and dispose
 
 | Owner | Scope name | Who creates motions in it | Stopped by |
 |---|---|---|---|
-| `ButtonController` | `ui:button:<id>` | only that controller | replacement by the next press/release animation (tap, any cancel reason, `setEnabled(false)`, re-press), `cancel()`, `dispose()` |
-| `WindowController` | `ui:window:<id>` | only that controller | replacement of the enter tween by `close()`, finalize hidden, `dispose()` |
+| `ButtonController` | `ui:button:<id>` | only that controller | replacement by the next press/release animation (tap, any cancel reason, `setEnabled(false)`, re-press); settle through `cancel()`, `ui.cancelScope`/`ui.cancelAll`, `core.cancelScope`/`core.cancelAll`, a cancellation delivered through the driver, or `dispose()` |
+| `WindowController` | `ui:window:<id>` | only that controller | replacement of the enter tween by `close()`; finalize hidden; force-hide through `cancel()`, `ui.cancelScope`/`ui.cancelAll`, `core.cancelScope`/`core.cancelAll`, a cancellation delivered through the driver, or `dispose()` |
+
+**Facts about `CoreRuntime` v0.2 this section relies on** (as implemented, unchanged by v0.3): `update`, `cancelScope`, `cancelAll`, `pauseScope`, `resumeScope`, `getStats`, and `dispose` fan out over the registered modules in registration order (a `Map` in insertion order); a module that lacks an optional method is skipped; `cancelScope`/`cancelAll` return the sum of the numbers the modules returned; a module that throws is reported through `onError` and skipped for that call while the others continue; `dispose` fans out in the same order, then clears the module map and the error handler. `MotionRuntime.cancelScope`/`cancelAll` iterate a snapshot of their operations, skip operations already removed reentrantly, fire `onCancel` synchronously inside `cancelOperation`, and `handle.cancel()` on an operation that is already gone returns `false`.
 
 Rules:
 
-- The `ui:` prefix is **reserved**. Hosts must not start motions in `ui:`-prefixed scopes, and must not cancel them from outside the controller. The only supported ways to stop a UI motion are the controller methods listed above and the runtime's `dispose()`. `MotionRuntime` cannot tell scopes apart, so this is a rule for hosts, enforced by reporting (sections 7.7 and 8.8), not by a guard inside `MotionRuntime`.
-- A controller runs at most one tween at any moment. Replacing a tween always increments the controller's generation first, so the replaced tween's `onCancel` is recognized as stale and ignored; only an `onCancel` with a current generation is an external cancellation.
-- Controller `dispose()`: increment the generation, cancel any tween (no host callback), then `driver.cancelScope(scope)` as a belt-and-braces sweep (it returns `0` when the cancel already did the job), then unregister from the runtime. A window that was active also clears `activeWindow` and runs `recomputeBlocking()`, which publishes `false` if the runtime was blocking (blocking must never dangle). No `onHidden`, no `onCancel`. After `dispose()` every method returns `false`/no-op and `disposed` is `true`. Disposing twice is a no-op.
-- Reuse: controllers are long-lived, like trail_arrow's window instances and gorodki's static dialogs. A window is shown and hidden many times over its life; a button is pressed many times. Nothing is recreated per show or per press. A host that wants a fresh controller disposes the old one and creates a new one with the same id (ids are freed on dispose).
-- `UiRuntime.dispose()`: disposes every controller (windows first, then buttons; the order is only for determinism in tests), which cancels every `ui:` tween silently and runs `recomputeBlocking()` at most once with a change; clears the registries; sets `disposed`. Later `createButton`/`createWindow` throw.
-- **Teardown order is mandatory: `UiRuntime` is disposed before `MotionRuntime`.** `ui.dispose()` bumps every controller's generation and cancels its tween, so `MotionRuntime`'s `onCancel` callbacks are stale and ignored, and a later `motion.dispose()`, `motion.cancelAll()`, or `core.cancelAll()` finds no UI-owned motion. Two ways to get that order, both shown in section 4: register `'ui'` before `'motion'` — `CoreRuntime.dispose()` disposes modules in registration order, which is deterministic, not accidental — or call `ui.dispose()` explicitly before `core.dispose()`. Guaranteed result of a correctly ordered teardown: no `onShown`, `onHidden`, `onTransition`, `onProgress`, `onTap`, or `onCancel` fires; `onBlockingChanged(false)` fires at most once; zero active motions remain; zero errors are reported. `UiRuntime` never creates browser listeners, so there is nothing else to detach.
-- **If the order is violated** (`'motion'` registered first, or `motion.dispose()`/`core.cancelAll()` called while `UiRuntime` is alive), the outcome is still bounded and still silent on the semantic side: every UI tween that was active is externally cancelled, each controller drops its handle without firing any host callback (sections 7.7 and 8.8), `externalCancels` counts them, and each is reported once through `onUiError` with phase `'externalCancel'`. The subsequent `ui.dispose()` still finishes silently and leaves no active motion. The reports are the signal to fix the order. Nothing in `CoreRuntime` or `MotionRuntime` changes for v0.3; if a future `CoreRuntime` gains explicit dispose ordering, this rule becomes a default rather than a host obligation.
-- `core.cancelScope('ui:…')`, `motion.cancelScope('ui:…')`, `core.cancelAll()`, and `motion.cancelAll()` reach UI motions like any other; they are legitimate only for non-`ui:` scopes, or after `ui.dispose()` during teardown. Any other use is the contract violation above.
+- The `ui:` prefix is reserved for **starting** motions: hosts must not create tweens in `ui:`-prefixed scopes. **Cancelling** them is supported through every route — `core.cancelScope`, `core.cancelAll`, `ui.cancelScope`, `ui.cancelAll`, `motion.cancelScope`, `motion.cancelAll`, `motion.dispose()` — and every route ends in the same controller state.
+- A controller runs at most one tween at any moment. Replacing a tween always increments the controller's generation first, so the replaced tween's `onCancel` is recognized as stale and ignored; only an `onCancel` with a current generation is a cancellation delivered through the driver.
+- **`UiRuntime.cancelScope(scope)`**: if `scope` is the scope of a registered controller, run that controller's settle — `button.cancel()` or `window.cancel()` — and return `1` if it changed anything, else `0`. Any other scope returns `0`. **`UiRuntime.cancelAll()`**: settle every registered controller (windows first, then buttons; the order only fixes test expectations) and return the number that changed. Both are idempotent: a second call changes nothing, fires nothing, and returns `0`.
+- **Convergence — why registration order is irrelevant.** A UI tween can be reached by the `ui` module first or by the `motion` module first. `ui` first: the controller settles, its own `handle.cancel()` removes the tween, the tween's `onCancel` is stale and ignored, and `motion` then finds nothing UI-owned. `motion` first: the tween is cancelled, its `onCancel` carries a current generation, the controller runs the very same settle (sections 7.7 and 8.8), and `ui` then finds the controller already settled and skips it. Both routes end in the same state and fire the same host callbacks exactly once, because settle is idempotent. The summed return value of `core.cancelAll()` is order-independent too: with `N` controllers that had something to settle, `K` of them holding a tween, and `M` non-UI motions, `ui` first yields `N + M` and `motion` first yields `(M + K) + (N − K) = N + M`.
+- **Guarantees after `core.cancelAll()`, `ui.cancelAll()`, or an equivalent cancellation of every `ui:` scope**, in any registration order: every button is `idle` (or `disabled`) at `progress 0` with no owner; every window is `hidden` at `progress 0`; `activeWindow` is `null`; `isBlocking()` is `false`, and `onBlockingChanged(false)` fired exactly once if blocking was `true`; `MotionRuntime` holds no `ui:` tween (`activeMotions` is `0` when the host had no other motion); the only host callbacks that fired are, per pressed button, `onProgress(0)` then `onCancel('programmatic')`, and, per active window, `onHidden('cancelled')`; `onClosed`, `onShown`, `onTap`, `onTransition`, and `onBeforeClose` never fire; a repeated `cancelAll()` returns `0` and fires nothing.
+- **`core.cancelScope('ui:window:<id>')`** force-hides that one window and cancels its tween, in either order, with the guarantees above restricted to that controller; `core.cancelScope('ui:button:<id>')` settles that one button. A `cancelScope` for a non-`ui:` scope leaves every controller untouched.
+- Controller `dispose()`: settle exactly as `cancel()` (same callbacks), then `driver.cancelScope(scope)` as a belt-and-braces sweep (it returns `0` when the settle already did the job), then unregister from the runtime and free the id. After `dispose()` every method returns `false`/no-op and `disposed` is `true`. Disposing twice is a no-op.
+- Reuse: controllers are long-lived, like trail_arrow's window instances and gorodki's static dialogs. A window is shown and hidden many times over its life; a button is pressed many times. Nothing is recreated per show or per press. A host that wants a fresh controller disposes the old one and creates a new one with the same id.
+- `UiRuntime.dispose()`: `cancelAll()`, then dispose every controller (each already settled, so this only unregisters), clear the registries, set `disposed`. Later `createButton`/`createWindow` throw. `dispose()` is safe after `cancelAll()` and after a previous `dispose()`.
+- **Teardown through `core.dispose()`** is the guarantees above followed by unregistration, in any registration order: if `motion` is disposed first, every UI tween is cancelled through the driver and each controller settles itself; if `ui` is disposed first, it settles everything and `motion` finds nothing UI-owned. Either way no business continuation runs, no window is left half-shown, no motion dangles, blocking is `false`, and the host's views received exactly one cleanup callback each. No ordering rule is imposed on hosts and nothing in `CoreRuntime` or `MotionRuntime` changes.
+- `pauseScope`/`resumeScope` on a `ui:` scope pause and resume that tween inside `MotionRuntime` only; the controller keeps its phase and fires nothing until the tween resumes or is cancelled. `UiRuntime` neither implements nor calls them.
+- `UiRuntime` never creates browser listeners, so there is nothing else to detach on dispose.
 
 ## 12. Error isolation
 
 `UiRuntime` follows the two-layer model already shipped for `FxRuntime` and `MotionRuntime`:
 
-1. **Inner layer (`UiRuntime`):** every host callback — `onProgress`, `onPress`, `onTap`, `onCancel`, `onShow`, `onTransition`, `onShown`, `onBeforeClose`, `onHidden`, `onBlockingChanged` — is invoked inside a guard. A throw is caught, `callbackErrors` increments, and the error is reported through the runtime's handler. The controller's own transition has already happened before the callback ran, and the generation rule of section 6.1 covers a callback that re-enters the runtime, so neither a throwing nor a re-entering callback can leave a controller half-transitioned.
-2. **Outer layer (`CoreRuntime`):** if `ui.update`/`getStats`/`dispose` itself throws (a bug in `UiRuntime`), `CoreRuntime` reports it through its own `onError` and keeps every other module running, exactly as for `fx` and `motion`.
+1. **Inner layer (`UiRuntime`):** every host callback — `onProgress`, `onPress`, `onTap`, `onCancel`, `onShow`, `onTransition`, `onShown`, `onBeforeClose`, `onHidden`, `onClosed`, `onBlockingChanged` — is invoked inside a guard. A throw is caught, `callbackErrors` increments, and the error is reported through the runtime's handler. The controller's own transition has already happened before the callback ran, and the generation rule of section 6.1 covers a callback that re-enters the runtime, so neither a throwing nor a re-entering callback can leave a controller half-transitioned.
+2. **Outer layer (`CoreRuntime`):** if `ui.update`/`cancelScope`/`cancelAll`/`getStats`/`dispose` itself throws (a bug in `UiRuntime`), `CoreRuntime` reports it through its own `onError` and keeps every other module running, exactly as for `fx` and `motion`.
 
 Handler contract, mirroring `onMotionError`/`onEffectError`:
 
@@ -669,9 +704,8 @@ export type UiControllerKind = 'button' | 'window' | 'runtime';
 
 export type UiErrorPhase =
   | 'onProgress' | 'onPress' | 'onTap' | 'onCancel'
-  | 'onShow' | 'onTransition' | 'onShown' | 'onBeforeClose' | 'onHidden'
-  | 'onBlockingChanged'
-  | 'externalCancel';   // not a callback: a ui: tween was cancelled from outside its controller (sections 7.7, 8.8)
+  | 'onShow' | 'onTransition' | 'onShown' | 'onBeforeClose' | 'onHidden' | 'onClosed'
+  | 'onBlockingChanged';
 
 export interface UiErrorContext {
   kind: UiControllerKind;   // 'runtime' for onBlockingChanged
@@ -687,7 +721,8 @@ export type UiErrorHandler = (error: unknown, context: UiErrorContext) => void;
 - A throwing error handler is itself caught and ignored; an error handler can never reach the host's frame loop.
 - `onProgress`/`onTransition` errors are caught **inside** the binding's `set()`, so `MotionRuntime` never classifies them as binding errors and never cancels the tween for them. The visual may skip a frame; the lifecycle completes.
 - `onBeforeClose` that throws: reported with phase `'onBeforeClose'`, and the close **proceeds** (fail-open). Rationale: a veto that happens by accident leaves a modal that blocks the entire game with no way out; a close that happens by accident is recoverable and visible in the error sink. The host's handler sees the failure either way.
-- `'externalCancel'` reports carry an `Error` whose message names the scope; they are the only reports not caused by a throw. A correctly ordered teardown (section 11) produces none.
+- `onClosed` that throws: reported with phase `'onClosed'`. The window is already `hidden`, `activeWindow` already clear; `recomputeBlocking()` still runs afterwards, so blocking is never left `true` by a failed continuation.
+- Cancellation delivered through the driver (sections 7.7 and 8.8) is not an error and is not reported.
 - Rejected `show()`/`close()` calls (sections 8.3, 8.4) are **not** errors; they are counted in stats and return `false`. A duplicate controller id, `create*` after `dispose()`, an invalid tap threshold (section 7.4), and an invalid design size (section 10.5) **are** errors and throw, because they are programming mistakes at wiring time, not runtime conditions.
 
 ## 13. Stats
@@ -706,12 +741,12 @@ export interface UiRuntimeStats {
   closes: number;
   vetoedCloses: number;
   rejectedCloses: number;
-  externalCancels: number;
+  forcedHides: number;
   callbackErrors: number;
 }
 ```
 
-Through `core.getStats()` the aggregate becomes `{ fx: {...}, motion: {...}, ui: {...} }`. `getStats()` allocates one plain object per call and is never called from the frame path by the runtime itself. Counters are monotonic for the runtime's lifetime; `dispose()` does not reset them. `externalCancels` is `0` for the whole life of a correctly wired host.
+Through `core.getStats()` the aggregate becomes `{ fx: {...}, motion: {...}, ui: {...} }`. `getStats()` allocates one plain object per call and is never called from the frame path by the runtime itself. Counters are monotonic for the runtime's lifetime; `dispose()` does not reset them. `forcedHides` counts windows hidden through `cancel()`, `cancelScope`, `cancelAll`, a cancellation delivered through the driver, or `dispose()`; `cancelledPresses` already counts button settles through the same routes.
 
 ## 14. Performance rules and how to test them
 
@@ -744,7 +779,7 @@ Types:
 - `UiRuntimeOptions`, `UiRuntimeStats`
 - `UiMotionDriver`, `UiMotionTweenRequest`, `UiMotionHandle`, `UiScope`
 - `ButtonController`, `ButtonControllerOptions`, `ButtonState`, `ButtonCancelReason`, `ButtonPointerCancelReason`
-- `WindowController`, `WindowControllerOptions`, `WindowState`, `WindowTransitionPhase`, `WindowCloseReason`, `WindowCloseIntent`
+- `WindowController`, `WindowControllerOptions`, `WindowState`, `WindowTransitionPhase`, `WindowCloseReason`, `WindowHiddenReason`, `WindowCloseIntent`
 - `LayoutInput`, `LayoutResult`, `LayoutRect`, `LayoutInsets`, `LayoutOrientation`
 - `UiErrorContext`, `UiErrorHandler`, `UiErrorPhase`, `UiControllerKind`
 
@@ -788,18 +823,18 @@ Both proofs happen **after** implementation, as separate bounded integration tas
 - **Button:** `LevelCompleteWindow.btnClose` only. The existing `Button` component gains one opt-in path that forwards its Pixi pointer events to a `ButtonController` (mapping in section 7.8) and applies `onProgress` to scale from its explicit idle scale. Every other `Button` keeps the current GSAP path.
 - **Window:** `LevelCompleteWindow` only, through a `WindowController` wired as in section 8.9. `WindowsSystem`, `ScreenSystem`, every other window, and all remaining GSAP usage stay untouched.
 - **Wiring:** `App` creates `UiRuntime` next to its existing `MotionRuntime` and registers `'ui'` before `'motion'` (section 4); `core.update(ticker.deltaMS)` already exists. Game Core is consumed through the public entry, replacing the deep imports of the spike (section 15.2).
-- **Verify:** visual identity of the entrance (`440 ms`, `back.out(1.9)`, `alpha`/`y`/`scale`) on a real iPhone; press/release identity (`0.9`, `80 ms`); repeated press; close during release leaves `btnClose` at its idle scale on the next show; `isBlocking()` is `true` from `show()` to `onHidden` and `onBlockingChanged` fires exactly twice per show/close cycle; `motion.getStats().activeMotions` is `0` after the window is hidden; `ui.getStats().callbackErrors` is `0`.
+- **Verify:** visual identity of the entrance (`440 ms`, `back.out(1.9)`, `alpha`/`y`/`scale`) on a real iPhone; press/release identity (`0.9`, `80 ms`); repeated press; close during release leaves `btnClose` at its idle scale on the next show; `isBlocking()` is `true` from `show()` to `onHidden` and `onBlockingChanged` fires exactly twice per show/close cycle; navigation happens only from the `close()` continuation; a dev-hook `core.cancelAll()` while the window is shown runs the cleanup, leaves `isBlocking()` `false`, and does not navigate; `motion.getStats().activeMotions` is `0` after the window is hidden; `ui.getStats().callbackErrors` is `0`.
 
 ### 16.2 gorodki
 
 - **Button:** `#menu` only, through a DOM adapter (section 7.8) that replaces its `onclick` with `onTap` and drives a CSS custom property from `onProgress`. `#retry`, `#sound`, and the dialog buttons keep their current handlers.
 - **Window:** `#result` only, through a `WindowController` with the dialog adapter from section 8.9. `#picker` stays as it is.
 - **Allowed host refactor, and nothing more:** the frame loop calls `core.update(frameMs)` every frame before `render()`; `step()` is additionally gated on `!ui.isBlocking()`; Game Core is loaded as a vendored `dist/game-core.es.js` through the existing import map. Rapier, the physics step, level loading, the throw gesture, and `game.js`'s remaining DOM wiring are not touched. The larger `createGame(...)`/`destroy()` refactor recommended by HANDOFF.md is a separate decision and is not a prerequisite for this proof.
-- **Verify:** `#menu` reacts through `ButtonController` (press visual, tap opens the picker, a swipe starting on the button does not); `Escape` on `#result` is vetoed by `onBeforeClose` and the dialog stays open with gameplay state intact; `next`/`again` close through `close('button')` and the level changes only from `onHidden`; `isBlocking()` pauses physics stepping while `#result` is active; the dialog's enter/leave transition keeps animating while physics is paused; after the dialog hides, `motion.getStats().activeMotions` is `0`.
+- **Verify:** `#menu` reacts through `ButtonController` (press visual, tap opens the picker, a swipe starting on the button does not); `Escape` on `#result` is vetoed by `onBeforeClose` and the dialog stays open with gameplay state intact; `next`/`again` close through `close('button', continuation)` and the level changes only from that continuation, while `onHidden` does nothing but `dialog.close()`; a console `core.cancelAll()` while `#result` is open closes the dialog, leaves `isBlocking()` `false`, and changes no level; `isBlocking()` pauses physics stepping while `#result` is active; the dialog's enter/leave transition keeps animating while physics is paused; after the dialog hides, `motion.getStats().activeMotions` is `0`.
 
 ## 17. Test matrix for the future implementation
 
-All unit tests use `tests/ui/fakeMotionDriver.ts`: a driver that records requests, exposes `advance(ms)` to interpolate active tweens linearly (calling `binding.set` and then `onComplete`), fires `onCancel` synchronously inside `cancel()`/`cancelScope()` exactly like `MotionRuntime`, can inject an external cancel into a specific tween, can replay a recorded `onComplete` late (to prove stale completions are ignored), and has spies on `pauseScope`/`resumeScope` that must never be called. `tests/ui/integration.test.ts` uses the real `MotionRuntime` registered in a real `CoreRuntime` and advances through `core.update(frameMs)` only.
+All unit tests use `tests/ui/fakeMotionDriver.ts`: a driver that records requests, exposes `advance(ms)` to interpolate active tweens linearly (calling `binding.set` and then `onComplete`), fires `onCancel` synchronously inside `cancel()`/`cancelScope()`/`cancelAll()` exactly like `MotionRuntime`, returns `false` from `handle.cancel()` on a tween already gone, can replay a recorded `onComplete` late (to prove stale completions are ignored), and has spies on `pauseScope`/`resumeScope` that must never be called. `tests/ui/integration.test.ts` and the cancellation/teardown tests use the real `MotionRuntime` registered in a real `CoreRuntime` and advance through `core.update(frameMs)` only.
 
 **Button:**
 - normal press then release reaches `1` then `0`, `onPress` and `onTap` once each;
@@ -812,53 +847,65 @@ All unit tests use `tests/ui/fakeMotionDriver.ts`: a driver that records request
 - disabled: `pointerDown` ignored; `setEnabled(false)` during a press → `onCancel('disabled')`, state `disabled`, progress animates to `0`;
 - repeated press during release starts from the current progress with no jump (assert the first `set()` value equals the progress at re-press);
 - release interrupted by `cancel()` snaps to `0`, fires `onProgress(0)` and nothing else; the next press starts from `0` and still reaches exactly `1` (baseline never compounds, asserted over ten cycles);
-- `cancel()` while pressed → `onProgress(0)` then `onCancel('programmatic')`, in that order;
+- `cancel()` while pressed → `onProgress(0)` then `onCancel('programmatic')`, in that order; `cancel()` on an idle, settled button returns `false` and fires nothing;
 - threshold: `setTapThreshold(60)` during a press makes a subsequent `40`-unit move a non-swipe; `setTapThreshold` with `NaN`, `-1`, or `Infinity` throws `RangeError` and `tapThreshold` is unchanged; `createButton({ tapThreshold: NaN })` throws `RangeError`; `0` is accepted and any movement swipes; the gorodki resize formula applied through the setter changes the outcome of an identical gesture;
 - `onProgress`/`onPress`/`onTap`/`onCancel` that throw are reported with the right phase, the lifecycle completes, `callbackErrors` increments;
 - reentrancy: `dispose()` from inside `onPress`, `onTap`, `onCancel`, and `onProgress` (instant release) fires no further callback and later calls return `false`; `cancel()` from inside `onTap` settles to `0` and a subsequent press works; `pointerDown` from inside `onCancel` re-presses (state `pressed`); with an instant release, `dispose()` from inside `onProgress(0)` prevents `onTap`;
-- external cancel of a press or release tween: no callback, `progress`/`state`/owner unchanged, `externalCancels` is `1`, `onUiError` called with phase `'externalCancel'`; a following `pointerUp` still ends the press normally;
+- cancellation through the driver: with the real `MotionRuntime`, `motion.cancelAll()` during a press → the button is `idle` at `0`, `onProgress(0)` then `onCancel('programmatic')` fired once, no error reported, `activeMotions` is `0`; the same during a release tween → `onProgress(0)` only;
 - stale completion: a recorded `onComplete` replayed after a re-press is ignored;
-- `dispose()` during a press cancels the scope, fires no callback, and later calls return `false`;
+- `dispose()` during a press settles (same callbacks as `cancel()`), fires nothing afterwards, and later calls return `false`;
 - instant press/release (`durationMs: 0`) never calls the driver.
 
 **Window:**
-- normal show then close reaches `shown` and `hidden`, each callback once, in the order of sections 8.3 and 8.4;
+- normal show then close reaches `shown` and `hidden`, each callback once, in the order of sections 8.3 and 8.4, with `onClosed` after `onHidden`;
 - `show(params)` passes params to `onShow` unchanged;
 - `entering → shown` only after the tween completes; `progress` is exactly `1`;
 - every `WindowCloseReason` is passed through to the `onBeforeClose` intent and to `onHidden`;
-- veto keeps the state, increments `vetoedCloses`, returns `false`; veto during `entering` still reaches `shown`;
+- `close(reason, onClosed)`: the continuation runs exactly once after `onHidden` when the close completes (instant and tweened); it does not run on veto; it is dropped on `cancel()` during `leaving`, on `dispose()` during `leaving`, and on `dispose()` from inside `onHidden`; a duplicate `close()` neither replaces nor drops the first continuation; `close()` without a continuation completes normally;
+- `onClosed` that shows the next blocking window produces no `false`/`true` blocking flicker; `onClosed` that throws is reported with phase `'onClosed'` and blocking is still reconciled;
+- veto keeps the state, increments `vetoedCloses`, returns `false`, stores no continuation; veto during `entering` still reaches `shown`;
 - close during entering starts leaving from the current progress;
 - duplicate close during `leaving` and when `hidden` returns `false`;
 - `show()` during `entering`/`shown`/`leaving` returns `false` and does not re-apply params;
 - instant enter and instant leave (`0 ms`) run the full callback sequence synchronously without touching the driver;
 - `onTransition` reports the start and terminal value of both phases;
 - callbacks that throw are reported with the right phase; a throwing `onBeforeClose` does not veto;
-- reentrancy — `onShow`: `close()` from inside `onShow` → `show()` returns `true`, the driver's `tween()` is never called, the sequence is `onShow`, `onBeforeClose`, `onTransition(0, 'leaving')`, `onHidden`, and `onShown` never fires; `dispose()` from inside `onShow` → `show()` returns `true`, no further callback, `activeWindow` is `null`;
-- reentrancy — `onTransition`: `close()` from inside an entering `onTransition` cancels the enter tween, `onShown` never fires, leaving completes; `dispose()` from inside `onTransition` fires nothing further;
+- reentrancy — `onShow`: `close()` from inside `onShow` → `show()` returns `true`, the driver's `tween()` is never called, the sequence is `onShow`, `onBeforeClose`, `onTransition(0, 'leaving')`, `onHidden`, `onClosed`, and `onShown` never fires; `dispose()` from inside `onShow` → `show()` returns `true`, no further callback except `onHidden('cancelled')`, `activeWindow` is `null`;
+- reentrancy — `onTransition`: `close()` from inside an entering `onTransition` cancels the enter tween, `onShown` never fires, leaving completes; `dispose()` from inside `onTransition` fires `onHidden('cancelled')` and nothing further;
 - reentrancy — `onShown`: `close()` and `dispose()` from inside `onShown` proceed normally;
-- reentrancy — `onBeforeClose`: a nested `close()` returns `false`, increments `rejectedCloses`, and does not recurse; the outer close proceeds when the callback returns `undefined` and vetoes when it returns `false`; `dispose()` from inside `onBeforeClose` makes the outer `close()` return `false` with no leaving callbacks;
-- reentrancy — `onHidden`: `show(B)` from inside `A.onHidden` succeeds and `B` reaches `shown`; `show(A)` from inside `A.onHidden` succeeds; in both cases `A`'s finalize publishes no blocking value that contradicts the new window;
-- stale completion: a recorded enter-tween `onComplete` replayed after a reentrant `close()` never restores `shown`;
-- external cancel during entering: state stays `entering`, `onShown` never fires, `externalCancels` is `1`, reported; `close()` afterwards still works; external cancel during leaving: state stays `leaving`, `onHidden` never fires; `dispose()` clears `activeWindow` and blocking without `onHidden`;
-- `dispose()` while active clears `activeWindow`, fires no `onHidden`, and clears blocking.
+- reentrancy — `onBeforeClose`: a nested `close()` returns `false`, increments `rejectedCloses`, and does not recurse; the outer close proceeds when the callback returns `undefined` and vetoes when it returns `false`; `dispose()` or `cancel()` from inside `onBeforeClose` makes the outer `close()` return `false` with no leaving callbacks and no stored continuation;
+- reentrancy — `onHidden`/`onClosed`: `show(B)` from inside `A.onHidden` and from inside `A.onClosed` succeeds and `B` reaches `shown`; `show(A)` from inside `A.onHidden` succeeds; in every case `A`'s finalize publishes no blocking value that contradicts the new window;
+- stale completion: a recorded enter-tween `onComplete` replayed after a reentrant `close()` or `cancel()` never restores `shown`;
+- force-hide: `cancel()` during `entering` → `hidden`, `onHidden('cancelled')`, no `onBeforeClose`, no `onShown`, tween gone; during `shown` → same; during `leaving` → same and the stored `onClosed` never runs; `cancel()` when `hidden` returns `false` and fires nothing;
+- `dispose()` while active behaves as `cancel()` then unregisters: `onHidden('cancelled')` once, `activeWindow` null, blocking cleared, no `onClosed`.
 
 **Blocking:**
 - `isBlocking()` false with no window; true from `show()` on a `blocksGameplay` window; false after `onHidden`;
-- `onBlockingChanged` fires after `onShow` on show and after `onHidden` on close, exactly once each;
-- hand-over, blocking → blocking: `A` blocks; `A.show()`; `A.close()`; from inside `A.onHidden` call `B.show()` where `B` blocks. The recorded `onBlockingChanged` calls are `[true]` through `A.show()`, `A.close()`, and the hand-over, with no intermediate `false`/`true`; `false` arrives only after `B.close()` completes, so the full recording is `[true, false]`;
+- `onBlockingChanged` fires after `onShow` on show and after `onHidden`/`onClosed` on close, exactly once each;
+- hand-over, blocking → blocking: `A` blocks; `A.show()`; `A.close()`; from inside `A.onHidden` (and, in a second variant, from inside `A.onClosed`) call `B.show()` where `B` blocks. The recorded `onBlockingChanged` calls are `[true]` through `A.show()`, `A.close()`, and the hand-over, with no intermediate `false`/`true`; `false` arrives only after `B.close()` completes, so the full recording is `[true, false]`;
 - hand-over, blocking → non-blocking: same sequence with `B.blocksGameplay === false`; the recording is `[true, false]` with the `false` published inside `B.show()` after `B.onShow`, and nothing more on `B.close()`;
 - hand-over, re-show: `A.show()` from inside `A.onHidden` publishes nothing;
-- `isBlocking()` read from inside `onHidden` and from inside `B.onShow` reflects the stored value at that moment;
+- `isBlocking()` read from inside `onHidden`, `onClosed`, and `B.onShow` reflects the stored value at that moment;
 - a `blocksGameplay: false` window never changes blocking;
-- `dispose()` of a blocking window and `UiRuntime.dispose()` both end with `isBlocking() === false` and exactly one `onBlockingChanged(false)`;
+- `cancel()`, `dispose()` of a blocking window, `ui.cancelAll()`, and `UiRuntime.dispose()` all end with `isBlocking() === false` and exactly one `onBlockingChanged(false)`;
 - `onBlockingChanged` never receives the same value twice in a row across every sequence above;
 - blocking never calls `pauseScope`/`resumeScope` on the driver.
 
-**Teardown:**
-- mandated order (`'ui'` registered before `'motion'`): with a window `entering` and a button `pressed`, `core.dispose()` fires no `onShown`, `onHidden`, `onTransition`, `onProgress`, `onTap`, or `onCancel`; fires exactly one `onBlockingChanged(false)`; reports zero errors; leaves `motion.getStats().activeMotions === 0` and `externalCancels === 0`;
-- explicit `ui.dispose()` then `core.dispose()` with `'motion'` registered first: identical outcome;
-- violated order (`'motion'` registered first, no explicit `ui.dispose()`): still no `onShown`, `onHidden`, `onTransition`, `onProgress`, `onTap`, or `onCancel`; `externalCancels` equals the number of UI tweens that were active; one `onUiError` per tween with phase `'externalCancel'`; `activeMotions === 0` afterwards; exactly one `onBlockingChanged(false)`;
-- mid-game `core.cancelAll()` while a window is entering: the contract-violation path; `dispose()` of that window then recovers with `isBlocking() === false` and no `onHidden`.
+**Cancellation and teardown** (real `MotionRuntime` + real `CoreRuntime`; each scenario is run twice, once with `'ui'` registered before `'motion'` and once after, and both runs must record identical host callbacks, identical final state, and identical `core.cancelAll()` return values):
+- active button press (press tween running) → `core.cancelAll()` → button `idle` at `0`, no owner, `onProgress(0)` then `onCancel('programmatic')` once, `activeMotions` `0`;
+- button release tween running → `core.cancelAll()` → `onProgress(0)` once, no `onCancel`, `activeMotions` `0`;
+- window `entering` → `core.cancelAll()` → `hidden`, `onHidden('cancelled')` once, no `onShown`, no `onClosed`, `activeMotions` `0`;
+- window `shown` and blocking → `core.cancelAll()` → `hidden`, `onHidden('cancelled')` once, `activeWindow` `null`, `isBlocking()` `false`, `onBlockingChanged(false)` once;
+- window `leaving` with a stored `onClosed` → `core.cancelAll()` → `hidden`, `onHidden('cancelled')` once, the continuation never runs;
+- no business callback during cancellation: with a window `shown` whose `close()` continuation and `onShown` set flags, `core.cancelAll()`, `core.cancelScope(window.scope)`, `motion.cancelAll()`, `ui.cancelAll()`, and `core.dispose()` each leave every flag unset;
+- `activeWindow === null` and `isBlocking() === false` after each global cancellation above;
+- `motion.getStats().activeMotions === 0` after each global cancellation above;
+- repeated `core.cancelAll()` is idempotent: the second call returns `0`, fires nothing, changes nothing;
+- `core.dispose()` after `core.cancelAll()` is safe: fires nothing further, throws nothing, leaves `ui.disposed` true; `ui.dispose()` after `ui.cancelAll()` likewise;
+- `core.cancelScope('ui:window:<id>')` force-hides only that window (`onHidden('cancelled')`), leaves other controllers untouched, and returns `1` in both registration orders; `core.cancelScope('ui:button:<id>')` settles only that button; `core.cancelScope('something-else')` touches no controller;
+- direct `motion.cancelAll()` and direct `motion.dispose()` while `UiRuntime` is alive produce the same controller state and callbacks as `core.cancelAll()`; a following `ui.cancelAll()` returns `0`;
+- `core.cancelAll()` return value equals `N + M` (settled controllers plus non-UI motions) in both registration orders;
+- `core.dispose()` in both registration orders: same callbacks as `core.cancelAll()`, then `ui.disposed` is true and `createButton` throws.
 
 **Layout:**
 - portrait viewport: scale by the limiting axis, offsets centered, `visibleRect` covers the viewport;
@@ -873,15 +920,15 @@ All unit tests use `tests/ui/fakeMotionDriver.ts`: a driver that records request
 
 **UiRuntime:**
 - `update()` returns `false` and calls nothing on the driver;
-- `getStats()` counters move through each lifecycle; `activeWindowId` tracks the active window;
+- `getStats()` counters move through each lifecycle; `activeWindowId` tracks the active window; `forcedHides` counts every force-hide route;
 - duplicate ids throw; `create*` after `dispose()` throws;
-- one active modal: `show(B)` while `A` is active returns `false`; succeeds from `A`'s `onHidden`;
-- `dispose()` cancels every `ui:` scope on the driver and leaves no active tween;
+- one active modal: `show(B)` while `A` is active returns `false`; succeeds from `A`'s `onHidden` and from `A`'s `onClosed`;
+- `ui.cancelAll()` and `ui.cancelScope()` return the number of controllers changed and are idempotent;
 - error isolation: a throwing `onBlockingChanged` is reported with `kind: 'runtime'` and the show still completes;
 - an `onBlockingChanged(true)` callback that closes the window it was notified about: `show()` returns `true`, the close sequence runs, and the final published value is `false` with no duplicate.
 
 **Public API:**
-- the compile-in-memory export test, in the style of `tests/motion/public-api.test.ts`: every exported name in section 15.1 resolves from `../../src/index`; `const driver: UiMotionDriver = new MotionRuntime();` compiles; controller implementation classes are not reachable.
+- the compile-in-memory export test, in the style of `tests/motion/public-api.test.ts`: every exported name in section 15.1 resolves from `../../src/index`; `const driver: UiMotionDriver = new MotionRuntime();` compiles; `const module: CoreRuntimeModule = new UiRuntime({ motion })` compiles; controller implementation classes are not reachable.
 
 **Performance:**
 - no own RAF/timers (stubs that throw, per section 14);
@@ -893,35 +940,37 @@ All unit tests use `tests/ui/fakeMotionDriver.ts`: a driver that records request
 Each item below was an open question before this spec. The decision is final for v0.3.
 
 1. **`UiMotionDriver` interface** — `{ tween(request), cancelScope(scope) }` with `UiMotionTweenRequest` a strict subset of `MotionTweenOptions`, so `MotionRuntime` satisfies it structurally with no adapter class. Rejected: a value-callback driver (`tween({ from, to, onValue })`) that would have needed an adapter around `MotionRuntime` and a second binding vocabulary.
-2. **`UiRuntime.update()`** — exists (required by `CoreRuntimeModule`) and is a no-op returning `false`. All UI motion is ticked by `MotionRuntime` through `CoreRuntime`. Rejected: not registering `UiRuntime` as a module, which would have needed a separate dispose/stats/error path.
+2. **`UiRuntime.update()`** — exists (required by `CoreRuntimeModule`) and is a no-op returning `false`. All UI motion is ticked by `MotionRuntime` through `CoreRuntime`. Rejected: not registering `UiRuntime` as a module, which would have needed a separate cancel/dispose/stats/error path.
 3. **Button state model** — three states (`idle`, `pressed`, `disabled`) plus a separate `progress` number. A release in flight is `idle` with `progress > 0`; it is not a fourth state, because no host decision depends on distinguishing "idle" from "releasing", while the visual is fully described by `progress`.
 4. **Pointer ownership** — one owning `pointerId` per controller; other pointers are ignored until release; no arbitration between controllers. Both games already hit-test in the host.
 5. **Tap threshold units** — the host's own pointer coordinate units, default `24`, changed through `setTapThreshold`. Both games pass CSS pixels; gorodki's viewport-relative rule is computed by the host on resize and pushed through the setter.
 6. **Button progress model** — `0..1` press progress, host maps to scale/CSS. Chosen over "Core animates a host-provided scale binding" because the baseline bug lives exactly in the host reading back its own animated property; a bounded progress removes that path entirely.
 7. **Window transition model** — one `0..1` progress per phase, `entering` up and `leaving` down, host maps all properties from it. trail_arrow's entrance is reproducible exactly because every property is linear in the same eased progress; gorodki can ignore it with `0 ms` durations.
-8. **Window replacement** — none. `show()` is rejected unless the controller is `hidden` and no other window is active; hosts sequence through `onHidden` or use instant leave. Rejected: a pending-show queue (a stack in disguise).
-9. **Blocking semantics** — a stored `blocking` field recomputed by one `recomputeBlocking()` from the actual `activeWindow`; published inside `show()` after `onShow`, withdrawn inside finalize-hidden after `onHidden` and inside `dispose()`; never a motion pause; never an input filter. Rejected: deriving `isBlocking()` from `activeWindow` on read, which made a hand-over inside `onHidden` able to publish a stale `false` for the new window.
-10. **Scope naming/ownership** — `ui:button:<id>` and `ui:window:<id>`, one tween at a time, reserved `ui:` prefix, controller is the sole creator and the sole legitimate canceller in its scope, `UiRuntime` does not implement the scope fan-out methods.
-11. **Dispose semantics** — controller dispose is silent (no host callback except a `recomputeBlocking()` that may publish `false`), sweeps its scope, frees its id; runtime dispose disposes all and throws on later `create*`; teardown order is mandatory (item 18).
-12. **Error phase/type** — `UiErrorContext { kind, id, phase }` with the ten callback phases plus `'externalCancel'`, handler in `UiRuntimeOptions`, console default, throwing handler swallowed; a throwing `onBeforeClose` fails open. Same shape and layering as `onMotionError`/`onEffectError`; no second mechanism.
+8. **Window replacement** — none. `show()` is rejected unless the controller is `hidden` and no other window is active; hosts sequence through `onClosed`/`onHidden` or use instant leave. Rejected: a pending-show queue (a stack in disguise).
+9. **Blocking semantics** — a stored `blocking` field recomputed by one `recomputeBlocking()` from the actual `activeWindow`; published inside `show()` after `onShow`, withdrawn at the end of finalize-hidden and of every force-hide; never a motion pause; never an input filter. Rejected: deriving `isBlocking()` from `activeWindow` on read, which made a hand-over inside `onHidden` able to publish a stale `false` for the new window.
+10. **Scope naming/ownership** — `ui:button:<id>` and `ui:window:<id>`, one tween at a time, `ui:` reserved for starting motions, cancellable through every route. `UiRuntime` implements `cancelScope`/`cancelAll` as a `CoreRuntimeModule` and maps a `ui:` scope to its controller's settle. Rejected: treating an outside cancellation of a `ui:` scope as a contract violation, which left `core.cancelAll()` — the shared cancellation API — unable to bring the UI into a consistent state.
+11. **Dispose semantics** — controller dispose is a settle (`cancel()`, same view-cleanup callbacks) followed by unregistration; runtime dispose is `cancelAll()` followed by unregistration of everything; `core.dispose()` yields the same observable result in any registration order. Rejected: a silent dispose that skipped `onHidden`, which left native dialogs open after teardown.
+12. **Error phase/type** — `UiErrorContext { kind, id, phase }` with the eleven callback phases (including `'onClosed'`), handler in `UiRuntimeOptions`, console default, throwing handler swallowed; a throwing `onBeforeClose` fails open. Same shape and layering as `onMotionError`/`onEffectError`; no second mechanism. Cancellation through the driver is not an error.
 13. **Layout fit semantics** — contain only, design box never shrunk by insets, rects in design units from the design box origin. Matches trail_arrow's `scaleFactor` and gorodki's CSS column exactly.
 14. **Public API exports** — listed in section 15.1; controllers exported as interfaces; deep imports forbidden for production integrations.
-15. **CoreRuntime / MotionRuntime / UiRuntime interaction** — host loop → `core.update(frameMs)` → `motion.update` advances UI tweens → binding `set` → controller → host callback; `ui.update` is a no-op; host input → controller methods → `driver.tween`; `'ui'` registered before `'motion'`; teardown through `core.dispose()` or `ui.dispose()` then `core.dispose()`. No module imports another module's runtime code; `ui` depends on `motion` only through `UiMotionDriver` and type-only imports.
+15. **CoreRuntime / MotionRuntime / UiRuntime interaction** — host loop → `core.update(frameMs)` → `motion.update` advances UI tweens → binding `set` → controller → host callback; `ui.update` is a no-op; host input → controller methods → `driver.tween`; `core.cancelScope`/`cancelAll`/`dispose` reach every controller through the `ui` module and every UI tween through the `motion` module, and both routes converge on the controller's settle. No module imports another module's runtime code; `ui` depends on `motion` only through `UiMotionDriver` and type-only imports.
 16. **Callback reentrancy** — one integer lifecycle generation per controller, incremented at every transition; every method transitions first, then runs callbacks and returns as soon as a callback moved the generation; driver callbacks are armed with a generation and ignored when stale; `close()` holds an evaluating flag so a nested `close()` cannot recurse. Rejected: extra lifecycle states ("closing", "releasing"), which would have leaked implementation detail into `WindowState`/`ButtonState`; and per-tween handle identity alone, which cannot cover callbacks that happen before any tween exists.
-17. **External cancellation** — a contract violation: the controller drops its handle, keeps its state, fires no host callback, counts it, and reports it. Rejected: the earlier "finalize to target" rule, because it let `motion.dispose()` fire `onShown`/`onHidden` — and through them next-level or restart actions — during app teardown.
-18. **Teardown order** — `UiRuntime` must be disposed before `MotionRuntime`; the documented way is registering `'ui'` before `'motion'` so `core.dispose()` does it, with an explicit `ui.dispose()` as the alternative. A violated order still fires no semantic callback and is made visible through `'externalCancel'` reports. Rejected: changing `CoreRuntime` to know about module dependencies, which is more than v0.3 needs.
+17. **Cancellation delivered through the driver** — the controller runs its own settle: a button ends `idle` at `0` with `onProgress(0)` and `onCancel('programmatic')`; a window is force-hidden with `onHidden('cancelled')`. Rejected: the first draft's "finalize to target", which let `motion.dispose()` fire `onShown`/`onHidden`-as-completion during teardown; and the second draft's "contract violation", which left `activeWindow`, blocking, and phase stale after a legitimate `core.cancelAll()`.
+18. **Registration order** — irrelevant, proven by convergence (section 11): whichever module reaches a controller first, the settle is the same and idempotent, the callbacks fire once, and the summed return value is the same. Rejected: a mandated order, which was a hidden host obligation that `CoreRuntime` could not enforce.
 19. **`pointerUp` carries the release position** and repeats the distance check, with swipe taking precedence over `inside`. Rejected: relying on `pointerMove` alone, which misclassifies a fast flick with sparse move events as a tap.
 20. **Threshold changes** — `setTapThreshold(value)` with `RangeError` on invalid input and the same validation at construction. Rejected: an immutable threshold (stale after resize) and a function-valued option (validation in the pointer path).
 21. **Layout invalid input** — declared configuration (`designWidth`/`designHeight`) fails fast with `RangeError`; measured runtime values (viewport, insets) are coerced so a resize handler can never throw. Rejected: coercing everything, which turned a developer mistake into a silent blank scene.
+22. **View cleanup versus business continuation** — `onHidden(reason)` is view cleanup and fires on every path to `hidden`, with `'cancelled'` marking a force-hide; the business action is the `onClosed` continuation passed to `close(reason, onClosed)` and runs only when that close completes. Rejected: a per-window `onClosed(reason)` option (cannot tell "next" from "again", both are `'button'`); an `outcome` argument on `onHidden` (a branch every host must remember, the exact footgun being removed); and a Promise-returning `close()` (non-goal).
+23. **`window.cancel()`** — a public force-hide, the same operation `cancelScope`/`cancelAll`/`dispose` use, so a host can hide a window without a close intent, a veto, or a continuation (a screen switch, an ad starting). Rejected: routing hosts through `ui.cancelScope(window.scope)` for that, which is the same operation behind a less explicit name.
 
 Trade-offs accepted with these decisions:
 
 - Hosts keep the responsibility for hit-testing, pointer capture, and the explicit visual baseline. Game Core owns the lifecycle, not the renderer.
 - A rejected `show()` is a silent `false`. The alternative, throwing, would turn a benign race (two wins within one frame) into a crash; the counter in stats keeps it observable.
 - Fail-open on a throwing `onBeforeClose` prefers a recoverable close over an unrecoverable stuck modal.
-- One active modal means a host that needs "confirm dialog over shop" waits for `onHidden`; neither production case needs more today.
-- A window whose tween was cancelled from outside stays where it is until the host disposes it. That is deliberate: the alternative of guessing a lifecycle outcome on the driver's behalf is exactly the teardown footgun this revision removes, and no production host cancels `ui:` scopes.
-- The teardown order is a host obligation that `CoreRuntime` does not enforce in v0.3. The documented registration order makes it automatic for every host that follows section 4.
+- One active modal means a host that needs "confirm dialog over shop" waits for `onHidden`/`onClosed`; neither production case needs more today.
+- `core.cancelAll()` force-hides every window and fires each window's view cleanup. That is the intended meaning of "cancel everything" for UI: a host that wants to keep a window open must not cancel everything, and a host that wants the business flow must go through `close()`.
+- The business continuation is a callback on the close request rather than a lifecycle event. A host that forgets to pass it gets a window that closes and does nothing, which is visible immediately in development; the reverse mistake — a cancellation that starts a level — is no longer expressible.
 
 ## 19. Success criteria
 
@@ -931,7 +980,8 @@ Trade-offs accepted with these decisions:
 - The cumulative-baseline bug is impossible by construction, and the gorodki Escape defect is closed by the close-intent funnel.
 - Every host callback may re-enter the runtime — close, show, cancel, dispose, show another window — without a stale transition ever resuming afterwards.
 - `isBlocking()` gives both games one flag for "UI is modal", with UI motion continuing on real frame time while gameplay is stopped, and with no stale value published across a window hand-over.
-- App teardown in the documented order fires no semantic callback, leaves no active motion, and reports no error; a wrongly ordered teardown still fires no semantic callback and is visible through `'externalCancel'` reports.
+- `core.cancelAll()`, `core.cancelScope()`, and `core.dispose()` leave the whole Game Core consistent in any registration order: no half-shown window, no dangling motion, `activeWindow` null, blocking false, view cleanup fired once, and no business continuation run.
+- A cancellation can never start a level, a restart, a reward, or a navigation: those live only in `close()` continuations.
 - `computeLayout` reproduces both games' current fit arithmetic and adds safe-area output without reading a single browser API.
 - Every host callback is error-isolated through the same two-layer model as the other runtimes.
 - Observable through `getStats()`; testable without a browser; production-consumable through Game Core's public entry only.
