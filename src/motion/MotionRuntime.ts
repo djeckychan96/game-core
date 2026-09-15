@@ -1,3 +1,4 @@
+import { advanceSequence, type SequenceHost, type SequenceStatus } from './MotionSequenceRunner';
 import { resolveEase } from './easing';
 import type {
   EaseFn,
@@ -11,23 +12,28 @@ import type {
   MotionHandle,
   MotionRuntimeOptions,
   MotionScope,
+  MotionSequenceOptions,
+  MotionSequenceStep,
   MotionTweenOptions,
   MotionUpdateCallback
 } from './types';
 
+// Shared by every operation kind (tween/delay/sequence): identity, pause state, scope, and the
+// two outer lifecycle callbacks. Deliberately does NOT include elapsedMs/durationMs — a
+// RuntimeSequence has neither of its own (those live on whichever step is current).
 interface RuntimeOperationBase {
   id: number;
-  elapsedMs: number;
-  durationMs: number;
   paused: boolean;
   scope?: MotionScope;
   onComplete?: MotionCompleteCallback;
   onCancel?: MotionCancelCallback;
 }
 
-interface RuntimeTween extends RuntimeOperationBase {
+export interface RuntimeTween extends RuntimeOperationBase {
   kind: 'tween';
+  elapsedMs: number;
   delayMs: number;
+  durationMs: number;
   bindingSpecs: MotionBinding[];
   resolvedFrom: number[] | null;
   ease: EaseFn;
@@ -38,11 +44,20 @@ interface RuntimeTween extends RuntimeOperationBase {
   onUpdate?: MotionUpdateCallback;
 }
 
-interface RuntimeDelay extends RuntimeOperationBase {
+export interface RuntimeDelay extends RuntimeOperationBase {
   kind: 'delay';
+  elapsedMs: number;
+  durationMs: number;
 }
 
-type RuntimeOperation = RuntimeTween | RuntimeDelay;
+export interface RuntimeSequence extends RuntimeOperationBase {
+  kind: 'sequence';
+  steps: MotionSequenceStep[];
+  currentStepIndex: number;
+  currentStepOperation: RuntimeTween | RuntimeDelay | null;
+}
+
+type RuntimeOperation = RuntimeTween | RuntimeDelay | RuntimeSequence;
 
 function clamp01(t: number): number {
   if (t <= 0) return 0;
@@ -72,10 +87,11 @@ function defaultOnMotionError(error: unknown, context: MotionErrorContext): void
   }
 }
 
-export class MotionRuntime {
+export class MotionRuntime implements SequenceHost {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
-  // Reused every update() call so completing operations doesn't allocate a new array per frame.
+  // Reused every update() call so completing/cancelled operations don't allocate a new array
+  // per frame; update() only ever needs it to remember which top-level ids to delete afterward.
   private readonly completedScratch: number[] = [];
   private readonly onMotionError: MotionErrorHandler;
   private callbackErrors = 0;
@@ -86,6 +102,161 @@ export class MotionRuntime {
   }
 
   tween(options: MotionTweenOptions): MotionHandle {
+    const tween = this.buildTweenRecord(options);
+    if (options.scope !== undefined) tween.scope = options.scope;
+    this.operations.set(tween.id, tween);
+    return this.createHandle(tween.id);
+  }
+
+  delay(options: MotionDelayOptions): MotionHandle {
+    const delayOp = this.buildDelayRecord(options);
+    if (options.scope !== undefined) delayOp.scope = options.scope;
+    this.operations.set(delayOp.id, delayOp);
+    return this.createHandle(delayOp.id);
+  }
+
+  sequence(options: MotionSequenceOptions): MotionHandle {
+    const id = this.nextId++;
+    const seq: RuntimeSequence = {
+      id,
+      kind: 'sequence',
+      paused: false,
+      steps: options.steps,
+      currentStepIndex: 0,
+      currentStepOperation: null
+    };
+    if (options.scope !== undefined) seq.scope = options.scope;
+    if (options.onComplete) seq.onComplete = options.onComplete;
+    if (options.onCancel) seq.onCancel = options.onCancel;
+
+    this.operations.set(id, seq);
+    return this.createHandle(id);
+  }
+
+  update(frameMs: number): boolean {
+    let changed = false;
+    const deltaMs = Math.max(0, finiteOr(frameMs, 0));
+    this.completedScratch.length = 0;
+
+    for (const op of this.operations.values()) {
+      if (op.paused) continue;
+
+      if (op.kind === 'tween') {
+        const result = this.advanceTweenFrame(op, deltaMs);
+        changed = true;
+        if (result !== 'running') this.completedScratch.push(op.id);
+        continue;
+      }
+
+      if (op.kind === 'delay') {
+        const result = this.advanceDelayFrame(op, deltaMs);
+        if (result !== 'running') this.completedScratch.push(op.id);
+        continue;
+      }
+
+      // sequence
+      const result = advanceSequence(op, deltaMs, this);
+      changed = true;
+      if (result !== 'running') this.completedScratch.push(op.id);
+    }
+
+    for (const id of this.completedScratch) {
+      this.operations.delete(id);
+    }
+
+    return changed;
+  }
+
+  // --- SequenceHost surface (called only from MotionSequenceRunner.advanceSequence) ---
+
+  buildStepOperation(step: MotionSequenceStep): RuntimeTween | RuntimeDelay {
+    return step.type === 'tween' ? this.buildTweenRecord(step) : this.buildDelayRecord(step);
+  }
+
+  advanceTweenFrame(op: RuntimeTween, deltaMs: number): SequenceStatus {
+    op.elapsedMs += deltaMs;
+    const localMs = op.elapsedMs - op.delayMs;
+    if (localMs < 0) return 'running';
+
+    if (op.resolvedFrom === null) {
+      try {
+        op.resolvedFrom = op.bindingSpecs.map((binding) =>
+          binding.from !== undefined ? binding.from : binding.get()
+        );
+      } catch (error) {
+        return this.failTween(op, error, 'binding-get');
+      }
+    }
+
+    const progress = clamp01(localMs / op.durationMs);
+    const eased = op.ease(progress);
+
+    try {
+      for (let i = 0; i < op.bindingSpecs.length; i++) {
+        const binding = op.bindingSpecs[i];
+        const from = op.resolvedFrom[i];
+        if (!binding || from === undefined) continue;
+        const passStart = op.direction === 1 ? from : binding.to;
+        const passEnd = op.direction === 1 ? binding.to : from;
+        binding.set(lerp(passStart, passEnd, eased));
+      }
+    } catch (error) {
+      return this.failTween(op, error, 'binding-set');
+    }
+
+    this.invokeUpdateCallback(op, progress);
+
+    if (progress < 1) return 'running';
+
+    if (op.passIndex < op.repeat) {
+      // More passes remain: snap to this pass's exact end, flip direction if yoyo, and let any
+      // overshoot carry into the next pass on a later update()/advance call (no per-frame
+      // allocation, no same-frame multi-pass loop needed for ordinary frame deltas).
+      try {
+        this.snapToPassEnd(op);
+      } catch (error) {
+        return this.failTween(op, error, 'binding-set');
+      }
+      op.elapsedMs -= op.durationMs;
+      op.passIndex += 1;
+      if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1;
+      return 'running';
+    }
+
+    try {
+      this.snapToPassEnd(op);
+    } catch (error) {
+      return this.failTween(op, error, 'binding-set');
+    }
+    this.invokeCallback(op.onComplete, op.kind, 'onComplete');
+    return 'completed';
+  }
+
+  advanceDelayFrame(op: RuntimeDelay, deltaMs: number): SequenceStatus {
+    op.elapsedMs += deltaMs;
+    const progress = clamp01(op.elapsedMs / op.durationMs);
+    if (progress < 1) return 'running';
+    this.invokeCallback(op.onComplete, op.kind, 'onComplete');
+    return 'completed';
+  }
+
+  invokeCallback(
+    fn: (() => void) | undefined,
+    kind: RuntimeOperation['kind'],
+    phase: MotionErrorPhase
+  ): void {
+    if (!fn) return;
+    try {
+      fn();
+    } catch (error) {
+      this.callbackErrors += 1;
+      this.reportError(error, kind, phase);
+    }
+  }
+
+  // --- internal helpers ---
+
+  private buildTweenRecord(options: Omit<MotionTweenOptions, 'scope'>): RuntimeTween {
     const id = this.nextId++;
     const tween: RuntimeTween = {
       id,
@@ -102,16 +273,13 @@ export class MotionRuntime {
       passIndex: 0,
       direction: 1
     };
-    if (options.scope !== undefined) tween.scope = options.scope;
     if (options.onUpdate) tween.onUpdate = options.onUpdate;
     if (options.onComplete) tween.onComplete = options.onComplete;
     if (options.onCancel) tween.onCancel = options.onCancel;
-
-    this.operations.set(id, tween);
-    return this.createHandle(id);
+    return tween;
   }
 
-  delay(options: MotionDelayOptions): MotionHandle {
+  private buildDelayRecord(options: Omit<MotionDelayOptions, 'scope'>): RuntimeDelay {
     const id = this.nextId++;
     const delayOp: RuntimeDelay = {
       id,
@@ -120,138 +288,33 @@ export class MotionRuntime {
       durationMs: Math.max(1, finiteOr(options.durationMs, 1)),
       paused: false
     };
-    if (options.scope !== undefined) delayOp.scope = options.scope;
     if (options.onComplete) delayOp.onComplete = options.onComplete;
     if (options.onCancel) delayOp.onCancel = options.onCancel;
-
-    this.operations.set(id, delayOp);
-    return this.createHandle(id);
+    return delayOp;
   }
 
-  update(frameMs: number): boolean {
-    let changed = false;
-    const deltaMs = Math.max(0, finiteOr(frameMs, 0));
-    this.completedScratch.length = 0;
-
-    for (const op of this.operations.values()) {
-      if (op.paused) continue;
-
-      op.elapsedMs += deltaMs;
-
-      if (op.kind === 'delay') {
-        const delayProgress = clamp01(op.elapsedMs / op.durationMs);
-        if (delayProgress >= 1) this.completedScratch.push(op.id);
-        continue;
-      }
-
-      const localMs = op.elapsedMs - op.delayMs;
-      if (localMs < 0) continue;
-
-      if (op.resolvedFrom === null) {
-        try {
-          op.resolvedFrom = op.bindingSpecs.map((binding) =>
-            binding.from !== undefined ? binding.from : binding.get()
-          );
-        } catch (error) {
-          this.bindingErrors += 1;
-          this.reportError(error, op.kind, 'binding-get');
-          this.cancelOperation(op);
-          continue;
-        }
-      }
-
-      const progress = clamp01(localMs / op.durationMs);
-      const eased = op.ease(progress);
-
-      try {
-        for (let i = 0; i < op.bindingSpecs.length; i++) {
-          const binding = op.bindingSpecs[i];
-          const from = op.resolvedFrom[i];
-          if (!binding || from === undefined) continue;
-          const passStart = op.direction === 1 ? from : binding.to;
-          const passEnd = op.direction === 1 ? binding.to : from;
-          binding.set(lerp(passStart, passEnd, eased));
-        }
-      } catch (error) {
-        this.bindingErrors += 1;
-        this.reportError(error, op.kind, 'binding-set');
-        this.cancelOperation(op);
-        continue;
-      }
-
-      this.invokeUpdateCallback(op, progress);
-      changed = true;
-
-      if (progress >= 1) {
-        if (op.passIndex < op.repeat) {
-          // More passes remain: snap to this pass's exact end, flip direction if yoyo, and let
-          // any overshoot carry into the next pass on a later update() call (no per-frame
-          // allocation, no same-frame multi-pass loop needed for ordinary frame deltas).
-          try {
-            for (let i = 0; i < op.bindingSpecs.length; i++) {
-              const binding = op.bindingSpecs[i];
-              const from = op.resolvedFrom[i];
-              if (!binding || from === undefined) continue;
-              binding.set(op.direction === 1 ? binding.to : from);
-            }
-          } catch (error) {
-            this.bindingErrors += 1;
-            this.reportError(error, op.kind, 'binding-set');
-            this.cancelOperation(op);
-            continue;
-          }
-          op.elapsedMs -= op.durationMs;
-          op.passIndex += 1;
-          if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1;
-        } else {
-          this.completedScratch.push(op.id);
-        }
-      }
+  private snapToPassEnd(op: RuntimeTween): void {
+    for (let i = 0; i < op.bindingSpecs.length; i++) {
+      const binding = op.bindingSpecs[i];
+      const from = op.resolvedFrom?.[i];
+      if (!binding || from === undefined) continue;
+      binding.set(op.direction === 1 ? binding.to : from);
     }
+  }
 
-    for (const id of this.completedScratch) {
-      const op = this.operations.get(id);
-      if (!op) continue;
-      if (op.kind === 'tween') {
-        try {
-          for (let i = 0; i < op.bindingSpecs.length; i++) {
-            const binding = op.bindingSpecs[i];
-            const from = op.resolvedFrom?.[i];
-            if (!binding || from === undefined) continue;
-            binding.set(op.direction === 1 ? binding.to : from);
-          }
-        } catch (error) {
-          this.bindingErrors += 1;
-          this.reportError(error, op.kind, 'binding-set');
-          this.cancelOperation(op);
-          continue;
-        }
-        changed = true;
-      }
-      this.invokeCallback(op.onComplete, op.kind, 'onComplete');
-      this.operations.delete(id);
-    }
-
-    return changed;
+  private failTween(op: RuntimeTween, error: unknown, phase: MotionErrorPhase): 'cancelled' {
+    this.bindingErrors += 1;
+    this.reportError(error, op.kind, phase);
+    this.invokeCallback(op.onCancel, op.kind, 'onCancel');
+    return 'cancelled';
   }
 
   private cancelOperation(op: RuntimeOperation): void {
     this.operations.delete(op.id);
-    this.invokeCallback(op.onCancel, op.kind, 'onCancel');
-  }
-
-  private invokeCallback(
-    fn: (() => void) | undefined,
-    kind: RuntimeOperation['kind'],
-    phase: MotionErrorPhase
-  ): void {
-    if (!fn) return;
-    try {
-      fn();
-    } catch (error) {
-      this.callbackErrors += 1;
-      this.reportError(error, kind, phase);
+    if (op.kind === 'sequence' && op.currentStepOperation) {
+      this.invokeCallback(op.currentStepOperation.onCancel, op.currentStepOperation.kind, 'onCancel');
     }
+    this.invokeCallback(op.onCancel, op.kind, 'onCancel');
   }
 
   private invokeUpdateCallback(op: RuntimeTween, progress: number): void {
