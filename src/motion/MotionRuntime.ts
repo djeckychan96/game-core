@@ -100,7 +100,7 @@ function defaultOnMotionError(error: unknown, context: MotionErrorContext): void
   }
 }
 
-export class MotionRuntime implements SequenceHost {
+export class MotionRuntime {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
   private readonly onMotionError: MotionErrorHandler;
@@ -110,6 +110,15 @@ export class MotionRuntime implements SequenceHost {
   private cancelledMotions = 0;
   private lastUpdateMs = 0;
   private maxUpdateMs = 0;
+  // Created once per runtime; sequence updates reuse this bridge to private methods.
+  private readonly sequenceHost: SequenceHost = {
+    buildStepOperation: (step) => this.buildStepOperation(step),
+    removeOperation: (id, outcome) => this.removeOperation(id, outcome),
+    isOperationActive: (id) => this.isOperationActive(id),
+    advanceTweenFrame: (op, deltaMs) => this.advanceTweenFrame(op, deltaMs),
+    advanceDelayFrame: (op, deltaMs) => this.advanceDelayFrame(op, deltaMs),
+    invokeCallback: (fn, kind, phase) => this.invokeCallback(fn, kind, phase)
+  };
 
   constructor(options: MotionRuntimeOptions = {}) {
     this.onMotionError = options.onMotionError ?? defaultOnMotionError;
@@ -173,7 +182,7 @@ export class MotionRuntime implements SequenceHost {
       }
 
       // sequence
-      advanceSequence(op, deltaMs, this);
+      advanceSequence(op, deltaMs, this.sequenceHost);
       changed = true;
     }
 
@@ -275,7 +284,7 @@ export class MotionRuntime implements SequenceHost {
 
   // --- SequenceHost surface (called only from MotionSequenceRunner.advanceSequence) ---
 
-  buildStepOperation(step: MotionSequenceStep): RuntimeTween | RuntimeDelay {
+  private buildStepOperation(step: MotionSequenceStep): RuntimeTween | RuntimeDelay {
     return step.type === 'tween' ? this.buildTweenRecord(step) : this.buildDelayRecord(step);
   }
 
@@ -283,7 +292,7 @@ export class MotionRuntime implements SequenceHost {
    * its own terminal callback fires) and records the sequence's own completedMotions/
    * cancelledMotions count exactly once. A no-op if `id` was never a top-level entry (e.g. a
    * sequence-internal step's own id, which is never inserted into `operations`). */
-  removeOperation(id: number, outcome: 'completed' | 'cancelled'): void {
+  private removeOperation(id: number, outcome: 'completed' | 'cancelled'): void {
     if (!this.operations.delete(id)) return;
     if (outcome === 'completed') this.completedMotions += 1;
     else this.cancelledMotions += 1;
@@ -292,11 +301,11 @@ export class MotionRuntime implements SequenceHost {
   /** Whether a top-level operation is still present. Lets MotionSequenceRunner detect that a
    * sequence was already finalized reentrantly (e.g. its own current step's callback cancelled
    * the parent sequence) before proceeding with its own completion/cancellation handling. */
-  isOperationActive(id: number): boolean {
+  private isOperationActive(id: number): boolean {
     return this.operations.has(id);
   }
 
-  advanceTweenFrame(op: RuntimeTween, deltaMs: number): SequenceStatus {
+  private advanceTweenFrame(op: RuntimeTween, deltaMs: number): SequenceStatus {
     op.elapsedMs += deltaMs;
     const localMs = op.elapsedMs - op.delayMs;
     if (localMs < 0) return 'running';
@@ -406,7 +415,7 @@ export class MotionRuntime implements SequenceHost {
     return 'running';
   }
 
-  advanceDelayFrame(op: RuntimeDelay, deltaMs: number): SequenceStatus {
+  private advanceDelayFrame(op: RuntimeDelay, deltaMs: number): SequenceStatus {
     op.elapsedMs += deltaMs;
     const progress = clamp01(op.elapsedMs / op.durationMs);
     if (progress < 1) return 'running';
@@ -419,7 +428,7 @@ export class MotionRuntime implements SequenceHost {
     return 'completed';
   }
 
-  invokeCallback(
+  private invokeCallback(
     fn: (() => void) | undefined,
     kind: RuntimeOperation['kind'],
     phase: MotionErrorPhase
