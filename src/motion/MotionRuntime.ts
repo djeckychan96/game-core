@@ -20,6 +20,10 @@ interface RuntimeTween {
   bindingSpecs: MotionBinding[];
   resolvedFrom: number[] | null;
   ease: EaseFn;
+  repeat: number; // 0 = one pass; finite N = N extra passes; Infinity = unbounded
+  yoyo: boolean;
+  passIndex: number;
+  direction: 1 | -1;
   onUpdate?: MotionUpdateCallback;
   onComplete?: MotionCompleteCallback;
   onCancel?: MotionCancelCallback;
@@ -41,6 +45,12 @@ function finiteOr(value: number | undefined, fallback: number): number {
   return Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+function normalizeRepeat(repeat: number | undefined): number {
+  if (repeat === Infinity) return Infinity;
+  if (!Number.isFinite(Number(repeat))) return 0;
+  return Math.max(0, Math.floor(Number(repeat)));
+}
+
 export class MotionRuntime {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
@@ -60,7 +70,11 @@ export class MotionRuntime {
       paused: false,
       bindingSpecs: options.bindings,
       resolvedFrom: null,
-      ease: resolveEase(options.ease)
+      ease: resolveEase(options.ease),
+      repeat: normalizeRepeat(options.repeat),
+      yoyo: options.yoyo ?? false,
+      passIndex: 0,
+      direction: 1
     };
     if (options.onUpdate) tween.onUpdate = options.onUpdate;
     if (options.onComplete) tween.onComplete = options.onComplete;
@@ -95,22 +109,42 @@ export class MotionRuntime {
         const binding = op.bindingSpecs[i];
         const from = op.resolvedFrom[i];
         if (!binding || from === undefined) continue;
-        binding.set(lerp(from, binding.to, eased));
+        const passStart = op.direction === 1 ? from : binding.to;
+        const passEnd = op.direction === 1 ? binding.to : from;
+        binding.set(lerp(passStart, passEnd, eased));
       }
 
       op.onUpdate?.(progress);
       changed = true;
 
       if (progress >= 1) {
-        completedIds.push(op.id);
+        if (op.passIndex < op.repeat) {
+          // More passes remain: snap to this pass's exact end, flip direction if yoyo, and let
+          // any overshoot carry into the next pass on a later update() call (no per-frame
+          // allocation, no same-frame multi-pass loop needed for ordinary frame deltas).
+          for (let i = 0; i < op.bindingSpecs.length; i++) {
+            const binding = op.bindingSpecs[i];
+            const from = op.resolvedFrom[i];
+            if (!binding || from === undefined) continue;
+            binding.set(op.direction === 1 ? binding.to : from);
+          }
+          op.elapsedMs -= op.durationMs;
+          op.passIndex += 1;
+          if (op.yoyo) op.direction = op.direction === 1 ? -1 : 1;
+        } else {
+          completedIds.push(op.id);
+        }
       }
     }
 
     for (const id of completedIds) {
       const op = this.operations.get(id);
       if (!op) continue;
-      for (const binding of op.bindingSpecs) {
-        binding.set(binding.to);
+      for (let i = 0; i < op.bindingSpecs.length; i++) {
+        const binding = op.bindingSpecs[i];
+        const from = op.resolvedFrom?.[i];
+        if (!binding || from === undefined) continue;
+        binding.set(op.direction === 1 ? binding.to : from);
       }
       op.onComplete?.();
       this.operations.delete(id);

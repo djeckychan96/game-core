@@ -233,6 +233,147 @@ describe('MotionRuntime tween lifecycle', () => {
     expect(handle.resume()).toBe(false);
   });
 
+  test('repeat: 0 behaves exactly like a single pass (regression guard)', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 0,
+      onComplete: () => {
+        completions += 1;
+      }
+    });
+
+    motion.update(100);
+    expect(read()).toBe(100);
+    expect(completions).toBe(1);
+
+    motion.update(100);
+    expect(completions).toBe(1); // still exactly once
+  });
+
+  test('repeat: 2 runs 3 total passes; onComplete fires exactly once, after the 3rd', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 2,
+      onComplete: () => {
+        completions += 1;
+      }
+    });
+
+    motion.update(100); // pass 0 done
+    expect(read()).toBe(100);
+    expect(completions).toBe(0);
+
+    motion.update(100); // pass 1 done
+    expect(read()).toBe(100);
+    expect(completions).toBe(0);
+
+    motion.update(100); // pass 2 done -> exhausted -> real completion
+    expect(read()).toBe(100);
+    expect(completions).toBe(1);
+
+    motion.update(100); // nothing left
+    expect(completions).toBe(1);
+  });
+
+  test('repeat: Infinity never completes naturally, but cancel() still works', () => {
+    const motion = new MotionRuntime();
+    const { binding } = makeNumberBinding(0);
+    let completions = 0;
+    let cancellations = 0;
+    const handle = motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: Infinity,
+      onComplete: () => {
+        completions += 1;
+      },
+      onCancel: () => {
+        cancellations += 1;
+      }
+    });
+
+    for (let i = 0; i < 20; i++) motion.update(100);
+
+    expect(completions).toBe(0);
+    expect(handle.active).toBe(true);
+
+    expect(handle.cancel()).toBe(true);
+    expect(cancellations).toBe(1);
+  });
+
+  test('yoyo: true with repeat: 1 alternates direction; pass 1 ends at `from`, not `to`', () => {
+    const motion = new MotionRuntime();
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 1,
+      yoyo: true
+    });
+
+    motion.update(50); // pass 0 midpoint
+    const pass0Midpoint = read();
+    expect(pass0Midpoint).toBe(50);
+
+    motion.update(50); // pass 0 complete (from -> to), flips into pass 1 (to -> from)
+    expect(read()).toBe(100);
+
+    motion.update(50); // pass 1 midpoint
+    expect(read()).toBe(pass0Midpoint); // same arithmetic midpoint, opposite direction
+
+    motion.update(50); // pass 1 complete: ends at `from`, not `to`
+    expect(read()).toBe(0);
+  });
+
+  test('yoyo endpoints are fixed across passes: get() is never called again after the first real start', () => {
+    const motion = new MotionRuntime();
+    let outer = 0;
+    const get = vi.fn(() => outer);
+    motion.tween({
+      bindings: [{ get, set: (v) => { outer = v; }, to: 100 }],
+      durationMs: 100,
+      repeat: 1,
+      yoyo: true
+    });
+
+    motion.update(50); // resolves from=0 via get() (called once)
+    expect(get).toHaveBeenCalledTimes(1);
+
+    outer = 999; // if get() were ever called again, this decoy would corrupt the math
+    motion.update(50); // finishes pass 0
+
+    // pass 1 (yoyo) must still use the ORIGINAL resolved from (0), not the decoy 999
+    motion.update(50); // pass 1 midpoint
+    expect(outer).toBe(50); // midpoint between the ORIGINAL to=100 and from=0
+    expect(get).toHaveBeenCalledTimes(1);
+  });
+
+  test("onUpdate's raw progress resets fresh at the start of each new pass", () => {
+    const motion = new MotionRuntime();
+    const { binding } = makeNumberBinding(0);
+    const seen: number[] = [];
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      repeat: 1,
+      onUpdate: (progress) => seen.push(progress)
+    });
+
+    motion.update(100); // pass 0 complete: progress hits 1
+    motion.update(50); // into pass 1: progress must be back down at 0.5, not 1.5
+
+    expect(seen[seen.length - 1]).toBe(0.5);
+    expect(Math.max(...seen)).toBeLessThanOrEqual(1);
+  });
+
   test('handle.active / handle.paused reflect state through create -> pause -> resume -> cancel', () => {
     const motion = new MotionRuntime();
     const { binding } = makeNumberBinding(0);
