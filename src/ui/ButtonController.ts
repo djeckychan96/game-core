@@ -244,15 +244,26 @@ export class ButtonControllerImpl implements ButtonController {
     handle.cancel();
   }
 
+  /**
+   * Driver callbacks are shared closures on the preallocated request, so a stale callback of an
+   * older tween is told apart in two ways: its armed generation no longer matches, or the current
+   * tween is still active (a driver removes an operation BEFORE firing its terminal callback, so a
+   * callback for the current tween always finds `handle.active === false`).
+   */
+  private isStaleDriverCallback(): boolean {
+    if (this.tweenGeneration !== this.generation) return true;
+    return this.handle !== null && this.handle.active;
+  }
+
   private onTweenComplete(): void {
-    if (this.tweenGeneration !== this.generation) return;
+    if (this.isStaleDriverCallback()) return;
     this.handle = null;
     if (this.progressValue !== this.target) this.setProgress(this.target);
   }
 
   /** A current-generation onCancel means the driver cancelled the tween from outside: settle (spec §7.7). */
   private onTweenCancel(): void {
-    if (this.tweenGeneration !== this.generation) return;
+    if (this.isStaleDriverCallback()) return;
     this.cancel();
   }
 
