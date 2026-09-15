@@ -4,22 +4,30 @@ import type {
   MotionBinding,
   MotionCancelCallback,
   MotionCompleteCallback,
+  MotionDelayOptions,
   MotionErrorContext,
   MotionErrorHandler,
   MotionErrorPhase,
   MotionHandle,
   MotionRuntimeOptions,
+  MotionScope,
   MotionTweenOptions,
   MotionUpdateCallback
 } from './types';
 
-interface RuntimeTween {
+interface RuntimeOperationBase {
   id: number;
-  kind: 'tween';
   elapsedMs: number;
-  delayMs: number;
   durationMs: number;
   paused: boolean;
+  scope?: MotionScope;
+  onComplete?: MotionCompleteCallback;
+  onCancel?: MotionCancelCallback;
+}
+
+interface RuntimeTween extends RuntimeOperationBase {
+  kind: 'tween';
+  delayMs: number;
   bindingSpecs: MotionBinding[];
   resolvedFrom: number[] | null;
   ease: EaseFn;
@@ -28,11 +36,13 @@ interface RuntimeTween {
   passIndex: number;
   direction: 1 | -1;
   onUpdate?: MotionUpdateCallback;
-  onComplete?: MotionCompleteCallback;
-  onCancel?: MotionCancelCallback;
 }
 
-type RuntimeOperation = RuntimeTween;
+interface RuntimeDelay extends RuntimeOperationBase {
+  kind: 'delay';
+}
+
+type RuntimeOperation = RuntimeTween | RuntimeDelay;
 
 function clamp01(t: number): number {
   if (t <= 0) return 0;
@@ -92,11 +102,29 @@ export class MotionRuntime {
       passIndex: 0,
       direction: 1
     };
+    if (options.scope !== undefined) tween.scope = options.scope;
     if (options.onUpdate) tween.onUpdate = options.onUpdate;
     if (options.onComplete) tween.onComplete = options.onComplete;
     if (options.onCancel) tween.onCancel = options.onCancel;
 
     this.operations.set(id, tween);
+    return this.createHandle(id);
+  }
+
+  delay(options: MotionDelayOptions): MotionHandle {
+    const id = this.nextId++;
+    const delayOp: RuntimeDelay = {
+      id,
+      kind: 'delay',
+      elapsedMs: 0,
+      durationMs: Math.max(1, finiteOr(options.durationMs, 1)),
+      paused: false
+    };
+    if (options.scope !== undefined) delayOp.scope = options.scope;
+    if (options.onComplete) delayOp.onComplete = options.onComplete;
+    if (options.onCancel) delayOp.onCancel = options.onCancel;
+
+    this.operations.set(id, delayOp);
     return this.createHandle(id);
   }
 
@@ -109,6 +137,13 @@ export class MotionRuntime {
       if (op.paused) continue;
 
       op.elapsedMs += deltaMs;
+
+      if (op.kind === 'delay') {
+        const delayProgress = clamp01(op.elapsedMs / op.durationMs);
+        if (delayProgress >= 1) this.completedScratch.push(op.id);
+        continue;
+      }
+
       const localMs = op.elapsedMs - op.delayMs;
       if (localMs < 0) continue;
 
@@ -177,22 +212,24 @@ export class MotionRuntime {
     for (const id of this.completedScratch) {
       const op = this.operations.get(id);
       if (!op) continue;
-      try {
-        for (let i = 0; i < op.bindingSpecs.length; i++) {
-          const binding = op.bindingSpecs[i];
-          const from = op.resolvedFrom?.[i];
-          if (!binding || from === undefined) continue;
-          binding.set(op.direction === 1 ? binding.to : from);
+      if (op.kind === 'tween') {
+        try {
+          for (let i = 0; i < op.bindingSpecs.length; i++) {
+            const binding = op.bindingSpecs[i];
+            const from = op.resolvedFrom?.[i];
+            if (!binding || from === undefined) continue;
+            binding.set(op.direction === 1 ? binding.to : from);
+          }
+        } catch (error) {
+          this.bindingErrors += 1;
+          this.reportError(error, op.kind, 'binding-set');
+          this.cancelOperation(op);
+          continue;
         }
-      } catch (error) {
-        this.bindingErrors += 1;
-        this.reportError(error, op.kind, 'binding-set');
-        this.cancelOperation(op);
-        continue;
+        changed = true;
       }
       this.invokeCallback(op.onComplete, op.kind, 'onComplete');
       this.operations.delete(id);
-      changed = true;
     }
 
     return changed;
