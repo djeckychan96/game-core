@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { MotionRuntime } from '../../src/motion/MotionRuntime';
 import { backOut, easeIn, easeInOut, easeOut, linear } from '../../src/motion/easing';
-import type { EaseName } from '../../src/motion/types';
+import type { EaseName, MotionErrorContext } from '../../src/motion/types';
 
 function makeNumberBinding(initial: number) {
   let value = initial;
@@ -393,5 +393,220 @@ describe('MotionRuntime tween lifecycle', () => {
     handle.cancel();
     expect(handle.active).toBe(false);
     expect(handle.paused).toBe(false);
+  });
+});
+
+describe('MotionRuntime error isolation', () => {
+  function makeThrowingMotion(errors: Array<{ error: unknown; context: MotionErrorContext }>) {
+    return new MotionRuntime({
+      onMotionError: (error, context) => {
+        errors.push({ error, context });
+      }
+    });
+  }
+
+  test('binding.get() throws during implicit-from resolution -> operation cancelled, onCancel once, onComplete never', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    let completions = 0;
+    let cancellations = 0;
+    motion.tween({
+      bindings: [{
+        get: () => {
+          throw new Error('get boom');
+        },
+        set: () => {},
+        to: 100
+      }],
+      durationMs: 100,
+      onComplete: () => { completions += 1; },
+      onCancel: () => { cancellations += 1; }
+    });
+
+    expect(() => motion.update(10)).not.toThrow();
+
+    expect(cancellations).toBe(1);
+    expect(completions).toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.context.phase).toBe('binding-get');
+    expect(errors[0]?.context.kind).toBe('tween');
+  });
+
+  test('binding.set() throws during a normal per-frame write -> same cancellation/report shape', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    let completions = 0;
+    let cancellations = 0;
+    motion.tween({
+      bindings: [{
+        get: () => 0,
+        set: () => {
+          throw new Error('set boom');
+        },
+        to: 100
+      }],
+      durationMs: 100,
+      onComplete: () => { completions += 1; },
+      onCancel: () => { cancellations += 1; }
+    });
+
+    expect(() => motion.update(10)).not.toThrow();
+
+    expect(cancellations).toBe(1);
+    expect(completions).toBe(0);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.context.phase).toBe('binding-set');
+  });
+
+  test('a failing motion does not affect a second, healthy motion in the same update() call', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{
+        get: () => {
+          throw new Error('boom');
+        },
+        set: () => {},
+        to: 100
+      }],
+      durationMs: 100
+    });
+    motion.tween({ bindings: [{ ...binding, to: 100 }], durationMs: 100 });
+
+    expect(() => motion.update(50)).not.toThrow();
+
+    expect(read()).toBe(50); // the healthy motion still advanced in the same call
+    expect(errors).toHaveLength(1);
+  });
+
+  test('the runtime keeps updating healthy motions on later frames after an isolated failure', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{
+        get: () => {
+          throw new Error('boom');
+        },
+        set: () => {},
+        to: 100
+      }],
+      durationMs: 100
+    });
+    motion.tween({ bindings: [{ ...binding, to: 100 }], durationMs: 100 });
+
+    motion.update(50);
+    motion.update(25);
+
+    expect(read()).toBe(75);
+  });
+
+  test('onUpdate throws -> reported, operation is NOT cancelled and keeps advancing', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      onUpdate: () => {
+        throw new Error('onUpdate boom');
+      }
+    });
+
+    motion.update(50);
+    expect(read()).toBe(50);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.context.phase).toBe('onUpdate');
+
+    motion.update(50); // must keep advancing despite the earlier throw
+    expect(read()).toBe(100);
+  });
+
+  test('onComplete throws -> cleanup still happens (operation removed, not completed twice)', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    const { binding } = makeNumberBinding(0);
+    let completions = 0;
+    motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      onComplete: () => {
+        completions += 1;
+        throw new Error('onComplete boom');
+      }
+    });
+
+    expect(() => motion.update(100)).not.toThrow();
+    expect(completions).toBe(1);
+    expect(errors[0]?.context.phase).toBe('onComplete');
+
+    motion.update(50); // nothing left; must not fire onComplete again
+    expect(completions).toBe(1);
+  });
+
+  test('onCancel throws -> cleanup still happens (handle is gone, second cancel returns false)', () => {
+    const errors: Array<{ error: unknown; context: MotionErrorContext }> = [];
+    const motion = makeThrowingMotion(errors);
+    const { binding } = makeNumberBinding(0);
+    const handle = motion.tween({
+      bindings: [{ ...binding, to: 100 }],
+      durationMs: 100,
+      onCancel: () => {
+        throw new Error('onCancel boom');
+      }
+    });
+
+    expect(() => {
+      expect(handle.cancel()).toBe(true);
+    }).not.toThrow();
+    expect(errors[0]?.context.phase).toBe('onCancel');
+    expect(handle.cancel()).toBe(false); // already gone
+  });
+
+  test('a throwing error handler never escapes update()/cancel() and does not stop the rest of the runtime', () => {
+    const motion = new MotionRuntime({
+      onMotionError: () => {
+        throw new Error('handler itself is broken');
+      }
+    });
+    const { binding, read } = makeNumberBinding(0);
+    motion.tween({
+      bindings: [{
+        get: () => {
+          throw new Error('boom');
+        },
+        set: () => {},
+        to: 100
+      }],
+      durationMs: 100
+    });
+    motion.tween({ bindings: [{ ...binding, to: 100 }], durationMs: 100 });
+
+    expect(() => motion.update(50)).not.toThrow();
+    expect(read()).toBe(50);
+  });
+
+  test('default handler (no onMotionError given) falls back to console.error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const motion = new MotionRuntime();
+      motion.tween({
+        bindings: [{
+          get: () => {
+            throw new Error('boom');
+          },
+          set: () => {},
+          to: 100
+        }],
+        durationMs: 100
+      });
+
+      motion.update(10);
+
+      expect(spy).toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

@@ -4,6 +4,9 @@ import type {
   MotionBinding,
   MotionCancelCallback,
   MotionCompleteCallback,
+  MotionErrorContext,
+  MotionErrorHandler,
+  MotionErrorPhase,
   MotionHandle,
   MotionRuntimeOptions,
   MotionTweenOptions,
@@ -51,14 +54,25 @@ function normalizeRepeat(repeat: number | undefined): number {
   return Math.max(0, Math.floor(Number(repeat)));
 }
 
+// Same shape as FxRuntime.ts's own defaultOnEffectError — independently re-declared here
+// (src/motion/** must never import from src/fx/**).
+function defaultOnMotionError(error: unknown, context: MotionErrorContext): void {
+  if (typeof console !== 'undefined' && typeof console.error === 'function') {
+    console.error('[MotionRuntime] callback/binding threw', context, error);
+  }
+}
+
 export class MotionRuntime {
   private readonly operations = new Map<number, RuntimeOperation>();
   private nextId = 1;
   // Reused every update() call so completing operations doesn't allocate a new array per frame.
   private readonly completedScratch: number[] = [];
+  private readonly onMotionError: MotionErrorHandler;
+  private callbackErrors = 0;
+  private bindingErrors = 0;
 
-  constructor(_options: MotionRuntimeOptions = {}) {
-    // options.onMotionError is wired in a later task (error isolation).
+  constructor(options: MotionRuntimeOptions = {}) {
+    this.onMotionError = options.onMotionError ?? defaultOnMotionError;
   }
 
   tween(options: MotionTweenOptions): MotionHandle {
@@ -99,24 +113,38 @@ export class MotionRuntime {
       if (localMs < 0) continue;
 
       if (op.resolvedFrom === null) {
-        op.resolvedFrom = op.bindingSpecs.map((binding) =>
-          binding.from !== undefined ? binding.from : binding.get()
-        );
+        try {
+          op.resolvedFrom = op.bindingSpecs.map((binding) =>
+            binding.from !== undefined ? binding.from : binding.get()
+          );
+        } catch (error) {
+          this.bindingErrors += 1;
+          this.reportError(error, op.kind, 'binding-get');
+          this.cancelOperation(op);
+          continue;
+        }
       }
 
       const progress = clamp01(localMs / op.durationMs);
       const eased = op.ease(progress);
 
-      for (let i = 0; i < op.bindingSpecs.length; i++) {
-        const binding = op.bindingSpecs[i];
-        const from = op.resolvedFrom[i];
-        if (!binding || from === undefined) continue;
-        const passStart = op.direction === 1 ? from : binding.to;
-        const passEnd = op.direction === 1 ? binding.to : from;
-        binding.set(lerp(passStart, passEnd, eased));
+      try {
+        for (let i = 0; i < op.bindingSpecs.length; i++) {
+          const binding = op.bindingSpecs[i];
+          const from = op.resolvedFrom[i];
+          if (!binding || from === undefined) continue;
+          const passStart = op.direction === 1 ? from : binding.to;
+          const passEnd = op.direction === 1 ? binding.to : from;
+          binding.set(lerp(passStart, passEnd, eased));
+        }
+      } catch (error) {
+        this.bindingErrors += 1;
+        this.reportError(error, op.kind, 'binding-set');
+        this.cancelOperation(op);
+        continue;
       }
 
-      op.onUpdate?.(progress);
+      this.invokeUpdateCallback(op, progress);
       changed = true;
 
       if (progress >= 1) {
@@ -124,11 +152,18 @@ export class MotionRuntime {
           // More passes remain: snap to this pass's exact end, flip direction if yoyo, and let
           // any overshoot carry into the next pass on a later update() call (no per-frame
           // allocation, no same-frame multi-pass loop needed for ordinary frame deltas).
-          for (let i = 0; i < op.bindingSpecs.length; i++) {
-            const binding = op.bindingSpecs[i];
-            const from = op.resolvedFrom[i];
-            if (!binding || from === undefined) continue;
-            binding.set(op.direction === 1 ? binding.to : from);
+          try {
+            for (let i = 0; i < op.bindingSpecs.length; i++) {
+              const binding = op.bindingSpecs[i];
+              const from = op.resolvedFrom[i];
+              if (!binding || from === undefined) continue;
+              binding.set(op.direction === 1 ? binding.to : from);
+            }
+          } catch (error) {
+            this.bindingErrors += 1;
+            this.reportError(error, op.kind, 'binding-set');
+            this.cancelOperation(op);
+            continue;
           }
           op.elapsedMs -= op.durationMs;
           op.passIndex += 1;
@@ -142,18 +177,62 @@ export class MotionRuntime {
     for (const id of this.completedScratch) {
       const op = this.operations.get(id);
       if (!op) continue;
-      for (let i = 0; i < op.bindingSpecs.length; i++) {
-        const binding = op.bindingSpecs[i];
-        const from = op.resolvedFrom?.[i];
-        if (!binding || from === undefined) continue;
-        binding.set(op.direction === 1 ? binding.to : from);
+      try {
+        for (let i = 0; i < op.bindingSpecs.length; i++) {
+          const binding = op.bindingSpecs[i];
+          const from = op.resolvedFrom?.[i];
+          if (!binding || from === undefined) continue;
+          binding.set(op.direction === 1 ? binding.to : from);
+        }
+      } catch (error) {
+        this.bindingErrors += 1;
+        this.reportError(error, op.kind, 'binding-set');
+        this.cancelOperation(op);
+        continue;
       }
-      op.onComplete?.();
+      this.invokeCallback(op.onComplete, op.kind, 'onComplete');
       this.operations.delete(id);
       changed = true;
     }
 
     return changed;
+  }
+
+  private cancelOperation(op: RuntimeOperation): void {
+    this.operations.delete(op.id);
+    this.invokeCallback(op.onCancel, op.kind, 'onCancel');
+  }
+
+  private invokeCallback(
+    fn: (() => void) | undefined,
+    kind: RuntimeOperation['kind'],
+    phase: MotionErrorPhase
+  ): void {
+    if (!fn) return;
+    try {
+      fn();
+    } catch (error) {
+      this.callbackErrors += 1;
+      this.reportError(error, kind, phase);
+    }
+  }
+
+  private invokeUpdateCallback(op: RuntimeTween, progress: number): void {
+    if (!op.onUpdate) return;
+    try {
+      op.onUpdate(progress);
+    } catch (error) {
+      this.callbackErrors += 1;
+      this.reportError(error, op.kind, 'onUpdate');
+    }
+  }
+
+  private reportError(error: unknown, kind: RuntimeOperation['kind'], phase: MotionErrorPhase): void {
+    try {
+      this.onMotionError(error, { kind, phase });
+    } catch {
+      // the error handler itself must never be able to take down update()/cancel()
+    }
   }
 
   private createHandle(id: number): MotionHandle {
@@ -162,8 +241,7 @@ export class MotionRuntime {
       cancel(): boolean {
         const op = runtime.operations.get(id);
         if (!op) return false;
-        runtime.operations.delete(id);
-        op.onCancel?.();
+        runtime.cancelOperation(op);
         return true;
       },
       pause(): boolean {
