@@ -1,23 +1,26 @@
-import { type BLEND_MODES, Container, Graphics } from 'pixi.js';
+import { type BLEND_MODES, Container, Graphics, Matrix } from 'pixi.js';
 import type { EaseFn, EaseName, MotionHandle, MotionRuntime } from '../../index';
 import { resolveFxEase } from './easing';
 
 /**
- * Look and timing of the click ripple. Every field is configurable; the defaults are oriented on
- * Trail Arrow's `ring_wave` burst (a ring growing ~2.6× with an ease-out while its alpha eases
- * in to 0 over 340 ms) stretched into a short "ocean" train of staggered rings.
+ * Look and timing of the click ripple. Every field is configurable; the defaults ARE the
+ * production "ocean" of Trail Arrow (`ArrowRenderer.spawnOceanRipple`): two white rings with
+ * phases 0 and 0.18, radius 10 → 56 px, width 3 → 1.2 px, alpha 0.6 → 0, linear, 620 ms in
+ * total, no halo, normal blending, at most 8 ripples, constant size on screen under world zoom.
  */
 export interface ClickRippleConfig {
-  /** Rings per spawn (≥ 1). */
-  rings: number;
-  /** Radius a ring starts at, in the effect's local px. */
+  /**
+   * Normalized start phase of every ring, each in [0, 1). Over the ripple's lifetime t ∈ [0, 1]
+   * ring i runs k = clamp((t − phase_i) / (1 − phase_i)): a later phase starts later but every
+   * ring ends together at t = 1. The array length is the number of rings (≥ 1).
+   */
+  ringPhases: ReadonlyArray<number>;
+  /** Radius a ring starts at, in px (see `sizeSpace`). */
   startRadius: number;
-  /** Radius a ring ends at, in the effect's local px. */
+  /** Radius a ring ends at, in px (see `sizeSpace`). */
   endRadius: number;
-  /** Lifetime of one ring in ms (> 0). */
+  /** Total lifetime of a ripple in ms (> 0); every ring has faded by then. */
   durationMs: number;
-  /** Delay between one ring starting and the next (≥ 0). */
-  staggerMs: number;
   /** Stroke width at the start of a ring's life. */
   lineWidth: number;
   /** Stroke width at the end of a ring's life (a thinning line reads as a fading wave). */
@@ -41,26 +44,32 @@ export interface ClickRippleConfig {
   blendMode: BLEND_MODES;
   /** Concurrent ripples cap: spawning past it recycles the oldest ripple (never the newest tap). */
   maxActive: number;
+  /**
+   * `screen`: radii and widths are screen px — every frame the effect divides them by its own
+   * world scale (all ancestors included), so a ripple keeps the same on-screen size whether the
+   * effect sits in a zoomed world or in a contain-fit UI layer. `local`: plain local units.
+   */
+  sizeSpace: 'screen' | 'local';
 }
 
 export const DEFAULT_CLICK_RIPPLE: Readonly<ClickRippleConfig> = Object.freeze({
-  rings: 3,
-  startRadius: 6,
+  ringPhases: Object.freeze([0, 0.18]) as ReadonlyArray<number>,
+  startRadius: 10,
   endRadius: 56,
-  durationMs: 460,
-  staggerMs: 90,
-  lineWidth: 2.5,
-  lineWidthEnd: 1,
+  durationMs: 620,
+  lineWidth: 3,
+  lineWidthEnd: 1.2,
   color: 0xffffff,
-  alpha: 0.9,
-  ringAlphaDecay: 0.72,
-  radiusEase: 'easeOut',
-  alphaEase: 'easeIn',
+  alpha: 0.6,
+  ringAlphaDecay: 1,
+  radiusEase: 'linear',
+  alphaEase: 'linear',
   haloColor: 0x000000,
-  haloAlpha: 0.3,
+  haloAlpha: 0,
   haloWidth: 1.5,
   blendMode: 'normal',
-  maxActive: 8
+  maxActive: 8,
+  sizeSpace: 'screen'
 });
 
 export interface ClickRippleEffectOptions extends Partial<ClickRippleConfig> {
@@ -68,7 +77,7 @@ export interface ClickRippleEffectOptions extends Partial<ClickRippleConfig> {
   motion: MotionRuntime;
   /** Scope suffix (`fx:click-ripple:<id>`); make it unique per runtime when several effects exist. */
   id?: string;
-  /** Ring Graphics created up front (default: 2 × rings). The pool never exceeds maxActive × rings. */
+  /** Ring Graphics created up front (default: two ripples' worth). The pool never exceeds maxActive × rings. */
   prewarm?: number;
 }
 
@@ -122,12 +131,17 @@ function assertFinite(name: string, value: number, min: number, max = Number.POS
 }
 
 function validateConfig(cfg: ClickRippleConfig): void {
-  assertFinite('rings', cfg.rings, 1);
-  if (!Number.isInteger(cfg.rings)) throw new RangeError(`ClickRippleEffect: rings must be an integer, got ${String(cfg.rings)}`);
+  if (!Array.isArray(cfg.ringPhases) || cfg.ringPhases.length === 0) {
+    throw new RangeError('ClickRippleEffect: ringPhases must be a non-empty array of phases in [0, 1)');
+  }
+  for (const phase of cfg.ringPhases) {
+    if (!Number.isFinite(phase) || phase < 0 || phase >= 1) {
+      throw new RangeError(`ClickRippleEffect: every ring phase must be a finite number in [0, 1), got ${String(phase)}`);
+    }
+  }
   assertFinite('startRadius', cfg.startRadius, 0);
   assertFinite('endRadius', cfg.endRadius, 0);
   assertFinite('durationMs', cfg.durationMs, 1);
-  assertFinite('staggerMs', cfg.staggerMs, 0);
   assertFinite('lineWidth', cfg.lineWidth, 0);
   assertFinite('lineWidthEnd', cfg.lineWidthEnd, 0);
   assertFinite('alpha', cfg.alpha, 0, 1);
@@ -136,6 +150,9 @@ function validateConfig(cfg: ClickRippleConfig): void {
   assertFinite('haloWidth', cfg.haloWidth, 0);
   assertFinite('maxActive', cfg.maxActive, 1);
   if (!Number.isInteger(cfg.maxActive)) throw new RangeError(`ClickRippleEffect: maxActive must be an integer, got ${String(cfg.maxActive)}`);
+  if (cfg.sizeSpace !== 'screen' && cfg.sizeSpace !== 'local') {
+    throw new RangeError(`ClickRippleEffect: sizeSpace must be "screen" or "local", got ${String(cfg.sizeSpace)}`);
+  }
 }
 
 /** Copies the defined fields of `overrides` over `base` and validates the result. */
@@ -146,6 +163,7 @@ function mergeConfig(base: Readonly<ClickRippleConfig>, overrides: Partial<Click
     if (value !== undefined) target[key] = value;
   }
   validateConfig(cfg);
+  cfg.ringPhases = Object.freeze([...cfg.ringPhases]);
   return cfg;
 }
 
@@ -160,8 +178,10 @@ function mergeConfig(base: Readonly<ClickRippleConfig>, overrides: Partial<Click
  * Every ripple is exactly one linear `MotionRuntime` tween in the scope `fx:click-ripple:<id>`:
  * the runtime the host ticks through `core.update(frameMs)` is the only clock (no ticker, no
  * timers, no requestAnimationFrame here), `core.pauseScope` / `cancelScope` / `cancelAll` apply
- * to the rings like to everything else. Ring `Graphics` are pooled — spawns reuse them, nothing
- * is allocated per frame; a ring is redrawn (radius, width, alpha) on each tween update.
+ * to the rings like to everything else. The tween's progress t drives every ring through its
+ * phase (`ringPhases`), so all rings of a ripple end together. Ring `Graphics` are pooled —
+ * spawns reuse them, nothing is allocated per frame; a ring is redrawn (radius, width, alpha)
+ * on each tween update.
  *
  * What is deliberately NOT here: deciding which pointer-up counts as a tap on empty space (a
  * drag threshold, "was that the UI", "is something being dragged"). That is host policy.
@@ -176,6 +196,7 @@ export class ClickRippleEffect extends Container {
   private alphaEaseFn: EaseFn;
   private readonly idle: Graphics[] = [];
   private readonly active: RippleRecord[] = [];
+  private readonly worldMatrix = new Matrix();
   private sizeScaleValue = 1;
   private nextId = 1;
   private createdRings = 0;
@@ -196,7 +217,7 @@ export class ClickRippleEffect extends Container {
     this.alphaEaseFn = resolveFxEase(cfg.alphaEase);
     this.eventMode = 'none';
     this.interactiveChildren = false;
-    this.prewarm(prewarm ?? cfg.rings * 2);
+    this.prewarm(prewarm ?? cfg.ringPhases.length * 2);
   }
 
   /** The current configuration (frozen; change it through `configure`). */
@@ -228,7 +249,7 @@ export class ClickRippleEffect extends Container {
   /** Creates idle ring Graphics ahead of the first tap; capped at maxActive × rings. */
   prewarm(count: number): number {
     if (this.disposed) return 0;
-    const cap = this.cfg.maxActive * this.cfg.rings;
+    const cap = this.cfg.maxActive * this.cfg.ringPhases.length;
     const target = Math.max(0, Math.min(cap, Math.floor(count)));
     let created = 0;
     while (this.idle.length + this.activeRingCount() < target) {
@@ -252,22 +273,23 @@ export class ClickRippleEffect extends Container {
     }
 
     const cfg = this.cfg;
+    const ringCount = cfg.ringPhases.length;
     const record: RippleRecord = {
       id: this.nextId++,
       cfg,
       radiusEase: this.radiusEaseFn,
       alphaEase: this.alphaEaseFn,
-      totalMs: cfg.durationMs + cfg.staggerMs * (cfg.rings - 1),
+      totalMs: cfg.durationMs,
       color: options?.color ?? cfg.color,
       sizeScale,
       rings: [],
-      live: cfg.rings,
+      live: ringCount,
       t: 0,
       handle: null,
       finished: false,
       recycled: false
     };
-    for (let i = 0; i < cfg.rings; i++) {
+    for (let i = 0; i < ringCount; i++) {
       const ring = this.acquireRing();
       ring.position.set(x, y);
       ring.blendMode = cfg.blendMode;
@@ -376,22 +398,32 @@ export class ClickRippleEffect extends Container {
   }
 
   private trimPool(): void {
-    const cap = this.cfg.maxActive * this.cfg.rings;
+    const cap = this.cfg.maxActive * this.cfg.ringPhases.length;
     while (this.idle.length > 0 && this.idle.length + this.activeRingCount() > cap) {
       this.idle.pop()!.destroy();
     }
   }
 
+  /** 1 / (scale of this container's full world transform), clamped like the donor so a collapsed world never explodes the rings. */
+  private inverseWorldScale(): number {
+    const m = this.getGlobalTransform(this.worldMatrix, false);
+    const scale = Math.hypot(m.a, m.b) || 1;
+    return 1 / Math.max(0.05, scale);
+  }
+
   private render(record: RippleRecord, progress: number): void {
     if (this.disposed || record.finished) return;
     const cfg = record.cfg;
-    const elapsed = progress * record.totalMs;
-    const k = record.sizeScale * this.sizeScaleValue;
+    let k = record.sizeScale * this.sizeScaleValue;
+    if (cfg.sizeSpace === 'screen') k *= this.inverseWorldScale();
     for (let i = 0; i < record.rings.length; i++) {
       const ring = record.rings[i];
       if (!ring) continue;
-      const local = (elapsed - i * cfg.staggerMs) / cfg.durationMs;
-      if (local < 0) {
+      const phase = cfg.ringPhases[i] ?? 0;
+      // donor semantics: k = clamp((t − phase) / (1 − phase)); a phased ring stays hidden until
+      // its phase and every ring reaches k = 1 exactly when the ripple's own t reaches 1
+      const local = (progress - phase) / (1 - phase);
+      if (local <= 0 && phase > 0) {
         ring.visible = false;
         continue;
       }
