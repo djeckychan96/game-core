@@ -1,7 +1,8 @@
-import { Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
-import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
+import type { MotionHandle } from '../index';
+import { CLOSE_SIZE, ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { UiButton } from './UiButton';
-import { createLabel, fitLabelWidth, formatAmount } from './text';
+import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 
 export interface ShopItem {
   id: string;
@@ -13,134 +14,307 @@ export interface ShopItem {
 
 export interface ShopWindowParams {
   items: ShopItem[];
+  /** Blue ribbon caption. Default `SPECIAL OFFER` (donor). */
   title?: string;
 }
 
 export interface ShopWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   id?: string;
   title?: string;
-  /** Close continuation: the player tapped BUY on `item`. */
+  /** Close continuation: the player tapped a pack. */
   onBuy: (item: ShopItem) => void;
 }
 
-const COLS = 3;
+/** Donor Shop prefab geometry (design units). */
+const HEADER_W = 1080;
+const HEADER_H = 539;
+const HEADER_HEIGHT_RATIO = 36 / 255;
+const CLOSE_MARGIN_RIGHT = 64;
+const CLOSE_MARGIN_TOP = 124;
+const SHOP_CLOSE = 89; // the shop's × is the bigger 89-unit one
+const CONTENT_MARGIN = 32;
+const TOP_MARGIN = 36;
+const BOTTOM_MARGIN = 48;
+const MASK_TOP_BLEED = 220;
+const SECTION_MAX_SCALE = 1.5;
 const CARD_W = 318;
 const CARD_H = 418;
-const CARD_GAP_X = 26;
-const CARD_GAP_Y = 30;
-const HEADER_H = 300;
-const DEFAULT_BOUNDS = new Rectangle(-540, -600, 1080, 1200);
+const ITEM_SLOTS: Array<[number, number]> = [[-340, 314], [0, 313], [340, 307], [-340, 750], [0, 750], [340, 750]];
+const DRAG_THRESHOLD = 6;
 
 interface CardView {
-  root: Container;
+  button: UiButton;
   icon: Sprite;
   amount: Text;
-  button: UiButton;
+  price: Text;
   item: ShopItem | null;
 }
 
 /**
- * Coin shop on the donor's striped awning: a grid of blue pack cards (coin pile, amount, green
- * BUY button with the price) and a ×. Up to six packs; BUY is a close() continuation.
+ * Coin shop — the donor's full-screen layout: the striped awning tiled across the top
+ * (height 36/255 of the screen), the big × at the top-right, then a column of content scaled to
+ * the screen width minus 2 × 32: the blue `SPECIAL OFFER` ribbon and a 3-column grid of pack cards
+ * (amount on top, coin pile, price on the card's bottom band). The column scrolls when it does
+ * not fit. Each card is a ButtonController; BUY is a close() continuation.
  */
 export class ShopWindowView extends ModalWindow<ShopWindowParams> {
+  private readonly header: Container;
+  private readonly headerTiles: Sprite[] = [];
+  private readonly content: Container;
+  private readonly gold: Container;
   private readonly title: Text;
   private readonly cards: CardView[] = [];
+  private readonly contentMask: Graphics;
   private readonly onBuy: (item: ShopItem) => void;
-  private readonly header: Container;
-  private bounds: Rectangle = DEFAULT_BOUNDS;
+  private readonly scrollScope: string;
+  private designScale = 1;
+  private scrollBase = 0;
+  private scrollOffset = 0;
+  private scrollMin = 0;
+  private headerIdleY = 0;
+  private dragPointerId: number | null = null;
+  private dragLastY = 0;
+  private dragMoved = 0;
+  private dragVelocity = 0;
+  private scrollHandle: MotionHandle | null = null;
 
   constructor(options: ShopWindowViewOptions) {
-    super({ ...options, id: options.id ?? 'shop-window', maxHeightRatio: options.maxHeightRatio ?? 0.86 });
+    super({ ...options, id: options.id ?? 'shop-window', closeButton: false });
     this.onBuy = options.onBuy;
+    this.scrollScope = `${this.id}:scroll`;
     const t = this.textures;
 
-    this.header = new Container();
-    const awning = this.sprite(t.shopHeader, 1080, 539);
-    awning.y = -HEADER_H / 2 + 20;
-    this.header.addChild(awning);
-    this.title = createLabel(this.theme, options.title ?? 'SHOP', { fontSize: 96 });
-    this.title.y = -HEADER_H / 2 + 44;
-    this.header.addChild(this.title);
-    this.panel.addChildAt(this.header, 0);
+    this.content = new Container();
+    this.content.eventMode = 'static';
+    this.gold = new Container();
+    this.content.addChild(this.gold);
+    const ribbon = this.sprite(t.shopRibbon, 1000, 116);
+    ribbon.x = 3;
+    this.gold.addChild(ribbon);
+    this.title = createLabel(this.theme, options.title ?? 'SPECIAL OFFER', { fontSize: 80, stroke: 11 });
+    this.title.y = -6;
+    this.gold.addChild(this.title);
 
     const coinTextures: Texture[] = [t.shopCoins1, t.shopCoins2, t.shopCoins3, t.shopCoins4, t.shopCoins5, t.shopCoins6];
-    for (let i = 0; i < 6; i++) {
-      const root = new Container();
-      const card = this.sprite(t.shopCard, CARD_W, CARD_H);
-      root.addChild(card);
-      const icon = new Sprite(coinTextures[i] ?? t.coinBig);
-      icon.anchor.set(0.5);
-      icon.width = 220;
-      icon.height = 186;
-      icon.y = -70;
-      root.addChild(icon);
-      const amount = createLabel(this.theme, '0', { fontSize: 52 });
-      amount.y = 62;
-      root.addChild(amount);
+    ITEM_SLOTS.forEach(([x, y], i) => {
       const button = new UiButton({
         ui: this.ui,
-        id: `${this.id}:buy:${i}`,
+        id: `${this.id}:item:${i}`,
         theme: this.theme,
-        texture: t.shopBuy,
-        width: 264,
-        height: 102,
-        label: '$0.99',
-        fontSize: 44,
-        labelOffsetY: -6,
+        texture: t.shopCard,
+        width: CARD_W,
+        height: CARD_H,
+        pressScale: 0.9,
         onTap: () => this.buy(i)
       });
-      button.y = 150;
-      root.addChild(button);
+      button.position.set(x, y);
+      const icon = new Sprite(coinTextures[i] ?? t.coinBig);
+      icon.anchor.set(0.5);
+      icon.width = 260;
+      icon.height = 220;
+      icon.position.set(i === 0 ? 5 : 0, -29);
+      const amount = createLabel(this.theme, '0', { fontSize: 68, stroke: 8 });
+      amount.y = -140;
+      const price = createLabel(this.theme, '', { fontSize: 68, stroke: 8 });
+      price.y = 141;
+      button.addChild(icon, amount, price);
+      this.gold.addChild(button);
       this.addButton(button);
-      this.panel.addChild(root);
-      this.cards.push({ root, icon, amount, button, item: null });
-    }
-    if (this.closeButton) this.panel.setChildIndex(this.closeButton, this.panel.children.length - 1);
-    this.layoutCards(6);
+      this.cards.push({ button, icon, amount, price, item: null });
+    });
+    this.panel.addChild(this.content);
+
+    this.contentMask = new Graphics();
+    this.panel.addChild(this.contentMask);
+    this.content.mask = this.contentMask;
+
+    this.header = new Container();
+    this.header.eventMode = 'none';
+    this.panel.addChild(this.header);
+
+    const close = new UiButton({
+      ui: this.ui,
+      id: `${this.id}:close`,
+      theme: this.theme,
+      texture: t.btnClose,
+      width: SHOP_CLOSE,
+      height: SHOP_CLOSE,
+      minHitSize: 160,
+      pressScale: 0.86,
+      onTap: () => this.close('button')
+    });
+    this.panel.addChild(close);
+    this.addButton(close);
+    this.shopClose = close;
+
+    this.content.on('pointerdown', this.onPointerDown, this);
+    this.content.on('globalpointermove', this.onPointerMove, this);
+    this.content.on('pointerup', this.onPointerUp, this);
+    this.content.on('pointerupoutside', this.onPointerUp, this);
+    this.layoutPanel();
   }
 
+  private shopClose: UiButton | null = null;
+
   protected applyParams(params: ShopWindowParams): void {
-    if (params.title) this.title.text = params.title;
+    if (params.title) {
+      this.title.text = params.title;
+      fitLabelWidth(this.title, 900);
+    }
     const items = params.items.slice(0, this.cards.length);
     this.cards.forEach((card, i) => {
       const item = items[i] ?? null;
       card.item = item;
-      card.root.visible = item !== null;
+      card.button.visible = item !== null;
       card.button.setEnabled(item !== null);
       if (!item) return;
       card.amount.text = formatAmount(item.amount);
-      fitLabelWidth(card.amount, CARD_W * 0.8);
-      card.button.setLabel(item.price);
+      fitLabelWidth(card.amount, 280);
+      card.price.text = item.price;
+      fitLabelWidth(card.price, 268);
     });
-    this.layoutCards(Math.max(1, items.length));
+    this.scrollOffset = 0;
     this.layoutPanel();
   }
 
-  protected panelBounds(): Rectangle {
-    // the base constructor lays out before this subclass's fields are initialized
-    return this.bounds ?? DEFAULT_BOUNDS;
-  }
+  /** Full-screen: panel origin at the viewport center, scaled by the contain-fit design scale. */
+  protected override layoutPanel(): void {
+    if (!this.header) return; // base constructor runs before the subclass fields exist
+    const w = this.viewportWidth;
+    const h = this.viewportHeight;
+    const s = Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
+    this.designScale = s;
+    const vw = w / s;
+    const vh = h / s;
+    const top = Math.max(0, this.insets.top ?? 0) / s;
+    const bottom = Math.max(0, this.insets.bottom ?? 0) / s;
+    this.setIdle(w / 2, h / 2, s);
+    this.panel.hitArea = new Rectangle(-vw / 2, -vh / 2, vw, vh);
 
-  private layoutCards(count: number): void {
-    const rows = Math.max(1, Math.ceil(count / COLS));
-    const cols = Math.min(COLS, count);
-    const gridW = cols * CARD_W + (cols - 1) * CARD_GAP_X;
-    const gridH = rows * CARD_H + (rows - 1) * CARD_GAP_Y;
-    const top = -HEADER_H / 2 + 170;
-    this.cards.forEach((card, i) => {
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
-      card.root.position.set(-gridW / 2 + CARD_W / 2 + col * (CARD_W + CARD_GAP_X), top + CARD_H / 2 + row * (CARD_H + CARD_GAP_Y));
+    // awning: tiles across the width, height 36/255 of the screen
+    const headerScale = (vh * HEADER_HEIGHT_RATIO) / HEADER_H;
+    const tileW = HEADER_W * headerScale;
+    const count = Math.max(1, Math.ceil(vw / tileW) + 2);
+    while (this.headerTiles.length < count) {
+      const tile = new Sprite(this.textures.shopHeader);
+      tile.anchor.set(0.5, 0);
+      tile.eventMode = 'none';
+      this.header.addChild(tile);
+      this.headerTiles.push(tile);
+    }
+    const startX = -(count * tileW) / 2 + tileW / 2;
+    this.headerTiles.forEach((tile, i) => {
+      tile.visible = i < count;
+      tile.width = tileW;
+      tile.height = HEADER_H * headerScale;
+      tile.position.set(startX + i * tileW, 0);
     });
-    const width = Math.max(1080, gridW + 80);
-    const height = HEADER_H / 2 + 20 + top + gridH + 60;
-    this.bounds = new Rectangle(-width / 2, -HEADER_H / 2 - 20, width, height);
+    this.headerIdleY = -vh / 2 + top;
+    this.header.y = this.headerIdleY;
+    const headerBottom = this.headerIdleY + HEADER_H * headerScale;
+
+    if (this.shopClose) {
+      this.shopClose.position.set(vw / 2 - CLOSE_MARGIN_RIGHT - SHOP_CLOSE / 2, -vh / 2 + top + CLOSE_MARGIN_TOP + SHOP_CLOSE / 2);
+    }
+
+    // content column scaled to the width; scrolls when taller than the area under the awning
+    this.gold.scale.set(1);
+    const goldBounds = this.gold.getLocalBounds();
+    const sectionScale = Math.min(SECTION_MAX_SCALE, (vw - CONTENT_MARGIN * 2) / Math.max(1, goldBounds.width));
+    this.gold.scale.set(sectionScale);
+    this.gold.x = -(goldBounds.x + goldBounds.width / 2) * sectionScale;
+    this.gold.y = -goldBounds.y * sectionScale;
+    const viewportTop = headerBottom + TOP_MARGIN;
+    const viewportBottom = vh / 2 - bottom - BOTTOM_MARGIN;
+    const visibleHeight = Math.max(1, viewportBottom - viewportTop);
+    const contentHeight = goldBounds.height * sectionScale;
+    this.scrollBase = viewportTop;
+    this.scrollMin = -Math.max(0, contentHeight - visibleHeight);
+    this.content.hitArea = new Rectangle(-vw / 2, -MASK_TOP_BLEED, vw, contentHeight + MASK_TOP_BLEED * 2);
+    this.contentMask.clear().rect(-vw / 2, viewportTop - MASK_TOP_BLEED, vw, visibleHeight + MASK_TOP_BLEED).fill(0xffffff);
+    this.setScroll(this.scrollOffset);
+    applyTextResolution(this.panel, s * sectionScale * this.pixelRatio);
   }
 
-  /** The × sits on the awning, clear of the first card row. */
-  protected override closeButtonPosition(bounds: Rectangle): { x: number; y: number } {
-    return { x: bounds.x + bounds.width - 60, y: bounds.y + 60 };
+  /** Donor entrance: awning slides down from −180, content fades and grows from 0.5. */
+  protected override applyTransition(progress: number): void {
+    const p = Math.min(1, Math.max(0, progress));
+    this.backdrop.alpha = p;
+    this.panel.alpha = 1;
+    this.panel.position.set(this.viewportWidth / 2, this.viewportHeight / 2);
+    this.panel.scale.set(this.designScale);
+    if (this.header) this.header.y = this.headerIdleY - 180 * (1 - progress);
+    if (this.content) {
+      this.content.alpha = p;
+      this.content.scale.set(0.5 + 0.5 * progress);
+      this.content.x = 0;
+    }
+    if (this.shopClose) this.shopClose.alpha = p;
+  }
+
+  get scrollable(): boolean {
+    return this.scrollMin < 0;
+  }
+
+  override destroy(options?: Parameters<Container['destroy']>[0]): void {
+    if (this.content) {
+      this.content.off('pointerdown', this.onPointerDown, this);
+      this.content.off('globalpointermove', this.onPointerMove, this);
+      this.content.off('pointerup', this.onPointerUp, this);
+      this.content.off('pointerupoutside', this.onPointerUp, this);
+    }
+    this.motion.cancelScope(this.scrollScope);
+    super.destroy(options);
+  }
+
+  // --- scroll ---
+
+  private setScroll(offset: number): void {
+    this.scrollOffset = Math.max(this.scrollMin, Math.min(0, offset));
+    this.content.y = this.scrollBase + this.scrollOffset;
+  }
+
+  private onPointerDown(event: FederatedPointerEvent): void {
+    if (!this.scrollable || this.dragPointerId !== null) return;
+    this.dragPointerId = event.pointerId;
+    this.dragLastY = event.global.y;
+    this.dragMoved = 0;
+    this.dragVelocity = 0;
+    this.stopFling();
+  }
+
+  private onPointerMove(event: FederatedPointerEvent): void {
+    if (event.pointerId !== this.dragPointerId) return;
+    const dy = event.global.y - this.dragLastY;
+    this.dragLastY = event.global.y;
+    this.dragMoved += Math.abs(dy);
+    this.dragVelocity = this.dragVelocity * 0.6 + dy * 0.4;
+    if (this.dragMoved > DRAG_THRESHOLD) {
+      // a drag cancels any card press so the release is never a purchase
+      for (const card of this.cards) card.button.controller.cancel();
+      this.setScroll(this.scrollOffset + dy / this.designScale);
+    }
+  }
+
+  private onPointerUp(event: FederatedPointerEvent): void {
+    if (event.pointerId !== this.dragPointerId) return;
+    this.dragPointerId = null;
+    if (this.dragMoved <= DRAG_THRESHOLD || Math.abs(this.dragVelocity) < 1) return;
+    const target = this.scrollOffset + (this.dragVelocity * 25) / this.designScale;
+    this.scrollHandle = this.motion.tween({
+      scope: this.scrollScope,
+      bindings: [{ get: () => this.scrollOffset, set: (v: number) => this.setScroll(v), to: Math.max(this.scrollMin, Math.min(0, target)) }],
+      durationMs: 800,
+      ease: 'easeOut',
+      onComplete: () => { this.scrollHandle = null; },
+      onCancel: () => { this.scrollHandle = null; }
+    });
+  }
+
+  private stopFling(): void {
+    const handle = this.scrollHandle;
+    this.scrollHandle = null;
+    handle?.cancel();
   }
 
   private buy(index: number): void {
@@ -149,3 +323,5 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     this.close('button', () => this.onBuy(item));
   }
 }
+
+void CLOSE_SIZE;

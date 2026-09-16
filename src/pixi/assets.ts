@@ -57,7 +57,33 @@ export const READY_UI_ASSET_FILES = {
   shopCoins3: 'shop/coins_3.webp',
   shopCoins4: 'shop/coins_4.webp',
   shopCoins5: 'shop/coins_5.webp',
-  shopCoins6: 'shop/coins_6.webp'
+  shopCoins6: 'shop/coins_6.webp',
+  // settings
+  settingsPanel: 'settings/panel.webp',
+  settingsSound: 'settings/btn_sound.webp',
+  settingsMusic: 'settings/btn_music.webp',
+  settingsHaptic: 'settings/btn_haptic.webp',
+  settingsOff: 'settings/deactivated.webp',
+  settingsBtnHome: 'settings/btn_home.webp',
+  settingsBtnRestart: 'settings/btn_restart.webp',
+  settingsIconHome: 'settings/icon_home.webp',
+  settingsIconRestart: 'settings/icon_restart.webp',
+  // offers
+  noAdsPanel: 'offer/noads_panel.webp',
+  noAdsBuy: 'offer/noads_btn_buy.webp',
+  noAdsIcon: 'offer/noads_icon.webp',
+  starterPanel: 'offer/starter_panel.webp',
+  starterImage: 'offer/starter_image.webp',
+  starterIcon: 'offer/starter_icon.webp',
+  starterBuy: 'offer/starter_btn_buy.webp',
+  starterGold: 'offer/icon_gold.webp',
+  starterHearts: 'offer/icon_hearts.webp',
+  starterNoAds: 'offer/icon_noads_small.webp',
+  starterBorder: 'offer/border.webp',
+  starterBooster1: 'offer/icon_booster_1.webp',
+  starterBooster2: 'offer/icon_booster_2.webp',
+  starterBooster3: 'offer/icon_booster_3.webp',
+  bulb: 'offer/bulb.webp'
 } as const;
 
 export type ReadyUiTextureName = keyof typeof READY_UI_ASSET_FILES;

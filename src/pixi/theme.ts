@@ -13,9 +13,14 @@ export interface ReadyUiTextTheme {
 export interface ReadyUiColors {
   /** Solid backdrop behind the map when the background art is not used. */
   mapBackground: number;
-  /** Modal dim layer color/alpha (donor: dark slate at 0.94). */
+  /** Modal dim layer (donor: black at 0.55 for shop/lives/settings/offers). */
   backdrop: number;
   backdropAlpha: number;
+  /** The victory window's dim layer (donor: slate at 0.94, so it reads as part of the game screen). */
+  resultBackdrop: number;
+  resultBackdropAlpha: number;
+  /** Settings version caption. */
+  versionText: number;
   /** Fill of a locked node's shake / a hard pill's text etc. */
   accent: number;
   /** Secondary text color (timers, captions). */
@@ -31,8 +36,10 @@ export interface ReadyUiLevelMapTheme {
   levelGap: number;
   /** How much the focused node grows over a plain one. */
   focusBoost: number;
-  /** Focus point as a fraction of the visible map height (0 = top, 1 = bottom). */
+  /** Focus point as a fraction of the viewport height (donor: the current badge sits at ~0.6). */
   focusRatio: number;
+  /** Extra scale the donor's layout applies to the whole progression widget on a phone. */
+  contentScale: number;
 }
 
 export interface ReadyUiTheme {
@@ -48,13 +55,16 @@ export const DEFAULT_READY_UI_THEME: ReadyUiTheme = {
   text: {
     fontFamily: 'Firasans Black',
     fill: 0xffffff,
-    strokeColor: 0x1d1428,
-    strokeRatio: 0.09
+    strokeColor: 0x000000,
+    strokeRatio: 0.12
   },
   colors: {
     mapBackground: 0x1d2231,
-    backdrop: 0x2c2f37,
-    backdropAlpha: 0.94,
+    backdrop: 0x000000,
+    backdropAlpha: 0.55,
+    resultBackdrop: 0x2c2f37,
+    resultBackdropAlpha: 0.94,
+    versionText: 0x716dd0,
     accent: 0xff5a5a,
     textMuted: 0xfff3d6
   },
@@ -63,7 +73,8 @@ export const DEFAULT_READY_UI_THEME: ReadyUiTheme = {
     nodeScale: 1.215,
     levelGap: 442 * 1.215,
     focusBoost: 1.18,
-    focusRatio: 0.56
+    focusRatio: 0.6,
+    contentScale: 0.963
   },
   designWidth: 1080,
   designHeight: 2344

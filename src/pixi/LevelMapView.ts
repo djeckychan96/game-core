@@ -310,16 +310,20 @@ export class LevelMapView extends Container {
     this.mapRight = Math.max(this.mapLeft + 1, w - Math.max(0, insets.right ?? 0));
     this.pixelRatio = options.pixelRatio ?? this.pixelRatio;
 
-    // contain-fit of the donor's portrait design box, so a node keeps the same share of the
-    // screen on a 320 px phone, an iPhone and a desktop window
-    this.scaleValue = Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
+    // contain-fit of the donor's portrait design box (× the donor's progression scale), so a
+    // node keeps the same share of the screen on a 320 px phone, an iPhone and a desktop window
+    this.scaleValue = Math.min(w / this.theme.designWidth, h / this.theme.designHeight) * this.theme.levelMap.contentScale;
     const s = this.scaleValue;
     const centerX = (this.mapLeft + this.mapRight) / 2;
     this.content.position.set(centerX, 0);
     this.content.scale.set(s);
 
+    // donor: the current badge rests at ~60% of the screen height, but always a whole badge
+    // (plus the hard pill) above the PLAY button / bottom inset and below the HUD
     const previousFocus = this.focusLevelValue;
-    this.focusY = this.mapTop + (this.mapBottom - this.mapTop) * this.theme.levelMap.focusRatio;
+    const reach = (this.theme.levelMap.badgeSize / 2 + 40) * this.theme.levelMap.nodeScale * s;
+    const wanted = h * this.theme.levelMap.focusRatio;
+    this.focusY = Math.max(this.mapTop + reach, Math.min(wanted, this.mapBottom - reach));
     this.shine.position.set(0, this.focusY / s);
 
     if (this.background) {
@@ -561,7 +565,8 @@ export class LevelMapView extends Container {
     const digits = String(level).length;
     const numK = digits >= 3 ? 0.74 : digits === 2 ? 0.92 : 1;
     const locked = state === 'locked';
-    const label = createLabel(this.theme, String(level), { fontSize: (locked ? 70 : 84) * numK * k });
+    const fontSize = (locked ? 70 : 84) * numK * k;
+    const label = createLabel(this.theme, String(level), { fontSize, stroke: fontSize * 0.095 });
     label.position.set(0, ((locked ? 6 : 27) + (digits >= 3 ? 7 : digits === 2 ? 3 : 0)) * k);
     inner.addChild(label);
 

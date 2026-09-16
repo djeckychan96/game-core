@@ -26,6 +26,20 @@ export interface ModalResizeOptions {
   pixelRatio?: number;
 }
 
+/** Share of the viewport the panel's measured bounds may take (the donor's WindowsSystem fit). */
+export interface ModalFit {
+  widthRatio: number;
+  heightRatio: number;
+}
+
+/** The two donor entrances: every info window pops from 0.84 / +60; the victory window from 0.7 / +130. */
+export interface ModalEntrance {
+  fromScale: number;
+  fromY: number;
+  durationMs: number;
+  ease: EaseFn;
+}
+
 export interface ModalWindowOptions {
   ui: UiRuntime;
   motion: MotionRuntime;
@@ -35,18 +49,19 @@ export interface ModalWindowOptions {
   id: string;
   /** default true */
   blocksGameplay?: boolean;
-  /** default 440 ms, back.out(1.9) — the donor's victory-window pop */
-  enterDurationMs?: number;
-  enterEase?: EaseFn;
+  /** default POP_ENTRANCE (0.84 scale, +60 y, 320 ms back.out(1.5)) */
+  entrance?: Partial<ModalEntrance>;
   /** default 160 ms */
   leaveDurationMs?: number;
   /** Tap on the dim backdrop closes with reason 'background'. Default true. */
   closeOnBackdrop?: boolean;
-  /** Draw the red × in the panel's top-right corner. Default true. */
+  /** Draw the red × (donor: 51 design units). Default true. */
   closeButton?: boolean;
-  /** Share of the viewport the panel may take (contain-fit). Defaults: 0.9 × 0.82. */
-  maxWidthRatio?: number;
-  maxHeightRatio?: number;
+  /** Contain-fit ratios of the panel's measured bounds. Default 0.88 × 0.84 (donor mobile). */
+  fit?: Partial<ModalFit>;
+  /** Backdrop color/alpha; defaults to the theme's black 0.55. */
+  backdropColor?: number;
+  backdropAlpha?: number;
   /** Return false to veto a close (e.g. while waiting for an ad). */
   onBeforeClose?: (intent: WindowCloseIntent) => boolean | void;
   /** View cleanup on every path to hidden (also cancelAll). Not a business hook. */
@@ -64,12 +79,20 @@ export function backOut(overshoot: number): EaseFn {
   };
 }
 
+export const POP_ENTRANCE: ModalEntrance = { fromScale: 0.84, fromY: 60, durationMs: 320, ease: backOut(1.5) };
+export const VICTORY_ENTRANCE: ModalEntrance = { fromScale: 0.7, fromY: 130, durationMs: 440, ease: backOut(1.9) };
+
+/** Donor close button: a 51-unit red × whose hit area is expanded to a comfortable square. */
+export const CLOSE_SIZE = 51;
+const CLOSE_HIT = 150;
+
 /**
- * Base of every Ready UI modal: a dim backdrop, a centered panel laid out in design units and
- * contain-fitted to the viewport, a WindowController driving hidden → entering → shown → leaving,
- * and the donor's entrance (alpha 0 → 1, y +130 → 0, scale 0.7 → 1 from the fit scale).
- * Subclasses build the panel content in `panel` (design units, centered at 0,0) and report their
- * `panelBounds` for fitting; business callbacks always run as close() continuations.
+ * Base of every Ready UI modal, laid out the way the donor's WindowsSystem did it: the dim
+ * backdrop covers the viewport, the panel is composed in design units around its own origin,
+ * scaled so its MEASURED bounds fit `fit.widthRatio × fit.heightRatio` of the viewport, and its
+ * origin sits at the viewport center. A WindowController drives hidden → entering → shown →
+ * leaving; the entrance maps progress onto alpha / y / scale from the fit scale.
+ * Subclasses build content in `panel`; business callbacks always run as close() continuations.
  */
 export abstract class ModalWindow<TParams = void> extends Container {
   readonly id: string;
@@ -82,18 +105,21 @@ export abstract class ModalWindow<TParams = void> extends Container {
   protected readonly panel: Container;
   protected readonly closeButton: UiButton | null;
   protected readonly fxScope: string;
+  protected readonly entrance: ModalEntrance;
+  protected readonly fit: ModalFit;
+  protected viewportWidth = 0;
+  protected viewportHeight = 0;
+  protected pixelRatio = 1;
+  protected insets: ModalInsets = {};
+  protected fitScale = 1;
   private readonly onDismiss: ((reason: WindowCloseReason) => void) | null;
   private readonly onHiddenHook: ((reason: WindowHiddenReason) => void) | null;
-  private readonly maxWidthRatio: number;
-  private readonly maxHeightRatio: number;
   private readonly closeOnBackdrop: boolean;
+  private readonly backdropColor: number;
+  private readonly backdropAlpha: number;
   private readonly buttons: UiButton[] = [];
-  private fitScale = 1;
-  private panelCenterY = 0;
-  private viewportWidth = 0;
-  private viewportHeight = 0;
-  private pixelRatio = 1;
-  private lastInsets: ModalInsets = {};
+  private idleX = 0;
+  private idleY = 0;
   private disposed = false;
 
   protected constructor(options: ModalWindowOptions) {
@@ -105,9 +131,11 @@ export abstract class ModalWindow<TParams = void> extends Container {
     this.textures = options.textures;
     this.onDismiss = options.onDismiss ?? null;
     this.onHiddenHook = options.onHidden ?? null;
-    this.maxWidthRatio = options.maxWidthRatio ?? 0.9;
-    this.maxHeightRatio = options.maxHeightRatio ?? 0.82;
     this.closeOnBackdrop = options.closeOnBackdrop ?? true;
+    this.backdropColor = options.backdropColor ?? this.theme.colors.backdrop;
+    this.backdropAlpha = options.backdropAlpha ?? this.theme.colors.backdropAlpha;
+    this.entrance = { ...POP_ENTRANCE, ...(options.entrance ?? {}) };
+    this.fit = { widthRatio: 0.88, heightRatio: 0.84, ...(options.fit ?? {}) };
     this.fxScope = `${this.id}:fx`;
     this.visible = false;
 
@@ -127,9 +155,9 @@ export abstract class ModalWindow<TParams = void> extends Container {
         id: `${options.id}:close`,
         theme: this.theme,
         texture: options.textures.btnClose,
-        width: 72,
-        height: 72,
-        minHitSize: 140,
+        width: CLOSE_SIZE,
+        height: CLOSE_SIZE,
+        minHitSize: CLOSE_HIT,
         pressScale: 0.86,
         onTap: () => this.close('button')
       });
@@ -141,8 +169,8 @@ export abstract class ModalWindow<TParams = void> extends Container {
     const controllerOptions: Parameters<UiRuntime['createWindow']>[0] = {
       id: options.id,
       blocksGameplay: options.blocksGameplay ?? true,
-      enterDurationMs: options.enterDurationMs ?? 440,
-      enterEase: options.enterEase ?? backOut(1.9),
+      enterDurationMs: this.entrance.durationMs,
+      enterEase: this.entrance.ease,
       leaveDurationMs: options.leaveDurationMs ?? 160,
       leaveEase: 'easeIn',
       onShow: (params: unknown) => {
@@ -173,8 +201,11 @@ export abstract class ModalWindow<TParams = void> extends Container {
   /** Mount/apply params. Called from the controller's onShow, before the entrance starts. */
   protected abstract applyParams(params: TParams): void;
 
-  /** The panel's design-unit box used for contain-fitting (x, y relative to the panel origin). */
-  protected abstract panelBounds(): Rectangle;
+  /** Design-unit box used for fitting. Default: the panel's measured local bounds (like the donor). */
+  protected panelBounds(): Rectangle {
+    const bounds = this.panel.getLocalBounds();
+    return new Rectangle(bounds.x, bounds.y, Math.max(1, bounds.width), Math.max(1, bounds.height));
+  }
 
   /** Hook for view cleanup on hidden (already forced back to idle). */
   protected onHiddenView(_reason: WindowHiddenReason): void {}
@@ -188,8 +219,8 @@ export abstract class ModalWindow<TParams = void> extends Container {
     return button;
   }
 
-  /** Shorthand for a themed panel button. */
-  protected createButton(id: string, texture: Texture, label: string, onTap: () => void, width = 439, height = 207): UiButton {
+  /** A themed panel button with the donor's default label metrics (fs 62 at y −9 for 207-tall buttons). */
+  protected createButton(id: string, texture: Texture, label: string, onTap: () => void, width = 439, height = 207, fontSize = 62, labelOffsetY = -9): UiButton {
     const button = new UiButton({
       ui: this.ui,
       id: `${this.id}:${id}`,
@@ -198,8 +229,9 @@ export abstract class ModalWindow<TParams = void> extends Container {
       width,
       height,
       label,
-      fontSize: 62,
-      labelOffsetY: -9,
+      fontSize,
+      labelOffsetY,
+      pressScale: 0.9,
       onTap
     });
     return this.addButton(button);
@@ -232,9 +264,9 @@ export abstract class ModalWindow<TParams = void> extends Container {
   resize(width: number, height: number, options: ModalResizeOptions = {}): void {
     this.viewportWidth = Number.isFinite(width) && width > 0 ? width : 1;
     this.viewportHeight = Number.isFinite(height) && height > 0 ? height : 1;
-    this.lastInsets = options.insets ?? {};
+    this.insets = options.insets ?? {};
     this.pixelRatio = options.pixelRatio ?? this.pixelRatio;
-    this.backdrop.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: this.theme.colors.backdrop, alpha: this.theme.colors.backdropAlpha });
+    this.backdrop.clear().rect(0, 0, this.viewportWidth, this.viewportHeight).fill({ color: this.backdropColor, alpha: this.backdropAlpha });
     this.backdrop.hitArea = new Rectangle(0, 0, this.viewportWidth, this.viewportHeight);
     this.layoutPanel();
     if (this.controller.state === 'shown') this.applyTransition(1);
@@ -250,42 +282,60 @@ export abstract class ModalWindow<TParams = void> extends Container {
     super.destroy(options ?? { children: true });
   }
 
-  // --- internals ---
+  // --- layout ---
 
+  /** The viewport minus insets, in px. */
+  protected safeArea(): { x: number; y: number; width: number; height: number } {
+    const top = Math.max(0, this.insets.top ?? 0);
+    const bottom = Math.max(0, this.insets.bottom ?? 0);
+    const left = Math.max(0, this.insets.left ?? 0);
+    const right = Math.max(0, this.insets.right ?? 0);
+    return { x: left, y: top, width: Math.max(1, this.viewportWidth - left - right), height: Math.max(1, this.viewportHeight - top - bottom) };
+  }
+
+  /** Donor fit: scale = min(maxW / boundsW, maxH / boundsH); origin at the safe-area center. */
   protected layoutPanel(): void {
+    this.placeClose();
     const bounds = this.panelBounds();
-    const insets = this.lastInsets;
-    const top = Math.max(0, insets.top ?? 0);
-    const bottom = Math.max(0, insets.bottom ?? 0);
-    const left = Math.max(0, insets.left ?? 0);
-    const right = Math.max(0, insets.right ?? 0);
-    const availW = Math.max(1, this.viewportWidth - left - right);
-    const availH = Math.max(1, this.viewportHeight - top - bottom);
-    this.fitScale = Math.min((availW * this.maxWidthRatio) / Math.max(1, bounds.width), (availH * this.maxHeightRatio) / Math.max(1, bounds.height));
+    const safe = this.safeArea();
+    this.fitScale = Math.min((safe.width * this.fit.widthRatio) / bounds.width, (safe.height * this.fit.heightRatio) / bounds.height);
     this.panel.scale.set(this.fitScale);
     this.panel.hitArea = new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.panelCenterY = top + availH / 2;
-    this.panel.position.set(left + availW / 2 - (bounds.x + bounds.width / 2) * this.fitScale, this.panelCenterY - (bounds.y + bounds.height / 2) * this.fitScale);
-    if (this.closeButton) {
-      const at = this.closeButtonPosition(bounds);
-      this.closeButton.position.set(at.x, at.y);
-    }
+    this.idleX = safe.x + safe.width / 2;
+    this.idleY = safe.y + safe.height / 2;
+    this.panel.position.set(this.idleX, this.idleY);
     applyTextResolution(this.panel, this.fitScale * this.pixelRatio);
   }
 
-  /** Where the × sits, in panel design units. Default: the panel's top-right corner. */
-  protected closeButtonPosition(bounds: Rectangle): { x: number; y: number } {
-    return { x: bounds.x + bounds.width - 36, y: bounds.y + 36 };
+  /** Where the × sits, in panel design units; subclasses use their donor coordinates. */
+  protected closeButtonPosition(): { x: number; y: number } {
+    return { x: 416, y: -437 };
+  }
+
+  protected placeClose(): void {
+    if (!this.closeButton) return;
+    const at = this.closeButtonPosition();
+    this.closeButton.position.set(at.x, at.y);
+    this.panel.setChildIndex(this.closeButton, this.panel.children.length - 1);
+  }
+
+  /** Lets a subclass override the idle placement (e.g. a full-screen window) after the base fit. */
+  protected setIdle(x: number, y: number, scale: number): void {
+    this.idleX = x;
+    this.idleY = y;
+    this.fitScale = scale;
+    this.panel.scale.set(scale);
+    this.panel.position.set(x, y);
   }
 
   /** Progress is already eased; every property is a linear blend from its start to its idle value. */
-  private applyTransition(progress: number): void {
-    this.backdrop.alpha = Math.min(1, Math.max(0, progress));
-    this.panel.alpha = Math.min(1, Math.max(0, progress));
-    const bounds = this.panelBounds();
-    const idleY = this.panelCenterY - (bounds.y + bounds.height / 2) * this.fitScale;
-    this.panel.y = idleY + 130 * this.fitScale * (1 - progress);
-    const k = 0.7 + 0.3 * progress;
+  protected applyTransition(progress: number): void {
+    const p = Math.min(1, Math.max(0, progress));
+    this.backdrop.alpha = p;
+    this.panel.alpha = p;
+    this.panel.y = this.idleY + this.entrance.fromY * this.fitScale * (1 - progress);
+    this.panel.x = this.idleX;
+    const k = this.entrance.fromScale + (1 - this.entrance.fromScale) * progress;
     this.panel.scale.set(this.fitScale * k);
   }
 

@@ -42,12 +42,17 @@ export function fitLabelWidth(label: Text, maxWidth: number): void {
 }
 
 /**
- * Canvas text is rasterised once at `fontSize × resolution`; a label drawn under a scaled
- * container is crisp only when that resolution matches the final on-screen density. Views call
- * this after resize with `containerScale × devicePixelRatio`, clamped to a sane range.
+ * Canvas text is rasterised once at `fontSize × resolution` and then drawn under the view's
+ * scale. Rendering it at exactly the on-screen density gives soft edges on Retina; the donor
+ * (Trail Arrow) rasterises at the renderer resolution and lets the GPU minify by ~2-3×, which
+ * reads crisper. We do the same deliberately: 2× the final density (supersampling, a 2×2 box
+ * filter on minification), clamped so a single label never allocates an absurd canvas.
+ * Views call this after resize with `containerScale × devicePixelRatio`.
  */
+export const TEXT_SUPERSAMPLE = 2;
+
 export function applyTextResolution(root: Container, resolution: number): void {
-  const res = Math.min(4, Math.max(0.5, resolution));
+  const res = Math.min(4, Math.max(1, resolution * TEXT_SUPERSAMPLE));
   const visit = (node: Container): void => {
     if (node instanceof Text) {
       if (Math.abs((node.resolution ?? 0) - res) > res * 0.12) node.resolution = res;

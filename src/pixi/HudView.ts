@@ -27,6 +27,8 @@ export interface HudViewOptions {
   coins?: number;
   lives?: number;
   maxLives?: number;
+  /** Total stars badge (donor: third capsule with a gold star, not tappable). Omit to hide. */
+  stars?: number;
   /** Text on the lives capsule when lives are full. Default `MAX`. */
   fullLivesLabel?: string;
   /** Show the gear button on the right. Default true. */
@@ -35,6 +37,7 @@ export interface HudViewOptions {
   shadow?: boolean;
   onCoinsTap?: () => void;
   onLivesTap?: () => void;
+  onStarsTap?: () => void;
   onSettingsTap?: () => void;
   width?: number;
   height?: number;
@@ -50,12 +53,17 @@ const PLUS_H = 57;
 const PLUS_X = 36;
 const PLUS_Y = 36;
 const BADGE_GAP = 290;
+const STAR_ICON = 112;
 const GEAR_SIZE = 100;
-const ROW_SCALE = 1.05;
+const GEAR_BACK_RATIO = 1.45;
 const LEFT_MARGIN = 60;
 const RIGHT_MARGIN = 48;
 const TOP_MARGIN = 83;
+const SETTINGS_TOP_MARGIN = 75;
 const ROW_GAP = 40;
+/** Donor: the row's area is 1/20 of the viewport in portrait, 1/50 in landscape, then width-capped. */
+const PORTRAIT_AREA_RATIO = 20;
+const LANDSCAPE_AREA_RATIO = 50;
 
 /**
  * A resource badge: capsule + icon over its left edge + counter + optional "+" button.
@@ -73,7 +81,7 @@ class ResourceBadge extends Container {
     id: string;
     theme: ReadyUiTheme;
     textures: ReadyUiTextures;
-    icon: 'coin' | 'heart';
+    icon: 'coin' | 'heart' | 'star';
     onTap: (() => void) | null;
   }) {
     super();
@@ -109,10 +117,12 @@ class ResourceBadge extends Container {
     capsule.x = CAPSULE_X;
     host.addChild(capsule);
 
-    const iconTex = options.icon === 'coin' ? textures.hudCoin : textures.hudHeart;
+    const iconTex = options.icon === 'coin' ? textures.hudCoin : options.icon === 'star' ? textures.starGold : textures.hudHeart;
     this.icon = new Sprite(iconTex);
     this.icon.anchor.set(0.5);
-    const k = ICON_BOX / Math.max(1, Math.max(iconTex.width, iconTex.height));
+    // the star art has no transparent padding: 112 gives the same visible size as the 128 icons
+    const box = options.icon === 'star' ? STAR_ICON : ICON_BOX;
+    const k = box / Math.max(1, Math.max(iconTex.width, iconTex.height));
     this.icon.scale.set(k);
     host.addChild(this.icon);
 
@@ -129,7 +139,7 @@ class ResourceBadge extends Container {
     host.addChild(this.countText, this.capsuleText);
 
     this.plus = null;
-    if (options.onTap) {
+    if (options.onTap && options.icon !== 'star') {
       const plus = new Sprite(textures.hudPlus);
       plus.anchor.set(0.5);
       plus.width = PLUS_W;
@@ -164,11 +174,13 @@ export class HudView extends Container {
   private readonly shadow: Sprite | null;
   private readonly lives: ResourceBadge;
   private readonly coins: ResourceBadge;
+  private readonly stars: ResourceBadge | null;
   private readonly gear: UiButton | null;
   private readonly fullLivesLabel: string;
   private readonly fxScope: string;
 
   private coinsValue: number;
+  private starsValue: number;
   private livesValue: number;
   private maxLivesValue: number;
   private timerText = '';
@@ -185,6 +197,7 @@ export class HudView extends Container {
     this.fullLivesLabel = options.fullLivesLabel ?? 'MAX';
     this.fxScope = `${this.id}:fx`;
     this.coinsValue = Math.max(0, options.coins ?? 0);
+    this.starsValue = Math.max(0, options.stars ?? 0);
     this.maxLivesValue = Math.max(1, options.maxLives ?? 5);
     this.livesValue = Math.max(0, Math.min(this.maxLivesValue, options.lives ?? this.maxLivesValue));
 
@@ -220,6 +233,20 @@ export class HudView extends Container {
     });
     this.coins.x = BADGE_GAP;
     this.row.addChild(this.lives, this.coins);
+    this.stars = null;
+    if (options.stars !== undefined) {
+      const stars = new ResourceBadge({
+        ui: options.ui,
+        id: `${this.id}:stars`,
+        theme: this.theme,
+        textures: options.textures,
+        icon: 'star',
+        onTap: options.onStarsTap ?? null
+      });
+      stars.x = BADGE_GAP * 2;
+      this.row.addChild(stars);
+      this.stars = stars;
+    }
 
     this.gear = null;
     if (options.settings ?? true) {
@@ -228,12 +255,13 @@ export class HudView extends Container {
         id: `${this.id}:settings`,
         theme: this.theme,
         texture: options.textures.hudGearBack,
-        width: GEAR_SIZE * 1.45,
-        height: GEAR_SIZE * 1.45 * (140 / 160),
+        width: GEAR_SIZE * GEAR_BACK_RATIO,
+        height: GEAR_SIZE * GEAR_BACK_RATIO * (140 / 160),
         icon: options.textures.hudGear,
         iconSize: GEAR_SIZE,
+        pressScale: 0.9,
         onTap: options.onSettingsTap ?? (() => {}),
-        minHitSize: 120
+        minHitSize: 160
       });
       if (!options.onSettingsTap) gear.setEnabled(false);
       this.addChild(gear);
@@ -241,6 +269,7 @@ export class HudView extends Container {
     }
 
     this.refreshCoins();
+    this.refreshStars();
     this.refreshLives();
     this.resize(options.width ?? 390, options.height ?? 844);
   }
@@ -256,6 +285,25 @@ export class HudView extends Container {
 
   get livesAmount(): number {
     return this.livesValue;
+  }
+
+  get starsAmount(): number {
+    return this.starsValue;
+  }
+
+  /** World position of the star icon (px) — a target for "stars fly to the counter" effects. */
+  get starAnchor(): { x: number; y: number } | null {
+    if (!this.stars) return null;
+    const p = this.stars.icon.getGlobalPosition();
+    return { x: p.x, y: p.y };
+  }
+
+  setStars(value: number, animate = true): void {
+    const next = Math.max(0, Math.round(value));
+    const changed = next !== this.starsValue;
+    this.starsValue = next;
+    this.refreshStars();
+    if (changed && animate && this.stars) this.pulse(this.stars.icon);
   }
 
   /** World position of the coin icon (px) — a target for "coins fly to the bank" effects. */
@@ -300,31 +348,40 @@ export class HudView extends Container {
     const left = Math.max(0, insets.left ?? 0);
     const right = Math.max(0, insets.right ?? 0);
     this.viewportWidth = w;
+    // donor: the stage is scaled by the contain-fit factor and the HUD is laid out in design units
     const s = Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
+    const vw = (w - left - right) / s;
+    const vh = (h - top) / s;
+    const portrait = vh > vw;
 
-    // donor: scale by area share, then never wider than the row available on narrow phones
+    this.row.scale.set(1);
     const rowBounds = this.row.getLocalBounds();
-    const gearW = this.gear ? this.gear.width : 0;
-    const availW = w - left - right - (LEFT_MARGIN + RIGHT_MARGIN) * s;
-    const contentW = rowBounds.width + (this.gear ? ROW_GAP + gearW : 0);
-    const scale = Math.min(s * ROW_SCALE, availW / Math.max(1, contentW));
-    this.rowScale = scale;
+    const gearBounds = this.gear ? this.gear.getLocalBounds() : null;
+    const baseArea = Math.max(1, rowBounds.width * rowBounds.height);
+    const targetArea = (vw * vh) / (portrait ? PORTRAIT_AREA_RATIO : LANDSCAPE_AREA_RATIO);
+    const areaScale = Math.sqrt(targetArea / baseArea);
+    const rowContent = rowBounds.width + (gearBounds ? ROW_GAP + gearBounds.width * GEAR_BACK_RATIO : 0);
+    const rowAvail = vw - LEFT_MARGIN - RIGHT_MARGIN;
+    const rowScale = Math.min(areaScale, rowAvail / Math.max(1, rowContent));
+    this.rowScale = rowScale;
 
-    this.row.scale.set(scale);
-    this.row.position.set(left + LEFT_MARGIN * s - rowBounds.x * scale, top + TOP_MARGIN * s - rowBounds.y * scale);
-    if (this.gear) {
-      this.gear.setIdleScale(scale);
-      const gb = this.gear.getLocalBounds();
-      this.gear.position.set(w - right - RIGHT_MARGIN * s - (gb.x + gb.width) * scale, top + (TOP_MARGIN - 8) * s - gb.y * scale);
+    this.row.scale.set(rowScale * s);
+    this.row.position.set(left + (LEFT_MARGIN - rowBounds.x * rowScale) * s, top + (TOP_MARGIN - rowBounds.y * rowScale) * s);
+    if (this.gear && gearBounds) {
+      this.gear.setIdleScale(rowScale * s);
+      this.gear.position.set(
+        w - right - (RIGHT_MARGIN + (gearBounds.x + gearBounds.width) * rowScale) * s,
+        top + (SETTINGS_TOP_MARGIN - gearBounds.y * rowScale) * s
+      );
     }
-    this.heightPx = top + TOP_MARGIN * s + (rowBounds.height + 24) * scale;
+    this.heightPx = top + (TOP_MARGIN + (rowBounds.y + rowBounds.height) * rowScale + 12) * s;
     if (this.shadow) {
       this.shadow.width = w * 1.05;
       this.shadow.height = this.heightPx * 2.1;
       this.shadow.position.set(w / 2, -this.heightPx * 0.35);
     }
     const pr = options.pixelRatio ?? 1;
-    applyTextResolution(this, scale * pr);
+    applyTextResolution(this, rowScale * s * pr);
   }
 
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
@@ -333,12 +390,17 @@ export class HudView extends Container {
     this.motion.cancelScope(this.fxScope);
     this.lives.button?.destroy();
     this.coins.button?.destroy();
+    this.stars?.button?.destroy();
     this.gear?.destroy();
     super.destroy(options ?? { children: true });
   }
 
   private refreshCoins(): void {
     this.coins.setCount(formatAmount(this.coinsValue), CAPSULE_W * 0.72);
+  }
+
+  private refreshStars(): void {
+    this.stars?.setCount(formatAmount(this.starsValue), CAPSULE_W * 0.72);
   }
 
   private refreshLives(): void {

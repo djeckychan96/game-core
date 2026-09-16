@@ -1,4 +1,4 @@
-import { Container, Rectangle, type Text } from 'pixi.js';
+import { Container, type Text } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth, formatAmount } from './text';
@@ -16,20 +16,23 @@ export interface LivesWindowParams {
 
 export interface LivesWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   id?: string;
+  /** Default `REFILL HEARTS!` */
   title?: string;
+  /** Default `Next heart in` */
   nextLifeLabel?: string;
+  /** Default `REFILL` */
   refillLabel?: string;
+  /** Capsule text when lives are full. Default `MAX` */
   fullLabel?: string;
   /** Close continuations. */
   onRefill: (params: LivesWindowParams) => void;
   onWatchAd?: (params: LivesWindowParams) => void;
 }
 
-const PANEL = new Rectangle(-484, -535, 968, 1070);
-
 /**
- * Lives / out-of-lives window on the donor's purple info panel: big heart with `n/max`,
- * the refill countdown, REFILL NOW (coin price) and an optional ad button.
+ * Refill Hearts window — the donor's RefillHearts prefab geometry 1:1 (968 × 1070 purple panel,
+ * inner 900 × 382 panel, heart at x −261 with `n/max` inside, countdown on the right, REFILL with
+ * the coin price and a "+1 for an ad" button at y 350, × at (416, −437)).
  */
 export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   private readonly title: Text;
@@ -48,44 +51,42 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     super({ ...options, id: options.id ?? 'lives-window' });
     this.onRefill = options.onRefill;
     this.onWatchAd = options.onWatchAd ?? null;
-    this.fullLabel = options.fullLabel ?? 'FULL';
+    this.fullLabel = options.fullLabel ?? 'MAX';
     const t = this.textures;
 
     this.panel.addChildAt(this.sprite(t.panelPurple, 968, 1070), 0);
-    this.title = createLabel(this.theme, options.title ?? 'REFILL HEARTS!', { fontSize: 88 });
+    this.title = createLabel(this.theme, options.title ?? 'REFILL HEARTS!', { fontSize: 88, stroke: 11 });
     this.title.y = -440;
+    fitLabelWidth(this.title, 780);
     this.panel.addChild(this.title);
 
-    const inner = this.sprite(t.panelInner, 900, 382);
-    this.panel.addChild(inner);
+    this.panel.addChild(this.sprite(t.panelInner, 900, 382));
     const heart = this.sprite(t.heartBig, 326, 298);
     heart.x = -261;
     this.panel.addChild(heart);
-    this.countText = createLabel(this.theme, '1/5', { fontSize: 108 });
+    this.countText = createLabel(this.theme, '1/5', { fontSize: 132, stroke: 10 });
     this.countText.position.set(-267, -30);
-    this.nextLabel = createLabel(this.theme, options.nextLifeLabel ?? 'NEXT HEART IN', { fontSize: 50 });
+    this.nextLabel = createLabel(this.theme, options.nextLifeLabel ?? 'Next heart in', { fontSize: 50, stroke: 7 });
     this.nextLabel.position.set(180, -69);
-    this.timerText = createLabel(this.theme, '00:00', { fontSize: 92 });
+    this.timerText = createLabel(this.theme, '00:00', { fontSize: 92, stroke: 10 });
     this.timerText.position.set(180, 29);
     this.panel.addChild(this.countText, this.nextLabel, this.timerText);
 
-    // REFILL NOW: label above, price + coin below (donor button layout)
-    this.refillButton = this.createButton('refill', t.btnGreenShort, options.refillLabel ?? 'REFILL NOW!', () => this.finish('refill'), 371, 207);
-    if (this.refillButton.labelText) {
-      this.refillButton.labelText.y = -50;
-      this.refillButton.labelText.style.fontSize = 46;
-      fitLabelWidth(this.refillButton.labelText, 310);
-    }
+    // REFILL: label above, price + coin below (donor button layout)
+    this.refillButton = this.createButton('refill', t.btnGreenShort, options.refillLabel ?? 'REFILL', () => this.finish('refill'), 371, 207, 52, -50);
+    if (this.refillButton.labelText) fitLabelWidth(this.refillButton.labelText, 300);
     const price = new Container();
-    this.priceText = createLabel(this.theme, '900', { fontSize: 64, anchorX: 1 });
-    this.priceText.position.set(18, 17);
+    price.position.set(18, 0);
+    this.priceText = createLabel(this.theme, '900', { fontSize: 68, stroke: 7, anchorX: 1 });
+    this.priceText.position.set(0, 17);
     const coin = this.sprite(t.coinSmall, 100, 100);
-    coin.position.set(66, 22);
+    coin.position.set(48, 22);
     price.addChild(this.priceText, coin);
     this.refillButton.addChild(price);
     this.refillButton.position.set(-253, 350);
 
     this.adButton = this.createButton('ad', t.btnYellowWide, '', () => this.finish('ad'), 507, 207);
+    if (this.adButton.labelText) this.adButton.labelText.visible = false;
     const ads = this.sprite(t.ads, 128, 134);
     ads.position.set(-87, -15);
     const plusOne = this.sprite(t.heartPlus1, 154, 154);
@@ -93,7 +94,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.adButton.addChild(ads, plusOne);
     this.adButton.position.set(206, 350);
     this.panel.addChild(this.refillButton, this.adButton);
-    if (this.closeButton) this.panel.setChildIndex(this.closeButton, this.panel.children.length - 1);
+    this.placeClose();
   }
 
   protected applyParams(params: LivesWindowParams): void {
@@ -117,8 +118,8 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.timerText.text = timerText;
   }
 
-  protected panelBounds(): Rectangle {
-    return PANEL;
+  protected override closeButtonPosition(): { x: number; y: number } {
+    return { x: 416, y: -437 };
   }
 
   private finish(action: 'refill' | 'ad'): void {

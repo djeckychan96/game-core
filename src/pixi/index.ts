@@ -19,14 +19,20 @@ export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
 export { UiButton } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
-export { ModalWindow, backOut } from './ModalWindow';
-export type { ModalWindowOptions, ModalInsets, ModalResizeOptions } from './ModalWindow';
+export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
+export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
 export { ResultWindowView } from './ResultWindowView';
 export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindowView';
 export { LivesWindowView } from './LivesWindowView';
 export type { LivesWindowParams, LivesWindowViewOptions } from './LivesWindowView';
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
+export { SettingsWindowView } from './SettingsWindowView';
+export type { SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
+export { NoAdsWindowView } from './NoAdsWindowView';
+export type { NoAdsWindowParams, NoAdsWindowViewOptions } from './NoAdsWindowView';
+export { StarterPackWindowView } from './StarterPackWindowView';
+export type { StarterPackRewards, StarterPackWindowParams, StarterPackWindowViewOptions } from './StarterPackWindowView';
 export {
   loadReadyUiAssets,
   createReadyUiTextures,
@@ -37,5 +43,5 @@ export {
 export type { ReadyUiTextures, ReadyUiTextureName, LoadReadyUiAssetsOptions } from './assets';
 export { DEFAULT_READY_UI_THEME, resolveTheme } from './theme';
 export type { ReadyUiTheme, ReadyUiThemeOverrides, ReadyUiTextTheme, ReadyUiColors, ReadyUiLevelMapTheme } from './theme';
-export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer } from './text';
+export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer, TEXT_SUPERSAMPLE } from './text';
 export type { LabelOptions } from './text';
