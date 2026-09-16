@@ -12,7 +12,8 @@ describe('game-core/pixi public entry', () => {
     for (const name of [
       'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
-      'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut'
+      'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
+      'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
     ]) {
       expect(pixiEntry, name).toHaveProperty(name);
     }
@@ -20,7 +21,7 @@ describe('game-core/pixi public entry', () => {
 
   it('keeps the root entry renderer-agnostic (no kit classes, no pixi.js)', () => {
     const rootKeys = Object.keys(rootEntry);
-    for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'UiButton']) {
+    for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'UiButton', 'ClickRippleEffect']) {
       expect(rootKeys).not.toContain(name);
     }
     const rootSources = ['src/index.ts', 'src/ui/UiRuntime.ts', 'src/motion/MotionRuntime.ts', 'src/core/CoreRuntime.ts'];
@@ -30,10 +31,10 @@ describe('game-core/pixi public entry', () => {
   });
 
   it('the kit imports the foundation as types only (no core runtime duplicated in the pixi bundle)', () => {
-    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts'];
+    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts'];
     for (const file of kitFiles) {
       const source = readFileSync(resolve(rootDir, 'src/pixi', file), 'utf-8');
-      const foundationImports = source.match(/^import\s+(type\s+)?[^;]*from ['"]\.\.\/index['"];/gm) ?? [];
+      const foundationImports = source.match(/^import\s+(type\s+)?[^;]*from ['"](\.\.\/)+index['"];/gm) ?? [];
       for (const line of foundationImports) expect(line, `${file}: ${line}`).toMatch(/^import type/);
     }
   });
