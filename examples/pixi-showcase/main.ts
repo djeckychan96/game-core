@@ -47,17 +47,17 @@ function readSafeInsets(): SafeInsets {
 const PLAY_SCALE = 1.424;
 const PLAY_BOTTOM_RATIO = 98 / 844;
 const TOOLBAR_H = 30;
-/** Contain scale of a 390 × 844 phone — the screen the ripple's px defaults were tuned on. */
-const RIPPLE_REFERENCE_SCALE = 390 / 1080;
-/** The level map's own tap threshold: a finger that travelled further scrolled, it did not tap. */
-const EMPTY_TAP_THRESHOLD_PX = 14;
+/** The donor's pan threshold: a finger that travelled further panned/scrolled, it did not tap. */
+const EMPTY_TAP_THRESHOLD_PX = 12;
 
-/** Demo presets for the ripple pill; a game configures the effect once and keeps it. */
+/**
+ * The ripple pill cycles these. Index 0 is the production ocean — `DEFAULT_CLICK_RIPPLE`, 1:1 with
+ * Trail Arrow's `ArrowRenderer.spawnOceanRipple`. The halo variant only demonstrates the Core-only
+ * option for light backgrounds; a game configures the effect once and keeps it.
+ */
 const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> | null }> = [
-  { name: 'RIPPLE · SOFT (default)', config: {} },
-  { name: 'RIPPLE · OCEAN', config: { rings: 4, startRadius: 4, endRadius: 96, durationMs: 720, staggerMs: 140, lineWidth: 3, color: 0xa8e4ff, alpha: 0.95, ringAlphaDecay: 0.8, haloAlpha: 0.4 } },
-  // Trail Arrow's ring_wave burst as-is: one additive ring, ×2.6 in 340 ms, no halo
-  { name: 'RIPPLE · BURST', config: { rings: 1, startRadius: 12, endRadius: 64, durationMs: 340, staggerMs: 0, lineWidth: 6, lineWidthEnd: 2, alpha: 1, haloAlpha: 0, blendMode: 'add' } },
+  { name: 'OCEAN · Trail Arrow production', config: {} },
+  { name: 'OCEAN + HALO · demo for light backgrounds', config: { haloAlpha: 0.35 } },
   { name: 'RIPPLE · OFF', config: null }
 ];
 
@@ -247,8 +247,10 @@ async function boot(): Promise<void> {
   // --- empty-tap gate: HOST policy, deliberately not in Core ---
   // A pointer-down counts only if it lands on a free surface (the stage background or the map's
   // empty ribbon — never a button, a badge, a window, the toolbar), while no window is blocking,
-  // and the matching pointer-up did not travel (a map scroll is not a tap). Core knows none of
-  // this; a game with draggable pieces adds "nothing is being dragged" here in the same way.
+  // and the matching pointer-up did not travel past the donor's 12 px pan threshold (a map scroll
+  // is not a tap). Core knows none of this. Trail Arrow's own gate lives in its ArrowRenderer:
+  // pinch/pan state, `arrowAtLoose` (a tap near an arrow is an arrow tap, never a ripple) — all
+  // game-specific, so a game brings its own conditions here in the same way.
   app.stage.eventMode = 'static';
   app.stage.hitArea = app.screen; // empty space now hits the stage instead of nothing
   const freeSurfaces = new Set<unknown>([app.stage, map]);
@@ -277,7 +279,7 @@ async function boot(): Promise<void> {
     const s = Math.min(w / theme.designWidth, h / theme.designHeight);
 
     hud.resize(w, h, { insets: { top: safe.top, left: safe.left, right: safe.right }, pixelRatio: resolution });
-    ripple.setSizeScale(Math.min(1.6, Math.max(0.6, s / RIPPLE_REFERENCE_SCALE)));
+    // the ripple is NOT scaled with the UI: like the donor it is a fixed size in screen px everywhere
 
     // demo toolbar: inside the bottom safe area, PLAY clears it
     const toolbarTop = h - safe.bottom - TOOLBAR_H;

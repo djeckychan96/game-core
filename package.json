@@ -30,7 +30,8 @@
     "showcase": "vite --config vite.showcase.config.ts",
     "showcase:build": "vite build --config vite.showcase.config.ts",
     "showcase:shots": "node scripts/showcase-screenshots.mjs",
-    "sync:word-tide": "node scripts/sync-word-tide.mjs"
+    "sync:word-tide": "node scripts/sync-word-tide.mjs",
+    "ocean:compare": "node scripts/ocean-compare.mjs"
   },
   "peerDependencies": {
     "pixi.js": "^8.0.0"

@@ -80,29 +80,31 @@ async function run() {
       if (typeof preset === 'number') s.setRipplePreset(preset);
       s.ripple.cancelAll();
       s.ripple.spawn(x, y);
-      for (let i = 0; i < 12; i++) s.core.update(16); // ~190 ms in: every default ring is alive
+      for (let i = 0; i < 12; i++) s.core.update(16); // 192 ms in: both production rings are alive
       s.app.render();
       return s.ripple.getStats();
     };
     const rippleMid = await page.evaluate(freezeAndSpawn, freeSpot);
     console.log('ripple mid', JSON.stringify(rippleMid));
-    if (rippleMid.activeRings !== 3 || rippleMid.activeRipples !== 1) throw new Error(`expected one ripple with 3 live rings, got ${JSON.stringify(rippleMid)}`);
+    if (rippleMid.activeRings !== 2 || rippleMid.activeRipples !== 1) throw new Error(`expected one production ripple with 2 live rings, got ${JSON.stringify(rippleMid)}`);
     await shot('01b-click-ripple');
-    // light background: hide the map art and paint the canvas light — the halo keeps the rings readable
+    // light background with the demo HALO preset: the Core-only halo keeps the rings readable there
     await page.evaluate(({ x, y }) => {
       const s = window.__showcase;
       s.map.visible = false;
       s.app.renderer.background.color = 0xf1f3f8;
+      s.setRipplePreset(1);
       s.ripple.cancelAll();
       s.ripple.spawn(x, y);
       for (let i = 0; i < 12; i++) s.core.update(16);
       s.app.render();
     }, freeSpot);
-    await shot('01c-click-ripple-light');
+    await shot('01c-click-ripple-light-halo');
     await page.evaluate(() => {
       const s = window.__showcase;
       s.map.visible = true;
       s.app.renderer.background.color = 0x1d2231;
+      s.setRipplePreset(0);
       s.ripple.cancelAll();
       s.app.ticker.start();
     });
@@ -224,19 +226,18 @@ async function run() {
   const desktop = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   await shoot('desktop-1280', desktop, async (page, shot) => {
     await shot('01-map');
-    // the OCEAN preset mid-flight, frozen like the phone shots
+    // the production ocean mid-flight on desktop, frozen like the phone shots
     const ocean = await page.evaluate(() => {
       const s = window.__showcase;
       s.app.ticker.stop();
-      s.setRipplePreset(1);
       s.ripple.spawn(640, 300);
       for (let i = 0; i < 20; i++) s.core.update(16);
       s.app.render();
       return s.ripple.getStats();
     });
-    if (ocean.activeRings !== 4) throw new Error(`OCEAN preset should show 4 rings, got ${JSON.stringify(ocean)}`);
+    if (ocean.activeRings !== 2) throw new Error(`the production ocean should show 2 rings, got ${JSON.stringify(ocean)}`);
     await shot('02-click-ripple-ocean');
-    await page.evaluate(() => { window.__showcase.ripple.cancelAll(); window.__showcase.setRipplePreset(0); window.__showcase.app.ticker.start(); });
+    await page.evaluate(() => { window.__showcase.ripple.cancelAll(); window.__showcase.app.ticker.start(); });
   });
   await desktop.close();
 
