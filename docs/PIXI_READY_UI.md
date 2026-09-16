@@ -167,44 +167,67 @@ while any of them is open.
 
 ### ClickRippleEffect (Pixi FX)
 
-Expanding "ocean" rings from a tap on empty space, as a reusable effect (`src/pixi/fx/`). It is a
-`Container` the host places where the rings should draw (over the play field, under the modals):
+The production "ocean" of Trail Arrow (`ArrowRenderer.spawnOceanRipple`: rings from a tap on empty
+space) as a reusable effect (`src/pixi/fx/`). It is a `Container` the host places where the rings
+should draw (inside the zoomed world like the donor, or over the play field under the modals):
 
 ```ts
-const ripple = new ClickRippleEffect({ motion, id: 'game' });   // defaults: 3 white rings, 6 → 56 px,
-app.stage.addChild(screen, ripple, modals);                      // 460 ms each, 90 ms apart, dark halo
+const ripple = new ClickRippleEffect({ motion, id: 'game' });   // defaults = the production ocean
+world.addChild(ripple);                                          // rings pan with the world, keep their screen size
 app.stage.on('pointerup', (e) => { if (isEmptyTap(e)) ripple.spawnGlobal(e.global.x, e.global.y); });
 ```
+
+`DEFAULT_CLICK_RIPPLE` is the donor 1:1: two white rings with phases `[0, 0.18]`, radius 10 → 56 px,
+stroke 3 → 1.2 px, alpha 0.6 → 0, linear, 620 ms in total (the second ring is born at 111.6 ms and
+both end together), no halo, normal blending, at most 8 ripples, sizes in screen px.
 
 | Member | Meaning |
 | --- | --- |
 | `spawn(x, y, { color?, sizeScale? })` | ripple at the effect's **local** point; returns a handle (`active`, `cancel()`) or null after destroy |
 | `spawnGlobal(x, y, …)` | the same from a Pixi global (screen) point, converted through the container's transform — absorbs a stage offset or a scaled world |
 | `configure(partial)` | changes future spawns (ripples in flight keep their settings); invalid values throw `RangeError` |
-| `setSizeScale(k)` / `sizeScale` | multiplies every radius and stroke width (set it from the UI scale on resize) |
+| `setSizeScale(k)` / `sizeScale` | extra multiplier on every radius and stroke width, on top of `sizeSpace` |
 | `prewarm(n)`, `cancelAll()`, `getStats()` | pool warm-up; cancel everything; `activeRipples / activeRings / pooledRings / createdRings / spawned / completed / cancelled / recycled` |
 | `scope` | `fx:click-ripple:<id>` — every ripple is one linear MotionRuntime tween there, so `core.pauseScope` / `cancelScope` / `cancelAll` apply |
 | `destroy()` | cancels the tweens, destroys every ring, never calls back afterwards; idempotent |
 
-`ClickRippleConfig` (all defaults in `DEFAULT_CLICK_RIPPLE`): `rings`, `startRadius`, `endRadius`,
-`durationMs`, `staggerMs`, `lineWidth` → `lineWidthEnd` (a thinning line reads as a fading wave),
-`color`, `alpha`, `ringAlphaDecay` (each later ring dimmer), `radiusEase` / `alphaEase` (ease names
-mean the same as in MotionRuntime; alpha = peak × (1 − alphaEase(t))), `haloColor` / `haloAlpha` /
-`haloWidth` (a wider dark stroke under the ring so it reads on light backgrounds too; 0 disables),
-`blendMode`, `maxActive` (spawning past it recycles the oldest ripple, never the newest tap). The
-defaults are oriented on Trail Arrow's `ring_wave` burst (a ring growing ~2.6× with an ease-out
-while its alpha eases in to 0 over 340 ms) stretched into a short train of staggered rings.
+`ClickRippleConfig` (all defaults in `DEFAULT_CLICK_RIPPLE`):
+
+- `ringPhases` — the phase semantics of the donor: over the ripple's lifetime t ∈ [0, 1] ring i runs
+  `k = clamp((t − phase_i) / (1 − phase_i))`, so a later phase starts later but **every ring ends
+  together** at t = 1; a phased ring stays hidden until its phase. The array length is the ring
+  count. `[0, 0.18]` is production; `[0, 0.3, 0.6]` gives three rings ending together.
+- `durationMs` — the total lifetime of a ripple (620); `startRadius` → `endRadius`, `lineWidth` →
+  `lineWidthEnd`, `alpha` → 0 with `radiusEase` / `alphaEase` (ease names mean the same as in
+  MotionRuntime; production is linear: alpha = 0.6 × (1 − k), width = 3 − 1.8k).
+- `sizeSpace` — `screen` (production): radii and widths are screen px and the effect divides them
+  by its own world scale every frame (`getGlobalTransform`, clamped at 0.05 like the donor), so a
+  ripple keeps the same on-screen size under a pinch-zoomed world or inside a contain-fit UI layer,
+  wherever the host parents it; `local`: plain local units.
+- extras that stay off in production: `ringAlphaDecay` (each later ring dimmer; 1), `haloColor` /
+  `haloAlpha` / `haloWidth` (a wider dark stroke under the ring for light backgrounds; alpha 0),
+  `blendMode` (`normal`), `color` (white).
+- `maxActive` (8): spawning past it recycles the oldest ripple, never the newest tap.
 
 Rings are pooled `Graphics` (never more than `maxActive × rings`, nothing allocated per frame); a
 live ring is redrawn on every tween update. There is no ticker, timer or requestAnimationFrame
 inside: the host's `core.update(frameMs)` is the only clock.
 
 **What stays in the host** (deliberately not in Core): deciding which pointer-up is "a tap on empty
-space". The showcase's rule — the press landed on a free surface (the stage or the map's empty
-ribbon, never a button / badge / window / toolbar), no window is blocking, and the pointer did not
-travel more than the tap threshold — lives in `examples/pixi-showcase/main.ts`. A game with
-draggable pieces adds its own "nothing is being dragged" condition there; a game whose world is
-offset or scaled just parents the effect accordingly and calls `spawnGlobal`.
+space". In Trail Arrow that is the ArrowRenderer's pinch/pan state, its 12 px pan threshold and
+`arrowAtLoose` (a tap near an arrow is an arrow tap, never a ripple) — all game-specific. The
+showcase's rule — the press landed on a free surface (the stage or the map's empty ribbon, never a
+button / badge / window / toolbar), no window is blocking, and the pointer did not travel more
+than 12 px — lives in `examples/pixi-showcase/main.ts`. A game whose world is offset or zoomed
+parents the effect inside that world (rings pan with it, `sizeSpace: 'screen'` keeps them the
+same size on screen) and calls `spawnGlobal`.
+
+Parity proof: `npm run ocean:compare` (`scripts/ocean-compare.mjs`, needs the donor dev server as
+`DONOR_URL` and the showcase as `SHOWCASE_URL`) boots both apps under one virtual clock, taps
+empty space in each, steps both 1/60 s at a time and measures ring radius / width / alpha from the
+pixels at 17, 133 (second ring born), 317, 550 and 633 ms (gone); it also fires 9 taps in 9 frames
+(cap 8, oldest recycled, pool never grows) and checks pool reuse. Crops and a side-by-side montage
+land in `showcase-shots/ocean/`.
 
 ### Theme
 
@@ -245,9 +268,9 @@ Opens **GAME CORE UI SHOWCASE**: the production Ready UI as a game scene — HUD
 stars / settings), a 36-level map (stars 0..3, hard pills, current, locked), the donor-sized
 PLAY button, the starter-pack and no-ads offer icons — and, separated at the very bottom, a
 flat DEMO TOOLBAR that opens each window directly (RESULT · SHOP · LIVES · SETTINGS · NO ADS ·
-OFFER) and cycles the click-ripple presets (RIPPLE: soft default · ocean · the donor's additive
-burst · off). A tap on free space (the stage or the map's empty ribbon) spawns the ripple; taps
-the UI consumes and map scrolls never do. A win on the current level unlocks the next one and
+OFFER) and a RIPPLE pill (the production ocean · the same with the demo halo for light backgrounds
+· off). A tap on free space (the stage or the map's empty ribbon) spawns the production ripple;
+taps the UI consumes and map scrolls never do. A win on the current level unlocks the next one and
 scrolls to it. Demo data only (`examples/pixi-showcase/demoData.ts`). `window.__showcase` exposes
 the views, the ripple effect and the runtimes.
 
@@ -257,8 +280,8 @@ Visual checks (the sandboxed in-app browser has no WebGL; use the installed Goog
 SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:shots   # Playwright, channel 'chrome'
 ```
 
-writes `showcase-shots/*.png` for 390 × 844 (map, click ripple on the dark map and on a light
-canvas, scrolled, locked, hard pill, every window), 320 × 568 (map + windows) and 1280 × 800 (map,
+writes `showcase-shots/*.png` for 390 × 844 (map, the production ripple on the dark map and the
+halo demo on a light canvas, scrolled, locked, hard pill, every window), 320 × 568 (map + windows) and 1280 × 800 (map,
 OCEAN ripple preset), drives a real tap on free space (rings spawn; a toolbar pill, an open window
 and a level badge must not), a real drag (no ripple), a real CONTINUE tap, a real SOUND toggle and
 `core.cancelAll()`, and fails on any unexpected console error. Ripple frames are captured with the
@@ -270,10 +293,11 @@ host clock frozen and stepped by hand, so the shots are deterministic on SwiftSh
 `DOMAdapter`, `Texture.WHITE` for art): public entry and package wiring, level data mapping and
 states, selection vs swipe, scroll/focus positioning, resize, `setProgress`, windowed builds,
 destroy/listener cleanup, `cancelAll` never firing business callbacks, HUD counters/taps/layout,
-window lifecycles and close continuations, and the click ripple (rings per spawn, staggered
-lifecycle through the host clock, pool reuse, `maxActive` recycling, global → local coordinates
-and size scale, `configure` validation, pause/resume/cancel through the motion scope, destroy with
-no callbacks afterwards).
+window lifecycles and close continuations, and the click ripple (production defaults, a frame-by-
+frame check against the donor formula transcribed from `ArrowRenderer.updateOceanRipples`, both
+rings ending together, pool reuse, `maxActive = 8` recycling, screen-space sizing under a zoomed
+world, global → local coordinates, `configure` validation, pause/resume/cancel through the motion
+scope, destroy with no callbacks afterwards).
 
 ## Assets (provenance)
 
