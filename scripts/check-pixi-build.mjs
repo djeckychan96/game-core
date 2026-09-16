@@ -30,24 +30,24 @@ if (/class\s+Application\b/.test(pixiSource) || /WebGLRenderer/.test(pixiSource)
 
 const coreSource = readFileSync(coreBundle, 'utf-8');
 if (/pixi\.js/.test(coreSource)) fail('root bundle references pixi.js');
-if (/LevelMapView|HudView|ResultWindowView/.test(coreSource)) fail('root bundle contains Pixi kit classes');
+if (/LevelMapView|HudView|ResultWindowView|ClickRippleEffect/.test(coreSource)) fail('root bundle contains Pixi kit classes');
 
 const mod = await import(pathToFileURL(pixiBundle).href);
 const expected = [
   'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
   'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'DEFAULT_READY_UI_THEME', 'resolveTheme',
-  'createLabel', 'formatAmount', 'formatTimer', 'backOut'
+  'createLabel', 'formatAmount', 'formatTimer', 'backOut', 'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
 ];
 for (const name of expected) {
   if (!(name in mod)) fail(`dist/pixi entry lacks export ${name}`);
 }
 
 const types = readFileSync(pixiTypes, 'utf-8');
-for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures']) {
+for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect']) {
   if (!types.includes(name)) fail(`${pixiExport.types} lacks ${name}`);
 }
 // the kit's declarations import the foundation types relatively; they must ship next to them
-for (const rel of ['dist/pixi/index.d.ts', 'dist/pixi/ui/types.d.ts', 'dist/pixi/motion/types.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts']) {
+for (const rel of ['dist/pixi/index.d.ts', 'dist/pixi/ui/types.d.ts', 'dist/pixi/motion/types.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts', 'dist/pixi/pixi/fx/ClickRippleEffect.d.ts']) {
   if (!existsSync(resolve(rootDir, rel))) fail(`missing declaration ${rel}`);
 }
 
