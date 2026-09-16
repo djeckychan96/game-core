@@ -5,9 +5,11 @@
 // Production Ready UI on screen: HUD (lives / coins / stars / settings), the level map, the PLAY
 // button, the two offer icons, and every window. The thin strip at the very bottom is a DEMO
 // TOOLBAR (opens each window directly) and is deliberately styled unlike the game UI.
-import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
+import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { BUILD_INFO, CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import {
+  ClickRippleEffect,
+  DEFAULT_CLICK_RIPPLE,
   HudView,
   LevelMapView,
   LivesWindowView,
@@ -21,6 +23,7 @@ import {
   formatTimer,
   loadReadyUiAssets,
   resolveTheme,
+  type ClickRippleConfig,
   type ReadyUiTextures
 } from 'game-core/pixi';
 import { DEMO_MAX_LIVES, DEMO_REFILL_PRICE, DEMO_SHOP_ITEMS, createDemoState } from './demoData';
@@ -44,6 +47,19 @@ function readSafeInsets(): SafeInsets {
 const PLAY_SCALE = 1.424;
 const PLAY_BOTTOM_RATIO = 98 / 844;
 const TOOLBAR_H = 30;
+/** Contain scale of a 390 × 844 phone — the screen the ripple's px defaults were tuned on. */
+const RIPPLE_REFERENCE_SCALE = 390 / 1080;
+/** The level map's own tap threshold: a finger that travelled further scrolled, it did not tap. */
+const EMPTY_TAP_THRESHOLD_PX = 14;
+
+/** Demo presets for the ripple pill; a game configures the effect once and keeps it. */
+const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> | null }> = [
+  { name: 'RIPPLE · SOFT (default)', config: {} },
+  { name: 'RIPPLE · OCEAN', config: { rings: 4, startRadius: 4, endRadius: 96, durationMs: 720, staggerMs: 140, lineWidth: 3, color: 0xa8e4ff, alpha: 0.95, ringAlphaDecay: 0.8, haloAlpha: 0.4 } },
+  // Trail Arrow's ring_wave burst as-is: one additive ring, ×2.6 in 340 ms, no halo
+  { name: 'RIPPLE · BURST', config: { rings: 1, startRadius: 12, endRadius: 64, durationMs: 340, staggerMs: 0, lineWidth: 6, lineWidthEnd: 2, alpha: 1, haloAlpha: 0, blendMode: 'add' } },
+  { name: 'RIPPLE · OFF', config: null }
+];
 
 async function boot(): Promise<void> {
   const theme = resolveTheme();
@@ -80,7 +96,10 @@ async function boot(): Promise<void> {
   const totalStars = () => state.levels.reduce((sum, level) => sum + (level.stars ?? 0), 0);
   const screen = new Container();
   const modals = new Container();
-  app.stage.addChild(screen, modals);
+  // Click ripple (Game Core Pixi FX): rings draw over the game screen and under the modals. The
+  // effect only draws; which pointer-up counts as "a tap on empty space" is decided below (host).
+  const ripple = new ClickRippleEffect({ motion, id: 'showcase' });
+  app.stage.addChild(screen, ripple, modals);
 
   // --- windows (created once, shown on demand) ---
   const resultWindow = new ResultWindowView({
@@ -176,10 +195,20 @@ async function boot(): Promise<void> {
   // --- DEMO TOOLBAR (not part of the Ready UI): flat dark strip with tiny pills ---
   const toolbar = new Container();
   const toolbarBg = new Graphics();
+  toolbarBg.eventMode = 'static'; // the strip is UI: a tap on it is consumed, never a ripple
   toolbar.addChild(toolbarBg);
+  let ripplePreset = 0;
+  const setRipplePreset = (index: number) => {
+    ripplePreset = ((index % RIPPLE_PRESETS.length) + RIPPLE_PRESETS.length) % RIPPLE_PRESETS.length;
+    const preset = RIPPLE_PRESETS[ripplePreset]!;
+    if (preset.config) ripple.configure({ ...DEFAULT_CLICK_RIPPLE, ...preset.config });
+    else ripple.cancelAll();
+    toast(preset.name);
+  };
   const toolbarItems: Array<[string, () => void]> = [
     ['RESULT', () => openResult(map.selectedLevel)], ['SHOP', openShop], ['LIVES', openLives],
-    ['SETTINGS', openSettings], ['NO ADS', openNoAds], ['OFFER', openStarter]
+    ['SETTINGS', openSettings], ['NO ADS', openNoAds], ['OFFER', openStarter],
+    ['RIPPLE', () => setRipplePreset(ripplePreset + 1)]
   ];
   const pills = toolbarItems.map(([label, onTap], i) => {
     const pill = new UiButton({ ui, id: `showcase:toolbar:${i}`, theme, texture: Texture.WHITE, width: 56, height: 20, label, fontSize: 9, labelOffsetY: 0, pressScale: 0.9, onTap });
@@ -215,6 +244,31 @@ async function boot(): Promise<void> {
     });
   };
 
+  // --- empty-tap gate: HOST policy, deliberately not in Core ---
+  // A pointer-down counts only if it lands on a free surface (the stage background or the map's
+  // empty ribbon — never a button, a badge, a window, the toolbar), while no window is blocking,
+  // and the matching pointer-up did not travel (a map scroll is not a tap). Core knows none of
+  // this; a game with draggable pieces adds "nothing is being dragged" here in the same way.
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = app.screen; // empty space now hits the stage instead of nothing
+  const freeSurfaces = new Set<unknown>([app.stage, map]);
+  let emptyPress: { pointerId: number; x: number; y: number } | null = null;
+  app.stage.on('pointerdown', (event: FederatedPointerEvent) => {
+    emptyPress = null;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (ui.isBlocking() || !freeSurfaces.has(event.target)) return;
+    emptyPress = { pointerId: event.pointerId, x: event.global.x, y: event.global.y };
+  });
+  app.stage.on('pointerup', (event: FederatedPointerEvent) => {
+    const press = emptyPress;
+    emptyPress = null;
+    if (!press || press.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.global.x - press.x, event.global.y - press.y) > EMPTY_TAP_THRESHOLD_PX) return;
+    if (RIPPLE_PRESETS[ripplePreset]!.config === null) return;
+    ripple.spawnGlobal(event.global.x, event.global.y);
+  });
+  app.stage.on('pointercancel', () => { emptyPress = null; });
+
   // --- layout ---
   const layout = () => {
     const w = app.screen.width;
@@ -223,6 +277,7 @@ async function boot(): Promise<void> {
     const s = Math.min(w / theme.designWidth, h / theme.designHeight);
 
     hud.resize(w, h, { insets: { top: safe.top, left: safe.left, right: safe.right }, pixelRatio: resolution });
+    ripple.setSizeScale(Math.min(1.6, Math.max(0.6, s / RIPPLE_REFERENCE_SCALE)));
 
     // demo toolbar: inside the bottom safe area, PLAY clears it
     const toolbarTop = h - safe.bottom - TOOLBAR_H;
@@ -292,6 +347,7 @@ async function boot(): Promise<void> {
     app, core, ui, motion, map, hud, state,
     resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow,
     playButton, toolbar,
+    ripple, ripplePresets: RIPPLE_PRESETS, setRipplePreset,
     openResult, openShop, openLives, openSettings, openNoAds, openStarter,
     layout,
     stats: () => core.getStats()
