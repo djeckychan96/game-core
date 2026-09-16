@@ -63,3 +63,42 @@ export type {
   UiErrorPhase,
   UiControllerKind
 } from './ui/types';
+export {
+  OfferRuntime,
+  offerByProduct,
+  activeOffer,
+  secondsLeft,
+  pickAvailableOffer,
+  isChainBlocked,
+  clampOfferTimes,
+  tickOffers,
+  onOfferPurchased,
+  DEFAULT_OFFER_CHAIN_TIMING,
+  DEFAULT_WELCOME_TIMER_SEC,
+  DEFAULT_TIER_TIMER_SEC,
+  OFFER_HOUR_SEC,
+  OFFER_DAY_SEC,
+  validateOfferChainConfig,
+  MemoryOfferStateStore,
+  OFFER_STATE_KEYS,
+  OFFER_WELCOME
+} from './offers';
+export type {
+  OfferVariant,
+  OfferReward,
+  OfferDef,
+  OfferChainConfig,
+  OfferStateKey,
+  OfferWelcomeState,
+  OfferStateStore,
+  OfferChainInput,
+  OfferPriceGate,
+  OfferEventType,
+  OfferEvent,
+  OfferEventHandler,
+  OfferErrorPhase,
+  OfferErrorContext,
+  OfferErrorHandler,
+  OfferRuntimeOptions,
+  OfferRuntimeStats
+} from './offers';
