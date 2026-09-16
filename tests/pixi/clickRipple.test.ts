@@ -29,58 +29,100 @@ function visibleRings(effect: ClickRippleEffect): Graphics[] {
   return rings(effect).filter((ring) => ring.visible);
 }
 
+/**
+ * The production ocean, transcribed 1:1 from Trail Arrow's `ArrowRenderer.updateOceanRipples`:
+ * t = min(1, elapsed / 620); per phase of [0, 0.18]: k = clamp((t − phase) / (1 − phase)), a
+ * phased ring is skipped while k ≤ 0, radius (10 + 46k)·inv, width (3 − 1.8k)·inv, alpha 0.6(1 − k);
+ * the whole ripple ends at t ≥ 1. `inv` is 1 / world scale (constant size on screen).
+ */
+function donorOcean(elapsedMs: number, inv = 1): Array<{ radius: number; width: number; alpha: number } | null> {
+  const t = Math.min(1, elapsedMs / 620);
+  if (t >= 1) return [null, null];
+  return [0, 0.18].map((phase) => {
+    const k = Math.min(1, Math.max(0, (t - phase) / (1 - phase)));
+    if (k <= 0 && phase > 0) return null;
+    return { radius: (10 + 46 * k) * inv, width: (3 - 1.8 * k) * inv, alpha: 0.6 * (1 - k) };
+  });
+}
+
+const FRAME_MS = 1000 / 60;
+
 describe('ClickRippleEffect', () => {
-  it('spawn draws the first ring at once and holds one pooled Graphics per ring', () => {
+  it('defaults are the production ocean of Trail Arrow', () => {
+    expect(DEFAULT_CLICK_RIPPLE).toEqual({
+      ringPhases: [0, 0.18],
+      startRadius: 10,
+      endRadius: 56,
+      durationMs: 620,
+      lineWidth: 3,
+      lineWidthEnd: 1.2,
+      color: 0xffffff,
+      alpha: 0.6,
+      ringAlphaDecay: 1,
+      radiusEase: 'linear',
+      alphaEase: 'linear',
+      haloColor: 0x000000,
+      haloAlpha: 0,
+      haloWidth: 1.5,
+      blendMode: 'normal',
+      maxActive: 8,
+      sizeSpace: 'screen'
+    });
+  });
+
+  it('spawn draws the first ring at once, the phased ring waits, one pooled Graphics per ring', () => {
     const kit = createKit();
     const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0 });
     const handle = effect.spawn(120, 200);
     expect(handle?.active).toBe(true);
-    expect(effect.getStats()).toMatchObject({ activeRipples: 1, activeRings: 3, createdRings: 3, pooledRings: 0, spawned: 1 });
+    expect(effect.getStats()).toMatchObject({ activeRipples: 1, activeRings: 2, createdRings: 2, pooledRings: 0, spawned: 1 });
     expect(kit.motion.getStats().activeTweens).toBe(1);
-    // first ring visible immediately at startRadius, the staggered ones still hidden
     const shown = visibleRings(effect);
     expect(shown).toHaveLength(1);
     expect(shown[0]?.position.x).toBe(120);
     expect(shown[0]?.position.y).toBe(200);
     const strokes = strokesOf(shown[0]!);
-    expect(strokes).toHaveLength(2); // halo + ring
-    expect(strokes[1]).toMatchObject({ radius: DEFAULT_CLICK_RIPPLE.startRadius, width: DEFAULT_CLICK_RIPPLE.lineWidth, color: 0xffffff });
-    expect(strokes[1]?.alpha).toBeCloseTo(DEFAULT_CLICK_RIPPLE.alpha, 5);
-    expect(strokes[0]?.color).toBe(DEFAULT_CLICK_RIPPLE.haloColor);
-    expect(strokes[0]?.width).toBeCloseTo(DEFAULT_CLICK_RIPPLE.lineWidth + 2 * DEFAULT_CLICK_RIPPLE.haloWidth, 5);
+    expect(strokes).toHaveLength(1); // no halo in production
+    expect(strokes[0]).toMatchObject({ radius: 10, width: 3, color: 0xffffff });
+    expect(strokes[0]?.alpha).toBeCloseTo(0.6, 9);
+    // the second ring appears once t passes its 0.18 phase (111.6 ms)
+    kit.core.update(111);
+    expect(visibleRings(effect)).toHaveLength(1);
+    kit.core.update(1);
+    expect(visibleRings(effect)).toHaveLength(2);
     effect.destroy();
   });
 
-  it('runs the lifecycle through the host clock: rings stagger in, grow, thin, fade and return to the pool', () => {
+  it('matches the donor formula frame by frame and ends both rings together at 620 ms', () => {
     const kit = createKit();
     const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0 });
     effect.spawn(0, 0);
-    const { durationMs, staggerMs, startRadius, endRadius } = DEFAULT_CLICK_RIPPLE;
-    advance(kit.core, staggerMs + 16);
-    expect(visibleRings(effect)).toHaveLength(2);
-    advance(kit.core, staggerMs);
-    expect(visibleRings(effect)).toHaveLength(3);
-    // the first ring grows monotonically while its alpha only ever decreases
-    const first = rings(effect)[0]!;
-    let lastRadius = strokesOf(first)[1]!.radius;
-    let lastAlpha = strokesOf(first)[1]!.alpha;
-    expect(lastRadius).toBeGreaterThan(startRadius);
-    for (let i = 0; i < 8; i++) {
-      advance(kit.core, 16);
-      const [, ring] = strokesOf(first);
-      expect(ring!.radius).toBeGreaterThanOrEqual(lastRadius);
-      expect(ring!.alpha).toBeLessThanOrEqual(lastAlpha);
-      expect(ring!.radius).toBeLessThanOrEqual(endRadius);
-      lastRadius = ring!.radius;
-      lastAlpha = ring!.alpha;
+    const owned = rings(effect);
+    expect(owned).toHaveLength(2);
+    let elapsed = 0;
+    let frames = 0;
+    while (elapsed < 620) {
+      const donor = donorOcean(elapsed);
+      for (let i = 0; i < 2; i++) {
+        const expected = donor[i];
+        const ring = owned[i]!;
+        if (!expected) {
+          expect(ring.visible, `ring ${i} at ${elapsed.toFixed(1)} ms should be hidden`).toBe(false);
+          continue;
+        }
+        expect(ring.visible, `ring ${i} at ${elapsed.toFixed(1)} ms should be visible`).toBe(true);
+        const [stroke] = strokesOf(ring);
+        expect(stroke?.radius).toBeCloseTo(expected.radius, 9);
+        expect(stroke?.width).toBeCloseTo(expected.width, 9);
+        expect(stroke?.alpha).toBeCloseTo(expected.alpha, 9);
+      }
+      kit.core.update(FRAME_MS);
+      elapsed += FRAME_MS;
+      frames += 1;
     }
-    // the first ring finishes before the last one does
-    advance(kit.core, durationMs - (2 * staggerMs + 16 + 8 * 16) + 16);
-    expect(effect.getStats().activeRings).toBe(2);
-    expect(effect.getStats().pooledRings).toBe(1);
-    // run out the whole train → nothing active, every ring pooled, one completion, no tween left
-    advance(kit.core, durationMs + 3 * staggerMs);
-    expect(effect.getStats()).toMatchObject({ activeRipples: 0, activeRings: 0, pooledRings: 3, completed: 1, cancelled: 0 });
+    expect(frames).toBe(38); // 38 × 16.67 ms = 633 ms > 620 ms
+    // the frame that crosses t = 1 releases BOTH rings and completes the ripple
+    expect(effect.getStats()).toMatchObject({ activeRipples: 0, activeRings: 0, pooledRings: 2, completed: 1, cancelled: 0 });
     expect(kit.motion.getStats().activeTweens).toBe(0);
     expect(visibleRings(effect)).toHaveLength(0);
     expect(kit.motionErrors).toEqual([]);
@@ -90,14 +132,13 @@ describe('ClickRippleEffect', () => {
   it('reuses pooled rings across spawns instead of creating new Graphics', () => {
     const kit = createKit();
     const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0 });
-    const total = DEFAULT_CLICK_RIPPLE.durationMs + DEFAULT_CLICK_RIPPLE.staggerMs * 2;
     for (let i = 0; i < 4; i++) {
       effect.spawn(10 * i, 0);
-      advance(kit.core, total + 32);
+      advance(kit.core, 620 + 32);
     }
-    expect(effect.getStats()).toMatchObject({ createdRings: 3, completed: 4, activeRings: 0, pooledRings: 3 });
-    // prewarm creates the idle rings up front, capped at maxActive × rings
-    const warm = new ClickRippleEffect({ motion: kit.motion, id: 'w', rings: 2, maxActive: 3 });
+    expect(effect.getStats()).toMatchObject({ createdRings: 2, completed: 4, activeRings: 0, pooledRings: 2 });
+    // default prewarm is two ripples' worth; prewarm is capped at maxActive × rings
+    const warm = new ClickRippleEffect({ motion: kit.motion, id: 'w', maxActive: 3 });
     expect(warm.getStats()).toMatchObject({ createdRings: 4, pooledRings: 4 });
     expect(warm.prewarm(100)).toBe(2);
     expect(warm.getStats().createdRings).toBe(6);
@@ -105,30 +146,37 @@ describe('ClickRippleEffect', () => {
     warm.destroy();
   });
 
-  it('repeated taps stack up to maxActive, then the oldest ripple is recycled for the newest tap', () => {
+  it('quick repeated taps stack up to maxActive = 8, then the oldest ripple is recycled for the newest tap', () => {
     const kit = createKit();
-    const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0, maxActive: 3 });
-    const handles = [0, 1, 2].map((i) => effect.spawn(i, i));
-    expect(effect.getStats()).toMatchObject({ activeRipples: 3, activeRings: 9, createdRings: 9 });
-    advance(kit.core, 40);
-    const fourth = effect.spawn(9, 9);
-    expect(fourth?.active).toBe(true);
+    const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0 });
+    const handles = Array.from({ length: 8 }, (_, i) => {
+      const handle = effect.spawn(i, i);
+      kit.core.update(20);
+      return handle;
+    });
+    expect(effect.getStats()).toMatchObject({ activeRipples: 8, activeRings: 16, createdRings: 16, recycled: 0 });
+    expect(kit.motion.getStats().activeTweens).toBe(8);
+    const ninth = effect.spawn(9, 9);
+    expect(ninth?.active).toBe(true);
     expect(handles[0]?.active).toBe(false);
     expect(handles[1]?.active).toBe(true);
-    expect(effect.getStats()).toMatchObject({ activeRipples: 3, activeRings: 9, createdRings: 9, recycled: 1, cancelled: 0 });
-    expect(kit.motion.getStats().activeTweens).toBe(3);
+    expect(effect.getStats()).toMatchObject({ activeRipples: 8, activeRings: 16, createdRings: 16, recycled: 1, cancelled: 0 });
+    expect(kit.motion.getStats().activeTweens).toBe(8);
     // a handle cancels only its own ripple
-    expect(fourth?.cancel()).toBe(true);
-    expect(fourth?.cancel()).toBe(false);
-    expect(effect.getStats()).toMatchObject({ activeRipples: 2, cancelled: 1 });
-    expect(effect.cancelAll()).toBe(2);
-    expect(effect.getStats()).toMatchObject({ activeRipples: 0, activeRings: 0, pooledRings: 9, cancelled: 3 });
+    expect(ninth?.cancel()).toBe(true);
+    expect(ninth?.cancel()).toBe(false);
+    expect(effect.getStats()).toMatchObject({ activeRipples: 7, cancelled: 1 });
+    expect(effect.cancelAll()).toBe(7);
+    expect(effect.getStats()).toMatchObject({ activeRipples: 0, activeRings: 0, pooledRings: 16, cancelled: 8 });
     expect(kit.motion.getStats().activeTweens).toBe(0);
     expect(effect.cancelAll()).toBe(0);
+    // the pool is reused: the next 8 taps create nothing new
+    for (let i = 0; i < 8; i++) effect.spawn(i, 0);
+    expect(effect.getStats()).toMatchObject({ activeRipples: 8, createdRings: 16, pooledRings: 0 });
     effect.destroy();
   });
 
-  it('spawnGlobal converts screen points through the container transform; setSizeScale scales the drawing', () => {
+  it('keeps a constant on-screen size under a zoomed world (sizeSpace "screen"), like the donor', () => {
     const kit = createKit();
     const world = new Container();
     world.position.set(100, 50);
@@ -139,15 +187,30 @@ describe('ClickRippleEffect', () => {
     const ring = visibleRings(effect)[0]!;
     expect(ring.position.x).toBeCloseTo(100, 5);
     expect(ring.position.y).toBeCloseTo(100, 5);
-    // a resize changes the size scale: the same tap draws proportionally bigger rings
-    effect.setSizeScale(2);
-    effect.spawn(0, 0, { sizeScale: 1.5, color: 0x22aaff });
-    const big = visibleRings(effect)[1]!;
-    const [halo, main] = strokesOf(big);
-    expect(main?.radius).toBeCloseTo(DEFAULT_CLICK_RIPPLE.startRadius * 3, 5);
-    expect(main?.width).toBeCloseTo(DEFAULT_CLICK_RIPPLE.lineWidth * 3, 5);
-    expect(main?.color).toBe(0x22aaff);
-    expect(halo?.width).toBeCloseTo((DEFAULT_CLICK_RIPPLE.lineWidth + 2 * DEFAULT_CLICK_RIPPLE.haloWidth) * 3, 5);
+    // radius and width are divided by the world scale: 10 px on screen stays 10 px on screen
+    const [stroke] = strokesOf(ring);
+    expect(stroke?.radius).toBeCloseTo(5, 9);
+    expect(stroke?.width).toBeCloseTo(1.5, 9);
+    // the inverse is re-evaluated every frame, so a pinch mid-ripple does not change the screen size
+    world.scale.set(4);
+    kit.core.update(FRAME_MS);
+    const [afterZoom] = strokesOf(ring);
+    expect(afterZoom?.radius).toBeCloseTo(donorOcean(FRAME_MS, 1 / 4)[0]!.radius, 9);
+    expect(afterZoom?.width).toBeCloseTo(donorOcean(FRAME_MS, 1 / 4)[0]!.width, 9);
+    // a collapsed world is clamped exactly like the donor (1 / max(0.05, scale))
+    world.scale.set(0.01);
+    kit.core.update(FRAME_MS);
+    expect(strokesOf(ring)[0]?.radius).toBeCloseTo(donorOcean(2 * FRAME_MS, 20)[0]!.radius, 9);
+    // "local" sizing scales with the world instead; sizeScale multiplies either way
+    world.scale.set(2);
+    effect.configure({ sizeSpace: 'local' });
+    effect.setSizeScale(3);
+    effect.spawn(0, 0, { sizeScale: 0.5, color: 0x22aaff });
+    const local = visibleRings(effect).at(-1)!;
+    const [localStroke] = strokesOf(local);
+    expect(localStroke?.radius).toBeCloseTo(10 * 1.5, 9);
+    expect(localStroke?.width).toBeCloseTo(3 * 1.5, 9);
+    expect(localStroke?.color).toBe(0x22aaff);
     expect(effect.spawn(Number.NaN, 0)).toBeNull();
     expect(() => effect.setSizeScale(-1)).toThrow(RangeError);
     effect.destroy();
@@ -158,17 +221,26 @@ describe('ClickRippleEffect', () => {
     const kit = createKit();
     const effect = new ClickRippleEffect({ motion: kit.motion, id: 't', prewarm: 0 });
     const before = effect.spawn(0, 0);
-    effect.configure({ rings: 5, haloAlpha: 0, color: 0x00ff00, staggerMs: 0 });
-    expect(effect.config.rings).toBe(5);
-    expect(effect.config.durationMs).toBe(DEFAULT_CLICK_RIPPLE.durationMs);
+    effect.configure({ ringPhases: [0, 0.3, 0.6], haloAlpha: 0.35, color: 0x00ff00 });
+    expect(effect.config.ringPhases).toEqual([0, 0.3, 0.6]);
+    expect(effect.config.durationMs).toBe(620);
+    expect(Object.isFrozen(effect.config.ringPhases)).toBe(true);
     effect.spawn(0, 0);
-    expect(effect.getStats().activeRings).toBe(3 + 5);
-    const latest = rings(effect).slice(-5);
-    expect(latest.every((ring) => ring.visible)).toBe(true); // no stagger → all five at once
-    expect(strokesOf(latest[0]!)).toHaveLength(1); // halo off
-    expect(strokesOf(latest[0]!)[0]?.color).toBe(0x00ff00);
+    expect(effect.getStats().activeRings).toBe(2 + 3);
+    const latest = rings(effect).slice(-3);
+    expect(latest.filter((ring) => ring.visible)).toHaveLength(1); // phases 0.3 / 0.6 wait
+    const strokes = strokesOf(latest[0]!);
+    expect(strokes).toHaveLength(2); // halo + ring
+    expect(strokes[0]?.color).toBe(0x000000);
+    expect(strokes[0]?.width).toBeCloseTo(3 + 2 * 1.5, 9);
+    expect(strokes[1]?.color).toBe(0x00ff00);
     expect(before?.active).toBe(true);
-    for (const bad of [{ rings: 0 }, { rings: 1.5 }, { durationMs: 0 }, { alpha: 2 }, { maxActive: 0 }, { radiusEase: 'bounce' as never }]) {
+    advance(kit.core, 640);
+    expect(effect.getStats()).toMatchObject({ activeRipples: 0, completed: 2 });
+    for (const bad of [
+      { ringPhases: [] }, { ringPhases: [0, 1] }, { ringPhases: [-0.1] }, { durationMs: 0 }, { alpha: 2 },
+      { maxActive: 0 }, { radiusEase: 'bounce' as never }, { sizeSpace: 'world' as never }
+    ]) {
       expect(() => effect.configure(bad)).toThrow(RangeError);
     }
     expect(() => new ClickRippleEffect({ motion: kit.motion, endRadius: -1 })).toThrow(RangeError);
