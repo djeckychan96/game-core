@@ -11,6 +11,8 @@ Game Core is a reusable runtime library for shared HTML5 game systems. It is org
 
 The host owns rendering, asset loading, DOM, canvases, application objects, and tickers, and is the only thing that ever calls `CoreRuntime.update(frameMs)`.
 
+On top of that renderer-agnostic core sits one optional, renderer-specific layer: the **Pixi Ready UI** kit (`game-core/pixi`, see `docs/PIXI_READY_UI.md`) — the drawn level map, HUD, buttons and result/lives/shop windows a PixiJS 8 game gets out of the box. It is a separate build with `pixi.js` as an external optional peer dependency, imports the core as types only, and drives everything through the host's `UiRuntime`/`MotionRuntime`, so the root entry stays free of any renderer.
+
 ## Core Runtime
 
 `CoreRuntime` registers runtime modules under a stable name and fans out to all of them:
@@ -113,5 +115,9 @@ A binding whose `get()`/`set()` throws (a stale or destroyed host object) cancel
 - `computeLayout(input)` — pure contain-fit math: design size fails fast with `RangeError`, measured viewport/insets are coerced, results are rects in design units.
 
 Motion is delegated to `MotionRuntime` through `UiMotionDriver` (`tween` + `cancelScope`), a strict structural subset that a `MotionRuntime` instance satisfies with no adapter. Each controller owns one tween at a time in a reserved scope (`ui:button:<id>`, `ui:window:<id>`) and arms its driver callbacks with a lifecycle generation, so stale completions and controller-initiated replacements are ignored while a cancellation delivered through the driver settles the controller.
+
+## Pixi Ready UI
+
+`game-core/pixi` (source `src/pixi/`, bundle `dist/pixi/`, art `assets/pixi-ui/`) contains `LevelMapView`, `HudView`, `UiButton`, `ModalWindow` with `ResultWindowView` / `LivesWindowView` / `ShopWindowView`, `loadReadyUiAssets` and a minimal theme. The views are PixiJS containers laid out in viewport px over a contain-fit design box; every tap is a `ButtonController`, every modal a `WindowController`, every animation a `MotionRuntime` tween or sequence in a view-owned scope, so `core.cancelAll()` settles the whole interface and no business callback (level selection, NEXT, BUY) can fire from a cancelled press or a force-hidden window — they run only as settled taps and `close()` continuations. The standalone showcase (`npm run showcase`) proves the layer without any game attached.
 
 `UiRuntime.update()` is a no-op; it participates in `CoreRuntime`'s `cancelScope`/`cancelAll`/`dispose` fan-out so that `core.cancelAll()` leaves the whole Game Core consistent: every button idle, every window hidden with its view cleanup fired once, `activeWindow` null, blocking false, no motion left. Whichever module reaches a controller first — `ui` or `motion` — the outcome is the same settle, so registration order does not matter. Every host callback is error-isolated through `onUiError`, mirroring `onMotionError`/`onEffectError`. See `docs/superpowers/specs/2026-09-15-ui-runtime-v0.3-design.md` for the full design.
