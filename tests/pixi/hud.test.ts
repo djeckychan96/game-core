@@ -62,6 +62,26 @@ describe('HudView', () => {
     expect(kit.ui.getStats().buttons).toBe(0);
   });
 
+  it('shows a stars badge on request and pulses it on change', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, stars: 41, onCoinsTap: () => {}, onLivesTap: () => {} });
+    const stars = (hud as unknown as { stars: { countText: { text: string }; plus: unknown; x: number } | null }).stars;
+    expect(stars).not.toBeNull();
+    expect(stars?.countText.text).toBe('41');
+    expect(stars?.plus).toBeNull(); // not tappable, no "+"
+    expect(stars?.x).toBe(580);
+    expect(hud.starAnchor).not.toBeNull();
+    hud.setStars(44);
+    expect(hud.starsAmount).toBe(44);
+    expect(kit.motion.getStats().activeMotions).toBe(1);
+    advance(kit.core, 400);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    const bare = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, id: 'hud2' });
+    expect(bare.starAnchor).toBeNull();
+    bare.destroy();
+    hud.destroy();
+  });
+
   it('lays out along the top safe edge and never wider than the viewport', () => {
     const kit = createKit();
     // shadow: false — the soft top shadow deliberately bleeds past the viewport edges
@@ -70,6 +90,12 @@ describe('HudView', () => {
     const phoneHeight = hud.barHeight;
     expect(phoneHeight).toBeGreaterThan(47);
     expect(phoneHeight).toBeLessThan(200);
+    // donor: the heart icon's left edge sits 60 design units from the edge, its top 83 from the top
+    const s = Math.min(390 / 1080, 844 / 2344);
+    const row = (hud as unknown as { row: { x: number; y: number; scale: { x: number }; getLocalBounds(): { x: number; y: number } } }).row;
+    const rowBounds = row.getLocalBounds();
+    expect(row.x + rowBounds.x * row.scale.x).toBeCloseTo(60 * s, 1);
+    expect(row.y + rowBounds.y * row.scale.x).toBeCloseTo(47 + 83 * s, 1);
     const bounds = hud.getLocalBounds();
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(390 + 1);
     hud.resize(320, 568);

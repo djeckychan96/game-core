@@ -77,15 +77,20 @@ describe('LevelMapView', () => {
     map.resize(390, 844, { insets: { top: 90, bottom: 200 } });
     expect(map.focusLevel).toBe(19);
     expect(map.selectedLevel).toBe(19);
-    const mapTop = 90;
-    const mapBottom = 844 - 200;
-    const expectedFocus = mapTop + (mapBottom - mapTop) * map.theme.levelMap.focusRatio;
+    // donor: the focused badge rests at 60% of the screen height, kept a badge (+ pill) clear
+    // of the bottom inset and of the HUD
+    const s = Math.min(390 / 1080, 844 / 2344) * map.theme.levelMap.contentScale;
+    const reach = (map.theme.levelMap.badgeSize / 2 + 40) * map.theme.levelMap.nodeScale * s;
+    const expectedFocus = Math.max(90 + reach, Math.min(844 * map.theme.levelMap.focusRatio, 844 - 200 - reach));
     expect(map.levelScreenY(19)).toBeCloseTo(expectedFocus, 3);
     expect(map.focusPoint.y).toBeCloseTo(expectedFocus, 3);
     // higher levels climb upward
     expect(map.levelScreenY(20)).toBeLessThan(map.levelScreenY(19));
     expect(map.levelScreenY(18)).toBeGreaterThan(map.levelScreenY(19));
-    expect(map.contentScale).toBeCloseTo(Math.min(390 / 1080, 844 / 2344), 6);
+    expect(map.contentScale).toBeCloseTo(s, 6);
+    // a tall bottom inset pushes the focus up so the badge never hides under the PLAY button
+    map.resize(390, 844, { insets: { top: 90, bottom: 500 } });
+    expect(map.levelScreenY(19)).toBeCloseTo(844 - 500 - reach, 3);
     map.destroy();
   });
 
@@ -159,10 +164,10 @@ describe('LevelMapView', () => {
     map.resize(320, 568, { insets: { top: 60, bottom: 140 }, pixelRatio: 2 });
     expect(map.focusLevel).toBe(12);
     expect(map.levelScreenY(12)).toBeCloseTo(map.focusPoint.y, 2);
-    expect(map.contentScale).toBeCloseTo(Math.min(320 / 1080, 568 / 2344), 6);
+    expect(map.contentScale).toBeCloseTo(Math.min(320 / 1080, 568 / 2344) * map.theme.levelMap.contentScale, 6);
     map.resize(1280, 800, { pixelRatio: 1 });
     expect(map.focusLevel).toBe(12);
-    expect(map.contentScale).toBeCloseTo(800 / 2344, 6);
+    expect(map.contentScale).toBeCloseTo((800 / 2344) * map.theme.levelMap.contentScale, 6);
     // degenerate sizes never throw
     map.resize(0, Number.NaN);
     expect(map.focusLevel).toBe(12);
