@@ -2,15 +2,17 @@
 
 `game-core/pixi` is the ready-made, drawn UI layer of Game Core for PixiJS 8 hosts. A game plugs
 in its data (levels, progress, coins, lives, callbacks) and gets a finished, animated interface:
-level map, HUD, result / lives / shop windows. The art and geometry come from Trail Arrow and now
-live physically inside this package (`assets/pixi-ui/`); the behaviour runs on the renderer-agnostic
-foundation (`UiRuntime`, `MotionRuntime`, `CoreRuntime`).
+level map, HUD, result / lives / shop / settings / no-ads / starter-pack windows. The art and the
+geometry come from Trail Arrow 1:1 and now live physically inside this package
+(`assets/pixi-ui/`); the behaviour runs on the renderer-agnostic foundation (`UiRuntime`,
+`MotionRuntime`, `CoreRuntime`).
 
 ```
 game-core
 ├── "game-core"        renderer-agnostic: CoreRuntime, FxRuntime, MotionRuntime, UiRuntime
 └── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, UiButton, ModalWindow,
-                       ResultWindowView, LivesWindowView, ShopWindowView, assets loader, theme
+                       ResultWindowView, LivesWindowView, ShopWindowView, SettingsWindowView,
+                       NoAdsWindowView, StarterPackWindowView, assets loader, theme
 ```
 
 Rules that keep the two layers apart:
@@ -66,8 +68,8 @@ app.renderer.on('resize', () => {
 result.show({ level: 19, stars: 2, rewardCoins: 100 });   // WindowController lifecycle inside
 ```
 
-Copy or serve `game-core/assets/pixi-ui/**` (45 webp files + `fonts/FiraSans-Black.woff2`,
-~600 KB); `READY_UI_ASSET_FILES` lists them so a build step can bundle them. `package.json`
+Copy or serve `game-core/assets/pixi-ui/**` (69 webp files + `fonts/FiraSans-Black.woff2`,
+~1.3 MB); `READY_UI_ASSET_FILES` lists them so a build step can bundle them. `package.json`
 also exposes them as `game-core/assets/pixi-ui/...` for hosts that import asset URLs.
 
 ## Components
@@ -75,8 +77,9 @@ also exposes them as `game-core/assets/pixi-ui/...` for hosts that import asset 
 All views are `pixi.js` `Container`s laid out in **viewport CSS px** through `resize(width,
 height, { insets, pixelRatio })`. Internally they compose in the donor's design units under a
 contain-fit scale of the portrait design box (1080 × 2344), so a node keeps the same share of the
-screen on a 320 px phone, an iPhone and a desktop window; canvas text is re-rasterised at the
-final on-screen density (`applyTextResolution`) so it stays crisp under scaling.
+screen on a 320 px phone, an iPhone and a desktop window; canvas text is re-rasterised at twice
+the final on-screen density (`applyTextResolution`, see Render quality) so it stays crisp under
+scaling.
 
 ### LevelMapView
 
