@@ -99,15 +99,20 @@ stars, locks, the red HARD pill, the rail between levels, the focus glow. Levels
 Interaction: drag anywhere inside the map, release to fling with a projected snap to the nearest
 level; wheel scrolls and snaps; each badge is a `ButtonController` (tap threshold 14 px) so a
 press cancelled by a swipe, `cancelScope` or `core.cancelAll()` never fires `onSelectLevel`.
-Culling hides off-screen nodes; nothing is created or destroyed per frame.
+Culling hides off-screen nodes; nothing is created or destroyed per frame. Geometry is the
+donor's: contain scale × 0.963 (its progression scale on a phone), 300-unit badges × 1.215,
+537-unit gap, the focused badge at 60% of the screen height but always a whole badge clear of
+the bottom inset (PLAY) and the HUD.
 
 ### HudView
 
 Lives (heart with the count inside, timer / `MAX` on the capsule, "+"), coins (capsule counter,
-"+") and a settings gear, along the top safe edge; the whole badge is a `UiButton`.
-`setCoins(n)`, `setLives(n, timerText)`, `setLivesTimer(text)`, `setMaxLives(n)`, `barHeight`
-(px to reserve), `coinAnchor` (world position for coin flights). Counter changes pulse through
-MotionRuntime.
+"+"), an optional **stars** badge (gold star, total count, not tappable) and the settings gear on
+its dark back, laid out with the donor's rule: row area = 1/20 of the viewport in portrait (1/50
+landscape), never wider than the screen minus the margins, heart icon 60 design units from the
+left and 83 from the top. `setCoins(n)`, `setLives(n, timerText)`, `setLivesTimer(text)`,
+`setMaxLives(n)`, `setStars(n)`, `barHeight` (px to reserve), `coinAnchor` / `starAnchor` (world
+positions for flight effects). Counter changes pulse through MotionRuntime.
 
 ### UiButton
 
@@ -115,22 +120,43 @@ Sprite background + optional label/icon; Pixi pointer events → `ButtonControll
 → scale from an explicit idle scale (`setIdleScale`). `setLabel`, `setEnabled`, `setTapThreshold`,
 `controller`.
 
-### ModalWindow → ResultWindowView, LivesWindowView, ShopWindowView
+### ModalWindow → the windows
 
-`ModalWindow` is the base: dim backdrop (tap = `close('background')`), a design-unit panel
-contain-fitted into the viewport, a red × (`<id>:close`), and a `WindowController` with the
-donor's entrance (440 ms `backOut(1.9)`: alpha 0→1, y +130→0, scale 0.7→1) and a 160 ms leave.
-`show(params)`, `close(reason, onClosed?)`, `state`, `resize`, `destroy`; `onBeforeClose` can veto,
-`onHidden` is view cleanup only, `onDismiss(reason)` runs after × / backdrop closes.
+`ModalWindow` is the base and reproduces the donor's WindowsSystem: a dim backdrop (black 0.55;
+tap = `close('background')`), a panel composed in design units around its own origin, scaled so
+its **measured** bounds fit `fit.widthRatio × fit.heightRatio` of the safe area (default 0.88 ×
+0.84, the donor's mobile ratios), origin at the safe-area center; a `WindowController` with the
+donor's pop entrance (320 ms `backOut(1.5)`: alpha 0→1, y +60→0, scale 0.84→1) and a 160 ms
+leave; the 51-unit red × at each window's donor coordinates. `show(params)`,
+`close(reason, onClosed?)`, `state`, `resize`, `destroy`; `onBeforeClose` can veto, `onHidden` is
+view cleanup only, `onDismiss(reason)` runs after × / backdrop closes.
 
-- **ResultWindowView** — victory ribbon with `LEVEL n` / `COMPLETED!`, three stars popping in,
-  reward coins, NEXT / RETRY, ×. `onNext(params)` / `onRetry(params)` run as **close
+Every window below is laid out from the donor's generated prefab + its runtime adjustments
+(positions, sizes, font sizes and strokes are the donor's numbers):
+
+- **ResultWindowView** — LevelComplete: ribbon at y −317 with `LEVEL n` / `COMPLETED!`,
+  `REWARDS` caption, big coin with the amount under it, green CONTINUE (−230, 310), yellow
+  secondary (230, 310), × at (445, −369); slate 0.94 backdrop and the 440 ms `backOut(1.9)`
+  victory pop. Optional stars crown the ribbon. `onNext` / `onRetry` are **close
   continuations**: only after the window is hidden, never on cancel.
-- **LivesWindowView** — purple info panel: big heart `n/max`, `NEXT HEART IN` + timer
-  (`setTimer` while open), REFILL NOW (coin price) and an optional "+1 for an ad" button;
-  `onRefill`, `onWatchAd` continuations.
-- **ShopWindowView** — striped awning, up to six pack cards (coin pile, amount, green BUY with
-  the price); `onBuy(item)` continuation.
+- **LivesWindowView** — RefillHearts: 968 × 1070 purple panel, inner 900 × 382 panel, heart
+  at x −261 with `n/max`, `Next heart in` + countdown (`setTimer` while open; `MAX` when full),
+  REFILL with the coin price and a "+1 for an ad" button at y 350; `onRefill`, `onWatchAd`.
+- **ShopWindowView** — the donor's **full-screen** shop: striped awning tiled across the top
+  (36/255 of the height), the 89-unit × at the top-right, then the blue `SPECIAL OFFER` ribbon
+  and a 3-column grid of 318 × 418 pack cards (amount on top, coin pile, price on the bottom band)
+  scaled to the screen width minus 2 × 32, scrollable when it overflows; `onBuy(item)`.
+- **SettingsWindowView** — 968 × 1102 panel, `SETTINGS`, SOUND / MUSIC toggles (blue squares
+  300 apart at y 45, labels above, red slash when off; HAPTIC optional), version caption,
+  optional in-level HOME / RESTART; `onToggle(setting, enabled)` fires in place, home/restart
+  are continuations. `setSettings`, `currentSettings`.
+- **NoAdsWindowView** — 975 × 1355 blue panel with the crossed clapperboard, `NO` / `ADS`
+  rotated −32° over the corner, description band at y 248, green price button at y 517;
+  `onBuy(params)` continuation, no purchase logic inside.
+- **StarterPackWindowView** — 975 × 1355 warm panel, the chest hero, `STARTER PACK` rotated
+  −14°, rewards row (coins, ∞-lives duration), red booster bar with the bulb, price button at
+  y 542; configurable `rewards` / `title`, `onBuy(params)` continuation. Ready for a future
+  OfferRuntime: everything shown is data.
 
 Only one window is active per `UiRuntime` at a time (foundation rule); `ui.isBlocking()` is true
 while any of them is open.
@@ -141,16 +167,41 @@ while any of them is open.
 text fill/stroke, backdrop color, level-map geometry (badge size, node scale, gap, focus boost,
 focus ratio) and the design box. It is deliberately small — the default looks right out of the box.
 
+## Render quality (Retina)
+
+Both the donor and the showcase render at `resolution = min(max(devicePixelRatio, 1), 2)` with
+`autoDensity` and MSAA; sprites are minified from the same source art with mipmaps (PixiJS 8
+recomputes `mipLevelCount` at upload when `autoGenerateMipmaps` is set). The one real difference
+was text: the donor rasterises canvas text at the renderer resolution and lets the GPU minify it
+2–3×, which reads crisper on Retina than text rasterised at exactly its on-screen density. The kit
+now supersamples labels the same way (`applyTextResolution` uses `TEXT_SUPERSAMPLE = 2` × the
+final density, capped at 4).
+
+## Donor parity check
+
+```bash
+# from the workspace root, READ ONLY on trail_arrow:
+sh -c "cd trail_arrow && npx vite --mode localhost --host 0.0.0.0 --port 8090"
+DONOR_URL=http://127.0.0.1:8090/ node scripts/donor-compare.mjs
+```
+
+`scripts/donor-compare.mjs` seeds a level-19 profile into the donor's localStorage, opens its
+main screen and every window at 390 × 844 @2x and writes `showcase-shots/donor/*.png` plus
+`*.json` scene dumps (positions, scales, screen bounds, font sizes) — the numbers the kit's
+layouts are taken from. Compare them side by side with `npm run showcase:shots`.
+
 ## Showcase
 
 ```bash
 npm run showcase -- --host 0.0.0.0        # Vite dev server, examples/pixi-showcase
 ```
 
-Opens **GAME CORE UI SHOWCASE**: HUD, a 36-level map (stars 0..3, hard pills, current, locked),
-PLAY (launches the focused level), RESULT / SHOP / LIVES buttons; a win on the current level
-unlocks the next one and scrolls to it. Demo data only (`examples/pixi-showcase/demoData.ts`).
-`window.__showcase` exposes the views and runtimes for automated checks.
+Opens **GAME CORE UI SHOWCASE**: the production Ready UI as a game scene — HUD (lives / coins /
+stars / settings), a 36-level map (stars 0..3, hard pills, current, locked), the donor-sized
+PLAY button, the starter-pack and no-ads offer icons — and, separated at the very bottom, a
+flat DEMO TOOLBAR that opens each window directly (RESULT · SHOP · LIVES · SETTINGS · NO ADS ·
+OFFER). A win on the current level unlocks the next one and scrolls to it. Demo data only
+(`examples/pixi-showcase/demoData.ts`). `window.__showcase` exposes the views and runtimes.
 
 Visual checks (the sandboxed in-app browser has no WebGL; use the installed Google Chrome):
 
@@ -158,8 +209,9 @@ Visual checks (the sandboxed in-app browser has no WebGL; use the installed Goog
 SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:shots   # Playwright, channel 'chrome'
 ```
 
-writes `showcase-shots/*.png` for 390 × 844, 320 × 568 and 1280 × 800, drives a real drag, a
-real NEXT tap and `core.cancelAll()`, and fails on any unexpected console error.
+writes `showcase-shots/*.png` for 390 × 844 (map, scrolled, locked, hard pill, every window),
+320 × 568 (map + windows) and 1280 × 800, drives a real drag, a real CONTINUE tap, a real SOUND
+toggle and `core.cancelAll()`, and fails on any unexpected console error.
 
 ## Tests
 
@@ -172,7 +224,8 @@ window lifecycles and close continuations.
 ## Assets (provenance)
 
 Extracted from Trail Arrow (`trail_arrow/public/assets/**` and its texture atlases) into
-`assets/pixi-ui/`: level badges/stars/lock/pill (`level/`), the level-select background and top
-shadow (`bg/`), the Figma top bar (`hud/`), buttons (`button/`), icons (`icons/`), the victory
-ribbon and purple panels (`window/`), shop awning/cards/coins (`shop/`), and Fira Sans Black.
-No runtime dependency on `trail_arrow/` remains.
+`assets/pixi-ui/` (69 files, ~1.3 MB): level badges/stars/lock/pill (`level/`), the level-select
+background and top shadow (`bg/`), the Figma top bar (`hud/`), buttons (`button/`), icons
+(`icons/`), the victory ribbon and purple panels (`window/`), shop awning/cards/coins (`shop/`),
+settings panel/toggles/buttons (`settings/`), the no-ads and starter-pack panels, heroes, icons
+and the bulb (`offer/`), and Fira Sans Black. No runtime dependency on `trail_arrow/` remains.
