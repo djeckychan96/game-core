@@ -12,7 +12,8 @@ game-core
 ├── "game-core"        renderer-agnostic: CoreRuntime, FxRuntime, MotionRuntime, UiRuntime
 └── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, UiButton, ModalWindow,
                        ResultWindowView, LivesWindowView, ShopWindowView, SettingsWindowView,
-                       NoAdsWindowView, StarterPackWindowView, assets loader, theme
+                       NoAdsWindowView, StarterPackWindowView, assets loader, theme;
+                       Pixi FX (src/pixi/fx): ClickRippleEffect
 ```
 
 Rules that keep the two layers apart:
@@ -164,6 +165,47 @@ Every window below is laid out from the donor's generated prefab + its runtime a
 Only one window is active per `UiRuntime` at a time (foundation rule); `ui.isBlocking()` is true
 while any of them is open.
 
+### ClickRippleEffect (Pixi FX)
+
+Expanding "ocean" rings from a tap on empty space, as a reusable effect (`src/pixi/fx/`). It is a
+`Container` the host places where the rings should draw (over the play field, under the modals):
+
+```ts
+const ripple = new ClickRippleEffect({ motion, id: 'game' });   // defaults: 3 white rings, 6 → 56 px,
+app.stage.addChild(screen, ripple, modals);                      // 460 ms each, 90 ms apart, dark halo
+app.stage.on('pointerup', (e) => { if (isEmptyTap(e)) ripple.spawnGlobal(e.global.x, e.global.y); });
+```
+
+| Member | Meaning |
+| --- | --- |
+| `spawn(x, y, { color?, sizeScale? })` | ripple at the effect's **local** point; returns a handle (`active`, `cancel()`) or null after destroy |
+| `spawnGlobal(x, y, …)` | the same from a Pixi global (screen) point, converted through the container's transform — absorbs a stage offset or a scaled world |
+| `configure(partial)` | changes future spawns (ripples in flight keep their settings); invalid values throw `RangeError` |
+| `setSizeScale(k)` / `sizeScale` | multiplies every radius and stroke width (set it from the UI scale on resize) |
+| `prewarm(n)`, `cancelAll()`, `getStats()` | pool warm-up; cancel everything; `activeRipples / activeRings / pooledRings / createdRings / spawned / completed / cancelled / recycled` |
+| `scope` | `fx:click-ripple:<id>` — every ripple is one linear MotionRuntime tween there, so `core.pauseScope` / `cancelScope` / `cancelAll` apply |
+| `destroy()` | cancels the tweens, destroys every ring, never calls back afterwards; idempotent |
+
+`ClickRippleConfig` (all defaults in `DEFAULT_CLICK_RIPPLE`): `rings`, `startRadius`, `endRadius`,
+`durationMs`, `staggerMs`, `lineWidth` → `lineWidthEnd` (a thinning line reads as a fading wave),
+`color`, `alpha`, `ringAlphaDecay` (each later ring dimmer), `radiusEase` / `alphaEase` (ease names
+mean the same as in MotionRuntime; alpha = peak × (1 − alphaEase(t))), `haloColor` / `haloAlpha` /
+`haloWidth` (a wider dark stroke under the ring so it reads on light backgrounds too; 0 disables),
+`blendMode`, `maxActive` (spawning past it recycles the oldest ripple, never the newest tap). The
+defaults are oriented on Trail Arrow's `ring_wave` burst (a ring growing ~2.6× with an ease-out
+while its alpha eases in to 0 over 340 ms) stretched into a short train of staggered rings.
+
+Rings are pooled `Graphics` (never more than `maxActive × rings`, nothing allocated per frame); a
+live ring is redrawn on every tween update. There is no ticker, timer or requestAnimationFrame
+inside: the host's `core.update(frameMs)` is the only clock.
+
+**What stays in the host** (deliberately not in Core): deciding which pointer-up is "a tap on empty
+space". The showcase's rule — the press landed on a free surface (the stage or the map's empty
+ribbon, never a button / badge / window / toolbar), no window is blocking, and the pointer did not
+travel more than the tap threshold — lives in `examples/pixi-showcase/main.ts`. A game with
+draggable pieces adds its own "nothing is being dragged" condition there; a game whose world is
+offset or scaled just parents the effect accordingly and calls `spawnGlobal`.
+
 ### Theme
 
 `resolveTheme(overrides)` merges one level deep over `DEFAULT_READY_UI_THEME`: font family,
@@ -203,8 +245,11 @@ Opens **GAME CORE UI SHOWCASE**: the production Ready UI as a game scene — HUD
 stars / settings), a 36-level map (stars 0..3, hard pills, current, locked), the donor-sized
 PLAY button, the starter-pack and no-ads offer icons — and, separated at the very bottom, a
 flat DEMO TOOLBAR that opens each window directly (RESULT · SHOP · LIVES · SETTINGS · NO ADS ·
-OFFER). A win on the current level unlocks the next one and scrolls to it. Demo data only
-(`examples/pixi-showcase/demoData.ts`). `window.__showcase` exposes the views and runtimes.
+OFFER) and cycles the click-ripple presets (RIPPLE: soft default · ocean · the donor's additive
+burst · off). A tap on free space (the stage or the map's empty ribbon) spawns the ripple; taps
+the UI consumes and map scrolls never do. A win on the current level unlocks the next one and
+scrolls to it. Demo data only (`examples/pixi-showcase/demoData.ts`). `window.__showcase` exposes
+the views, the ripple effect and the runtimes.
 
 Visual checks (the sandboxed in-app browser has no WebGL; use the installed Google Chrome):
 
@@ -212,9 +257,12 @@ Visual checks (the sandboxed in-app browser has no WebGL; use the installed Goog
 SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:shots   # Playwright, channel 'chrome'
 ```
 
-writes `showcase-shots/*.png` for 390 × 844 (map, scrolled, locked, hard pill, every window),
-320 × 568 (map + windows) and 1280 × 800, drives a real drag, a real CONTINUE tap, a real SOUND
-toggle and `core.cancelAll()`, and fails on any unexpected console error.
+writes `showcase-shots/*.png` for 390 × 844 (map, click ripple on the dark map and on a light
+canvas, scrolled, locked, hard pill, every window), 320 × 568 (map + windows) and 1280 × 800 (map,
+OCEAN ripple preset), drives a real tap on free space (rings spawn; a toolbar pill, an open window
+and a level badge must not), a real drag (no ripple), a real CONTINUE tap, a real SOUND toggle and
+`core.cancelAll()`, and fails on any unexpected console error. Ripple frames are captured with the
+host clock frozen and stepped by hand, so the shots are deterministic on SwiftShader.
 
 ## Tests
 
@@ -222,7 +270,10 @@ toggle and `core.cancelAll()`, and fails on any unexpected console error.
 `DOMAdapter`, `Texture.WHITE` for art): public entry and package wiring, level data mapping and
 states, selection vs swipe, scroll/focus positioning, resize, `setProgress`, windowed builds,
 destroy/listener cleanup, `cancelAll` never firing business callbacks, HUD counters/taps/layout,
-window lifecycles and close continuations.
+window lifecycles and close continuations, and the click ripple (rings per spawn, staggered
+lifecycle through the host clock, pool reuse, `maxActive` recycling, global → local coordinates
+and size scale, `configure` validation, pause/resume/cancel through the motion scope, destroy with
+no callbacks afterwards).
 
 ## Assets (provenance)
 

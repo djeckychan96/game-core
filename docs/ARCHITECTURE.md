@@ -120,4 +120,14 @@ Motion is delegated to `MotionRuntime` through `UiMotionDriver` (`tween` + `canc
 
 `game-core/pixi` (source `src/pixi/`, bundle `dist/pixi/`, art `assets/pixi-ui/`) contains `LevelMapView`, `HudView`, `UiButton`, `ModalWindow` with `ResultWindowView` / `LivesWindowView` / `ShopWindowView` / `SettingsWindowView` / `NoAdsWindowView` / `StarterPackWindowView`, `loadReadyUiAssets` and a minimal theme; geometry, assets and entrances are taken 1:1 from the Trail Arrow prefabs. The views are PixiJS containers laid out in viewport px over a contain-fit design box; every tap is a `ButtonController`, every modal a `WindowController`, every animation a `MotionRuntime` tween or sequence in a view-owned scope, so `core.cancelAll()` settles the whole interface and no business callback (level selection, NEXT, BUY) can fire from a cancelled press or a force-hidden window — they run only as settled taps and `close()` continuations. The standalone showcase (`npm run showcase`) proves the layer without any game attached.
 
+The same entry also ships Game Core's reusable **Pixi FX** (`src/pixi/fx/`), the first being
+`ClickRippleEffect`: expanding rings from a tap on empty space. An FX is a Pixi container that only
+draws — pooled `Graphics`, nothing allocated per frame — and animates through exactly one
+`MotionRuntime` tween per spawn in its own scope (`fx:click-ripple:<id>`), so the host's
+`core.update` is its only clock and `pauseScope` / `cancelScope` / `cancelAll` apply to it like to
+any motion. Input policy stays in the host: which pointer-up counts as a tap on empty space, what
+"empty" means in that game, whether something is being dragged. The FX exposes `spawn(x, y)` in its
+local coordinates and `spawnGlobal(x, y)` for screen points, so a stage offset or a scaled world is
+absorbed by parenting, never by game knowledge inside the effect.
+
 `UiRuntime.update()` is a no-op; it participates in `CoreRuntime`'s `cancelScope`/`cancelAll`/`dispose` fan-out so that `core.cancelAll()` leaves the whole Game Core consistent: every button idle, every window hidden with its view cleanup fired once, `activeWindow` null, blocking false, no motion left. Whichever module reaches a controller first — `ui` or `motion` — the outcome is the same settle, so registration order does not matter. Every host callback is error-isolated through `onUiError`, mirroring `onMotionError`/`onEffectError`. See `docs/superpowers/specs/2026-09-15-ui-runtime-v0.3-design.md` for the full design.
