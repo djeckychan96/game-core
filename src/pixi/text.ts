@@ -1,0 +1,84 @@
+import { Container, Text, type TextStyleOptions } from 'pixi.js';
+import type { ReadyUiTheme } from './theme';
+
+export interface LabelOptions {
+  /** Font size in the container's local units. */
+  fontSize: number;
+  fill?: number;
+  /** false = no stroke; a number overrides the theme's stroke ratio in local units. */
+  stroke?: boolean | number;
+  align?: 'left' | 'center' | 'right';
+  anchorX?: number;
+  anchorY?: number;
+  wordWrap?: number;
+}
+
+/** A themed outlined label: white Fira Sans Black with the donor's dark rounded stroke. */
+export function createLabel(theme: ReadyUiTheme, text: string, options: LabelOptions): Text {
+  const style: TextStyleOptions = {
+    fontFamily: theme.text.fontFamily,
+    fontSize: options.fontSize,
+    fill: options.fill ?? theme.text.fill,
+    align: options.align ?? 'center'
+  };
+  if (options.stroke !== false) {
+    const width = typeof options.stroke === 'number' ? options.stroke : Math.max(1, Math.round(options.fontSize * theme.text.strokeRatio));
+    style.stroke = { color: theme.text.strokeColor, width, join: 'round' };
+  }
+  if (options.wordWrap !== undefined) {
+    style.wordWrap = true;
+    style.wordWrapWidth = options.wordWrap;
+  }
+  const label = new Text({ text, style });
+  label.anchor.set(options.anchorX ?? 0.5, options.anchorY ?? 0.5);
+  return label;
+}
+
+/** Shrinks the label's scale so its width fits `maxWidth` (never grows). */
+export function fitLabelWidth(label: Text, maxWidth: number): void {
+  label.scale.set(1);
+  const width = label.width;
+  if (width > maxWidth && width > 0) label.scale.set(maxWidth / width);
+}
+
+/**
+ * Canvas text is rasterised once at `fontSize × resolution`; a label drawn under a scaled
+ * container is crisp only when that resolution matches the final on-screen density. Views call
+ * this after resize with `containerScale × devicePixelRatio`, clamped to a sane range.
+ */
+export function applyTextResolution(root: Container, resolution: number): void {
+  const res = Math.min(4, Math.max(0.5, resolution));
+  const visit = (node: Container): void => {
+    if (node instanceof Text) {
+      if (Math.abs((node.resolution ?? 0) - res) > res * 0.12) node.resolution = res;
+      return;
+    }
+    for (const child of node.children) visit(child);
+  };
+  visit(root);
+}
+
+/** Formats a counter the way the donor's `pretty()` did: thousands separated by a thin space. */
+export function formatAmount(value: number): string {
+  const rounded = Math.round(value);
+  const sign = rounded < 0 ? '-' : '';
+  const digits = String(Math.abs(rounded));
+  let out = '';
+  for (let i = 0; i < digits.length; i++) {
+    const fromEnd = digits.length - i;
+    out += digits[i];
+    if (fromEnd > 1 && fromEnd % 3 === 1) out += ' ';
+  }
+  return sign + out;
+}
+
+/** mm:ss or hh:mm:ss, as the donor HUD showed lives timers. */
+export function formatTimer(totalSeconds: number): string {
+  const s = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(s / 3600);
+  const minutes = Math.floor((s % 3600) / 60);
+  const seconds = s % 60;
+  const mm = String(minutes).padStart(2, '0');
+  const ss = String(seconds).padStart(2, '0');
+  return hours > 0 ? `${String(hours).padStart(2, '0')}:${mm}:${ss}` : `${mm}:${ss}`;
+}

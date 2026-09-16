@@ -14,11 +14,18 @@
     "exactOptionalPropertyTypes": true,
     "types": [
       "vitest/globals"
-    ]
+    ],
+    "paths": {
+      "game-core": ["./src/index.ts"],
+      "game-core/pixi": ["./src/pixi/index.ts"]
+    }
   },
   "include": [
     "src",
     "tests",
-    "vite.config.ts"
+    "examples",
+    "vite.config.ts",
+    "vite.pixi.config.ts",
+    "vite.showcase.config.ts"
   ]
 }
