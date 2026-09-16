@@ -34,6 +34,12 @@ async function run() {
     page.on('pageerror', (error) => errors.push(`[${label}] pageerror ${error.message}`));
     await page.goto(url, { waitUntil: 'load' });
     await page.waitForFunction(() => Boolean(window.__showcase), null, { timeout: 30000 });
+    // The OfferRuntime demo activates the welcome offer on the first tick and pops its window once
+    // per session (donor behaviour); these shots start from the bare map, so close it first.
+    // scripts/offer-demo-check.mjs covers the chain itself.
+    await page.waitForFunction(() => window.__showcase.offers.getStats().ticks >= 1, null, { timeout: WAIT_MS });
+    await page.evaluate(() => window.__showcase.ui.activeWindow?.close('programmatic'));
+    await page.waitForFunction(() => window.__showcase.ui.activeWindow === null, null, { timeout: WAIT_MS });
     // SwiftShader frames are slow: settle on rendered frames, not wall-clock
     await page.waitForTimeout(600);
     await actions(page, async (name) => {

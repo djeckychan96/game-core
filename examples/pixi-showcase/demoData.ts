@@ -14,6 +14,8 @@ export interface DemoState {
   refillSeconds: number;
   currentLevel: number;
   levels: LevelMapLevel[];
+  /** The welcome pack was bought (the OfferRuntime demo's `welcomeOwned`). */
+  starterPackOwned: boolean;
 }
 
 export function createDemoState(): DemoState {
@@ -29,7 +31,8 @@ export function createDemoState(): DemoState {
     lives: 3,
     refillSeconds: 17 * 60 + 42,
     currentLevel: DEMO_CURRENT_LEVEL,
-    levels
+    levels,
+    starterPackOwned: false
   };
 }
 
