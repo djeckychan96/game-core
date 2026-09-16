@@ -26,15 +26,22 @@ export interface StarterPackWindowViewOptions extends Omit<ModalWindowOptions, '
   onBuy: (params: StarterPackWindowParams) => void;
 }
 
+/** Donor: a header wider than this shrinks (long tier names — LEGENDARY, ROYAL — overflowed the panel). */
+const HEADER_MAX_WIDTH = 430;
+
 /**
  * Starter Pack offer — the donor's OfferStarterPack prefab: 975 × 1355 warm-gradient panel,
  * the chest hero (620 × 620 at (−6, −310)), `STARTER PACK` rotated −14° at the top-left, the
  * rewards row at y 158 (coin pile + amount, ∞-heart + duration), the red booster bar at y 353
- * with the bulb, the green price button at y 542, × at (410, −587).
- * Ready for a future OfferRuntime: everything shown is data, BUY is a close() continuation.
+ * with the bulb, the green price button at y 542, × at (410, −587), and the offer countdown
+ * under the rotated header (donor `layoutTimer`, decision of 15.09).
+ * Data only: the host (an OfferRuntime adapter) feeds title / price / rewards through `show`,
+ * the countdown through `setTimer`, the purchase-in-flight state through `setBuyEnabled`;
+ * BUY is a close() continuation and no LiveOps logic lives here.
  */
 export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> {
   private readonly title: Text;
+  private readonly timerText: Text;
   private readonly coinsText: Text;
   private readonly livesText: Text;
   private readonly livesIcon: Sprite;
@@ -59,6 +66,10 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
     this.title.position.set(-304, -577);
     this.title.rotation = (-14 * Math.PI) / 180;
     this.panel.addChild(this.title);
+    // donor: Firasans Black 60, stroke 8, same tilt as the header; hidden until the host sets a text
+    this.timerText = createLabel(this.theme, '', { fontSize: 60, stroke: 8 });
+    this.timerText.visible = false;
+    this.panel.addChild(this.timerText);
 
     const items = new Container();
     items.y = 158;
@@ -92,6 +103,8 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
   protected applyParams(params: StarterPackWindowParams): void {
     this.params = params;
     this.title.text = params.title ?? 'STARTER\nPACK';
+    fitLabelWidth(this.title, HEADER_MAX_WIDTH);
+    this.layoutTimer();
     this.coinsText.text = formatAmount(params.rewards.coins);
     const lives = params.rewards.infiniteLives;
     this.livesIcon.visible = Boolean(lives);
@@ -107,8 +120,36 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
     if (this.buyButton.labelText) fitLabelWidth(this.buyButton.labelText, 520);
   }
 
+  /** The offer countdown under the header (e.g. `11:59:58`). An empty string hides it. */
+  setTimer(text: string): void {
+    this.timerText.text = text;
+    this.timerText.visible = text.length > 0;
+    this.layoutTimer();
+  }
+
+  /** Whether BUY accepts taps — false while the host's purchase is in flight (donor `setPurchaseState`: alpha 0.85). */
+  setBuyEnabled(enabled: boolean): void {
+    this.buyButton.setEnabled(enabled);
+    this.buyButton.alpha = enabled ? 1 : 0.85;
+  }
+
+  get buyEnabled(): boolean {
+    return this.buyButton.enabled;
+  }
+
   protected override closeButtonPosition(): { x: number; y: number } {
     return { x: 410, y: -587 };
+  }
+
+  /**
+   * Donor `layoutTimer`: the countdown sits under the header along the header's own rotated
+   * "down" axis, half the header height (which follows a shrunk title) plus 40 units away.
+   */
+  private layoutTimer(): void {
+    const rotation = this.title.rotation;
+    const d = this.title.height / 2 + 40;
+    this.timerText.rotation = rotation;
+    this.timerText.position.set(this.title.x - d * Math.sin(rotation), this.title.y + d * Math.cos(rotation));
   }
 
   private finish(): void {

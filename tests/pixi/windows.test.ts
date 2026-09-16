@@ -311,4 +311,58 @@ describe('NoAdsWindowView / StarterPackWindowView', () => {
     expect(kit.ui.getStats().buttons).toBe(0);
     expect(kit.uiErrors).toEqual([]);
   });
+
+  it('Starter Pack setTimer shows the countdown under the rotated header (donor layoutTimer) and hides it when empty', () => {
+    const kit = createKit();
+    const view = new StarterPackWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onBuy: () => {} });
+    const timer = field<Text>(view, 'timerText');
+    const title = field<Text>(view, 'title');
+    expect(timer.visible).toBe(false);
+    view.show({ price: '$0.99', rewards: { coins: 3500 } });
+    expect(timer.visible).toBe(false);
+    view.setTimer('11:59:58');
+    expect(timer.visible).toBe(true);
+    expect(timer.text).toBe('11:59:58');
+    expect(timer.rotation).toBeCloseTo(title.rotation, 6);
+    const d = title.height / 2 + 40;
+    expect(timer.x).toBeCloseTo(title.x - d * Math.sin(title.rotation), 4);
+    expect(timer.y).toBeCloseTo(title.y + d * Math.cos(title.rotation), 4);
+    expect(timer.y).toBeGreaterThan(title.y); // below the header, along its tilt
+    view.setTimer('');
+    expect(timer.visible).toBe(false);
+    // a long tier title shrinks to the donor's 430-unit cap and the timer follows the smaller header
+    view.close('programmatic');
+    advance(kit.core, 200);
+    view.show({ price: '$39.99', title: 'LEGENDARY\nPACK', rewards: { coins: 130000, infiniteLives: '7d', boosters: 'x30' } });
+    expect(title.width).toBeLessThanOrEqual(430 + 1e-6);
+    view.setTimer('23:59:59');
+    expect(timer.y).toBeCloseTo(title.y + (title.height / 2 + 40) * Math.cos(title.rotation), 4);
+    view.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+
+  it('Starter Pack setBuyEnabled(false) blocks BUY taps (purchase in flight, alpha 0.85) until re-enabled', () => {
+    const kit = createKit();
+    const bought: string[] = [];
+    const view = new StarterPackWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onBuy: (p) => bought.push(p.price) });
+    view.show({ price: '$2.99', rewards: { coins: 5000, boosters: 'x3' } });
+    advance(kit.core, 400);
+    const buy = field<UiButton>(view, 'buyButton');
+    expect(view.buyEnabled).toBe(true);
+    view.setBuyEnabled(false);
+    expect(view.buyEnabled).toBe(false);
+    expect(buy.alpha).toBe(0.85);
+    tap(buy, kit);
+    advance(kit.core, 200);
+    expect(bought).toEqual([]);
+    expect(view.state).toBe('shown');
+    view.setBuyEnabled(true);
+    expect(buy.alpha).toBe(1);
+    tap(buy, kit);
+    advance(kit.core, 200);
+    expect(bought).toEqual(['$2.99']);
+    expect(view.state).toBe('hidden');
+    view.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
 });
