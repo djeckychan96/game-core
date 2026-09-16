@@ -1,14 +1,21 @@
 // GAME CORE UI SHOWCASE — a standalone page that shows the Pixi Ready UI kit shipped inside
 // game-core, with no game attached. The host (this file) owns the Pixi Application and ticker;
 // the kit is driven only through `core.update(deltaMS)`.
-import { Application, Container, Sprite, Text } from 'pixi.js';
+//
+// Production Ready UI on screen: HUD (lives / coins / stars / settings), the level map, the PLAY
+// button, the two offer icons, and every window. The thin strip at the very bottom is a DEMO
+// TOOLBAR (opens each window directly) and is deliberately styled unlike the game UI.
+import { Application, Container, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { BUILD_INFO, CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import {
   HudView,
   LevelMapView,
   LivesWindowView,
+  NoAdsWindowView,
   ResultWindowView,
+  SettingsWindowView,
   ShopWindowView,
+  StarterPackWindowView,
   UiButton,
   createLabel,
   formatTimer,
@@ -30,13 +37,13 @@ function readSafeInsets(): SafeInsets {
   if (!probe) return { top: 0, right: 0, bottom: 0, left: 0 };
   const style = getComputedStyle(probe);
   const px = (value: string) => Math.max(0, parseFloat(value) || 0);
-  return {
-    top: px(style.paddingTop),
-    right: px(style.paddingRight),
-    bottom: px(style.paddingBottom),
-    left: px(style.paddingLeft)
-  };
+  return { top: px(style.paddingTop), right: px(style.paddingRight), bottom: px(style.paddingBottom), left: px(style.paddingLeft) };
 }
+
+/** Donor main screen: PLAY is 522 × 228 design units at 1.424 × the contain scale on a phone. */
+const PLAY_SCALE = 1.424;
+const PLAY_BOTTOM_RATIO = 98 / 844;
+const TOOLBAR_H = 30;
 
 async function boot(): Promise<void> {
   const theme = resolveTheme();
@@ -69,42 +76,34 @@ async function boot(): Promise<void> {
   document.getElementById('boot')?.remove();
 
   const state = createDemoState();
+  const settings = { sound: true, music: true };
+  const totalStars = () => state.levels.reduce((sum, level) => sum + (level.stars ?? 0), 0);
   const screen = new Container();
   const modals = new Container();
   app.stage.addChild(screen, modals);
 
   // --- windows (created once, shown on demand) ---
   const resultWindow = new ResultWindowView({
-    ui,
-    motion,
-    textures,
+    ui, motion, textures,
     onNext: (params) => {
       // demo progression: a win on the current level unlocks the next one
       const level = state.levels[params.level - 1];
-      if (level) level.stars = Math.max(level.stars ?? 0, params.stars);
-      if (params.level === state.currentLevel && state.currentLevel < state.levels.length) {
-        state.currentLevel += 1;
-      }
+      if (level) level.stars = Math.max(level.stars ?? 0, params.stars ?? 0);
+      if (params.level === state.currentLevel && state.currentLevel < state.levels.length) state.currentLevel += 1;
       state.coins += params.rewardCoins;
       hud.setCoins(state.coins);
+      hud.setStars(totalStars());
       map.setProgress({ levels: state.levels, currentLevel: state.currentLevel });
       map.scrollToLevel(state.currentLevel);
     },
     onRetry: (params) => openResult(params.level)
   });
   const shopWindow = new ShopWindowView({
-    ui,
-    motion,
-    textures,
-    onBuy: (item) => {
-      state.coins += item.amount;
-      hud.setCoins(state.coins);
-    }
+    ui, motion, textures,
+    onBuy: (item) => { state.coins += item.amount; hud.setCoins(state.coins); }
   });
   const livesWindow = new LivesWindowView({
-    ui,
-    motion,
-    textures,
+    ui, motion, textures,
     onRefill: (params) => {
       if (state.coins < params.refillPrice) return openShop();
       state.coins -= params.refillPrice;
@@ -112,12 +111,18 @@ async function boot(): Promise<void> {
       hud.setCoins(state.coins);
       hud.setLives(state.lives, formatTimer(state.refillSeconds));
     },
-    onWatchAd: () => {
-      state.lives = Math.min(DEMO_MAX_LIVES, state.lives + 1);
-      hud.setLives(state.lives, formatTimer(state.refillSeconds));
-    }
+    onWatchAd: () => { state.lives = Math.min(DEMO_MAX_LIVES, state.lives + 1); hud.setLives(state.lives, formatTimer(state.refillSeconds)); }
   });
-  modals.addChild(resultWindow, shopWindow, livesWindow);
+  const settingsWindow = new SettingsWindowView({
+    ui, motion, textures,
+    onToggle: (setting, enabled) => { if (setting === 'sound' || setting === 'music') settings[setting] = enabled; }
+  });
+  const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
+  const starterWindow = new StarterPackWindowView({
+    ui, motion, textures,
+    onBuy: (params) => { state.coins += params.rewards.coins; hud.setCoins(state.coins); toast('STARTER PACK — purchase is the host\'s job'); }
+  });
+  modals.addChild(resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow);
 
   const openResult = (level: number) => {
     const won = state.levels[level - 1];
@@ -125,90 +130,76 @@ async function boot(): Promise<void> {
     resultWindow.show({ level, stars, rewardCoins: 40 + (level % 5) * 15, retry: (won?.stars ?? 0) > 0 || level < state.currentLevel });
   };
   const openShop = () => shopWindow.show({ items: DEMO_SHOP_ITEMS });
-  const openLives = () =>
-    livesWindow.show({
-      lives: state.lives,
-      maxLives: DEMO_MAX_LIVES,
-      timerText: formatTimer(state.refillSeconds),
-      refillPrice: DEMO_REFILL_PRICE
-    });
+  const openLives = () => livesWindow.show({ lives: state.lives, maxLives: DEMO_MAX_LIVES, timerText: formatTimer(state.refillSeconds), refillPrice: DEMO_REFILL_PRICE });
+  const openSettings = () => settingsWindow.show({ ...settings, version: `VERSION ${BUILD_INFO.version}` });
+  const openNoAds = () => noAdsWindow.show({ price: '$1.99' });
+  const openStarter = () => starterWindow.show({ price: '$0.99', rewards: { coins: 3500, infiniteLives: '1h', boosters: 'x3' } });
 
   // --- HUD ---
   const hud = new HudView({
-    ui,
-    motion,
-    textures,
+    ui, motion, textures,
     coins: state.coins,
     lives: state.lives,
     maxLives: DEMO_MAX_LIVES,
+    stars: totalStars(),
     onCoinsTap: openShop,
     onLivesTap: openLives,
-    onSettingsTap: () => toast('SETTINGS — not part of this showcase')
+    onSettingsTap: openSettings
   });
   hud.setLives(state.lives, formatTimer(state.refillSeconds));
 
   // --- Level map ---
   const map = new LevelMapView({
-    ui,
-    motion,
-    textures,
+    ui, motion, textures,
     levels: state.levels,
     currentLevel: state.currentLevel,
-    onSelectLevel: (level) => {
-      if (state.lives <= 0) return openLives();
-      openResult(level);
-    },
+    onSelectLevel: (level) => { if (state.lives <= 0) return openLives(); openResult(level); },
     onLockedTap: (level) => toast(`LEVEL ${level} IS LOCKED`),
-    onFocusChange: ({ selectedLevel }) => playButton.setLabel(`LEVEL ${selectedLevel}`)
+    onFocusChange: ({ selectedLevel }) => playSub.text = `Level ${selectedLevel}`
   });
 
-  // --- bottom bar: PLAY + demo window buttons ---
-  const bottomBar = new Container();
-  const bottomShade = new Sprite(textures.topShadow);
-  bottomShade.anchor.set(0.5, 1);
-  bottomShade.scale.y = -1;
-  bottomShade.eventMode = 'none';
-  bottomShade.tint = 0x0a0d18;
-  bottomShade.alpha = 0.85;
-  bottomBar.addChild(bottomShade);
-
+  // --- PLAY (donor: big green button under the map, "PLAY" + "Level N") ---
   const playButton = new UiButton({
-    ui,
-    id: 'showcase:play',
-    theme,
-    texture: textures.btnPlay,
-    width: 522,
-    height: 228,
-    label: `LEVEL ${map.selectedLevel}`,
-    fontSize: 78,
-    labelOffsetY: -8,
-    onTap: () => {
-      if (state.lives <= 0) return openLives();
-      openResult(map.selectedLevel);
-    }
+    ui, id: 'showcase:play', theme, texture: textures.btnPlay, width: 522, height: 228,
+    label: 'PLAY', fontSize: 110, labelOffsetY: -34, pressScale: 0.9,
+    onTap: () => { if (state.lives <= 0) return openLives(); openResult(map.selectedLevel); }
   });
-  const playCaption = createLabel(theme, 'PLAY', { fontSize: 44, stroke: 5 });
-  playCaption.y = 62;
-  playButton.addChild(playCaption);
+  if (playButton.labelText) playButton.labelText.style.stroke = { color: 0x000000, width: 10, join: 'round' };
+  const playSub = createLabel(theme, `Level ${map.selectedLevel}`, { fontSize: 44, stroke: 5, fill: theme.colors.textMuted });
+  playSub.y = 40;
+  playButton.addChild(playSub);
 
-  const demoButtons = [
-    new UiButton({ ui, id: 'showcase:result', theme, texture: textures.btnGreen, width: 439, height: 207, label: 'RESULT', fontSize: 64, onTap: () => openResult(map.selectedLevel) }),
-    new UiButton({ ui, id: 'showcase:shop', theme, texture: textures.btnYellow, width: 439, height: 207, label: 'SHOP', fontSize: 64, onTap: openShop }),
-    new UiButton({ ui, id: 'showcase:lives', theme, texture: textures.btnGreenShort, width: 439, height: 207, label: 'LIVES', fontSize: 64, onTap: openLives })
+  // --- offer icons on the map (donor: starter pack left, no ads right, at a quarter height) ---
+  const starterIcon = new UiButton({ ui, id: 'showcase:offer-starter', theme, texture: textures.starterIcon, width: 100, height: 100, pressScale: 0.9, onTap: openStarter });
+  const noAdsIcon = new UiButton({ ui, id: 'showcase:offer-noads', theme, texture: textures.noAdsIcon, width: 100, height: 100, pressScale: 0.9, onTap: openNoAds });
+
+  // --- DEMO TOOLBAR (not part of the Ready UI): flat dark strip with tiny pills ---
+  const toolbar = new Container();
+  const toolbarBg = new Graphics();
+  toolbar.addChild(toolbarBg);
+  const toolbarItems: Array<[string, () => void]> = [
+    ['RESULT', () => openResult(map.selectedLevel)], ['SHOP', openShop], ['LIVES', openLives],
+    ['SETTINGS', openSettings], ['NO ADS', openNoAds], ['OFFER', openStarter]
   ];
-  bottomBar.addChild(playButton, ...demoButtons);
-  const caption = createLabel(theme, `GAME CORE · PIXI READY UI · core ${BUILD_INFO.version}`, { fontSize: 10, stroke: false, fill: theme.colors.textMuted });
-  caption.alpha = 0.55;
-  bottomBar.addChild(caption);
+  const pills = toolbarItems.map(([label, onTap], i) => {
+    const pill = new UiButton({ ui, id: `showcase:toolbar:${i}`, theme, texture: Texture.WHITE, width: 56, height: 20, label, fontSize: 9, labelOffsetY: 0, pressScale: 0.9, onTap });
+    pill.background.tint = 0x3a4160;
+    pill.background.alpha = 0.9;
+    if (pill.labelText) { pill.labelText.style.stroke = { color: 0x000000, width: 0 }; pill.labelText.style.fill = 0xdfe6ff; }
+    toolbar.addChild(pill);
+    return pill;
+  });
+  const caption = createLabel(theme, `DEMO · game-core ${BUILD_INFO.version}`, { fontSize: 8, stroke: false, fill: 0x9aa3c7 });
+  toolbar.addChild(caption);
 
-  screen.addChild(map, hud, bottomBar);
+  screen.addChild(map, hud, starterIcon, noAdsIcon, playButton, toolbar);
 
   // --- toast (a MotionRuntime-driven label, no timers) ---
   let toastLabel: Text | null = null;
   const toast = (message: string) => {
     motion.cancelScope('showcase:toast');
     toastLabel?.destroy();
-    toastLabel = createLabel(theme, message, { fontSize: 15 });
+    toastLabel = createLabel(theme, message, { fontSize: 15, stroke: 3 });
     toastLabel.position.set(app.screen.width / 2, hud.barHeight + 24);
     toastLabel.alpha = 0;
     screen.addChild(toastLabel);
@@ -225,7 +216,6 @@ async function boot(): Promise<void> {
   };
 
   // --- layout ---
-  let bottomBarHeight = 0;
   const layout = () => {
     const w = app.screen.width;
     const h = app.screen.height;
@@ -234,37 +224,42 @@ async function boot(): Promise<void> {
 
     hud.resize(w, h, { insets: { top: safe.top, left: safe.left, right: safe.right }, pixelRatio: resolution });
 
-    // bottom bar: PLAY row + demo row, sized in design units × contain scale
-    const playScale = Math.min(s * 0.9, (w - safe.left - safe.right - 40) / 522);
-    const playH = 228 * playScale;
-    const rowGap = 8;
-    const smallH = Math.max(36, Math.min(48, h * 0.056));
-    const smallW = Math.min(140, (w - safe.left - safe.right - 16 * 4) / 3);
-    const smallScale = Math.min(smallW / 439, smallH / 207);
-    const captionH = 14;
-    const bottomPad = Math.max(8, safe.bottom);
-    bottomBarHeight = bottomPad + captionH + 207 * smallScale + rowGap + playH + 8;
-    const baseY = h - bottomPad - captionH;
-    caption.position.set(w / 2, h - bottomPad - 5);
-    playButton.setIdleScale(playScale);
-    playButton.position.set(w / 2, baseY - 207 * smallScale - rowGap - playH / 2);
-    const rowW = demoButtons.length * 439 * smallScale + (demoButtons.length - 1) * 12;
-    demoButtons.forEach((button, i) => {
-      button.setIdleScale(smallScale);
-      button.position.set(w / 2 - rowW / 2 + 439 * smallScale / 2 + i * (439 * smallScale + 12), baseY - 207 * smallScale / 2);
+    // demo toolbar: inside the bottom safe area, PLAY clears it
+    const toolbarTop = h - safe.bottom - TOOLBAR_H;
+    toolbarBg.clear().rect(0, toolbarTop - 4, w, TOOLBAR_H + 4 + safe.bottom).fill({ color: 0x080a12, alpha: 0.78 });
+    const pillGap = 4;
+    const pillW = Math.min(56, (w - 16 - pillGap * (pills.length - 1)) / pills.length);
+    const pillScale = pillW / 56;
+    const rowW = pills.length * pillW + (pills.length - 1) * pillGap;
+    pills.forEach((pill, i) => {
+      pill.setIdleScale(pillScale);
+      pill.position.set(w / 2 - rowW / 2 + pillW / 2 + i * (pillW + pillGap), toolbarTop + TOOLBAR_H / 2 - 2);
     });
-    bottomShade.width = w * 1.1;
-    bottomShade.height = bottomBarHeight * 1.7;
-    bottomShade.position.set(w / 2, h);
+    caption.position.set(w / 2, toolbarTop + TOOLBAR_H - 1);
+    caption.visible = safe.bottom > 6;
 
-    map.resize(w, h, {
-      insets: { top: hud.barHeight - 10 * s, bottom: bottomBarHeight - 16, left: safe.left, right: safe.right },
-      pixelRatio: resolution
-    });
+    // PLAY: donor size and its 98/844 bottom margin, never under the toolbar
+    const playScale = Math.min(PLAY_SCALE * s, (w - 40) / 522);
+    const playH = 228 * playScale;
+    const playBottom = Math.min(h - h * PLAY_BOTTOM_RATIO, toolbarTop - 12);
+    playButton.setIdleScale(playScale);
+    playButton.position.set(w / 2, playBottom - playH / 2);
+    const playTop = playBottom - playH;
+
+    // offer icons: 16% of the short side (64..120 px), 10 px from the edges, a quarter down
+    const iconSize = Math.max(64, Math.min(120, Math.min(w, h) * 0.16));
+    starterIcon.setIdleScale(iconSize / 100);
+    noAdsIcon.setIdleScale(iconSize / 100);
+    starterIcon.position.set(safe.left + 10 + iconSize / 2, h / 4);
+    noAdsIcon.position.set(w - safe.right - 10 - iconSize / 2, h / 4);
+
+    // the map runs from under the HUD to the top of PLAY (nodes slide under the button)
+    map.resize(w, h, { insets: { top: hud.barHeight - 10 * s, bottom: h - playTop - 8 * s, left: safe.left, right: safe.right }, pixelRatio: resolution });
+
     const modalInsets = { top: safe.top, bottom: safe.bottom, left: safe.left, right: safe.right };
-    resultWindow.resize(w, h, { insets: modalInsets, pixelRatio: resolution });
-    shopWindow.resize(w, h, { insets: modalInsets, pixelRatio: resolution });
-    livesWindow.resize(w, h, { insets: modalInsets, pixelRatio: resolution });
+    for (const win of [resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow]) {
+      win.resize(w, h, { insets: modalInsets, pixelRatio: resolution });
+    }
     if (toastLabel) toastLabel.position.set(w / 2, hud.barHeight + 24);
   };
   app.renderer.on('resize', layout);
@@ -294,19 +289,10 @@ async function boot(): Promise<void> {
 
   // dev hooks for automated visual checks (Playwright)
   (window as unknown as { __showcase: unknown }).__showcase = {
-    app,
-    core,
-    ui,
-    motion,
-    map,
-    hud,
-    resultWindow,
-    shopWindow,
-    livesWindow,
-    state,
-    openResult,
-    openShop,
-    openLives,
+    app, core, ui, motion, map, hud, state,
+    resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow,
+    playButton, toolbar,
+    openResult, openShop, openLives, openSettings, openNoAds, openStarter,
     layout,
     stats: () => core.getStats()
   };

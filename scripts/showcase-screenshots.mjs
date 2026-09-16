@@ -100,6 +100,25 @@ async function run() {
     await page.evaluate(() => window.__showcase.openLives());
     await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: 5000 });
     await shot('06-lives-window');
+    await page.evaluate(() => window.__showcase.ui.activeWindow.close('programmatic'));
+    await page.waitForFunction(() => window.__showcase.ui.activeWindow === null, null, { timeout: 5000 });
+
+    for (const [name, opener] of [['08-settings-window', 'openSettings'], ['09-noads-window', 'openNoAds'], ['10-starter-window', 'openStarter']]) {
+      await page.evaluate((fn) => window.__showcase[fn](), opener);
+      await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: 5000 });
+      await shot(name);
+      await page.evaluate(() => window.__showcase.ui.activeWindow.close('programmatic'));
+      await page.waitForFunction(() => window.__showcase.ui.activeWindow === null, null, { timeout: 5000 });
+    }
+    // a real tap on the SOUND toggle: the slash appears, the window stays open
+    await page.evaluate(() => window.__showcase.openSettings());
+    await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: 5000 });
+    const soundAt = await page.evaluate(() => { const p = window.__showcase.settingsWindow.toggles.sound.button.getGlobalPosition(); return { x: p.x, y: p.y }; });
+    await page.mouse.click(soundAt.x, soundAt.y);
+    await page.waitForTimeout(250);
+    const soundOff = await page.evaluate(() => window.__showcase.settingsWindow.toggles.sound.off.visible);
+    if (!soundOff) throw new Error('sound toggle did not switch off');
+    await shot('08b-settings-sound-off');
     await page.evaluate(() => window.__showcase.core.cancelAll());
     const settled = await page.evaluate(() => ({ active: window.__showcase.ui.activeWindow, blocking: window.__showcase.ui.isBlocking(), motions: window.__showcase.motion.getStats().activeMotions }));
     console.log('after cancelAll', JSON.stringify(settled));
@@ -111,11 +130,14 @@ async function run() {
   const narrow = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 320, height: 568 }, deviceScaleFactor: 2 });
   await shoot('narrow-320', narrow, async (page, shot) => {
     await shot('01-map');
-    await page.evaluate(() => window.__showcase.openResult(window.__showcase.map.currentLevel));
-    await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: 5000 });
-    await page.waitForTimeout(900);
-    await shot('02-result');
-    await page.evaluate(() => window.__showcase.ui.activeWindow.close('programmatic'));
+    for (const [name, opener] of [['02-result', 'openResult'], ['03-shop', 'openShop'], ['04-lives', 'openLives'], ['05-settings', 'openSettings'], ['06-starter', 'openStarter']]) {
+      await page.evaluate((fn) => window.__showcase[fn](window.__showcase.map.currentLevel), opener);
+      await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: 5000 });
+      if (name === '02-result') await page.waitForTimeout(900);
+      await shot(name);
+      await page.evaluate(() => window.__showcase.ui.activeWindow.close('programmatic'));
+      await page.waitForFunction(() => window.__showcase.ui.activeWindow === null, null, { timeout: 5000 });
+    }
   });
   await narrow.close();
 
