@@ -8,6 +8,7 @@ Game Core is a reusable runtime library for shared HTML5 game systems. It is org
 - `FxRuntime` (module name `"fx"`) — effect lifecycle, pooled node acquisition and release, trajectories and easing, impact/completion/cancellation callbacks, cleanup and diagnostics.
 - `MotionRuntime` (module name `"motion"`) — numeric tween/delay/sequence scheduling over host-supplied bindings, for UI/game motion that isn't pooled FX.
 - `UiRuntime` (module name `"ui"`) — renderer-agnostic button and modal-window lifecycles, a single "UI is blocking gameplay" flag, and pure contain-fit layout arithmetic; animates through `MotionRuntime` behind a narrow driver interface.
+- `OfferRuntime` (module name `"offers"`) — the LiveOps offer chain of Trail Arrow 0.1.22 (one welcome offer, then a ladder of tiers × two variants) over an injected state store, server clock and live catalog gate; emits generic events, never does IAP, rewards or analytics itself.
 
 The host owns rendering, asset loading, DOM, canvases, application objects, and tickers, and is the only thing that ever calls `CoreRuntime.update(frameMs)`.
 
@@ -21,11 +22,12 @@ On top of that renderer-agnostic core sits one optional, renderer-specific layer
 core.registerRuntime('fx', fxRuntime);
 core.registerRuntime('motion', motionRuntime);
 core.registerRuntime('ui', uiRuntime);
+core.registerRuntime('offers', offerRuntime);
 core.update(frameMs);          // ticks every registered module
 core.cancelScope(scope);       // sums cancelled counts across modules that support it
 core.pauseScope(scope);
 core.resumeScope(scope);
-core.getStats();               // { fx: {...}, motion: {...}, ui: {...} }
+core.getStats();               // { fx: {...}, motion: {...}, ui: {...}, offers: {...} }
 ```
 
 A module's own `cancelScope`/`cancelAll`/`pauseScope`/`resumeScope`/`getStats`/`dispose` are all optional — `CoreRuntime` skips a module that doesn't implement one, rather than requiring every module to support everything. If a module throws from any of these, `CoreRuntime` catches it, reports it through the single handler registered via `onError`, and every other registered module keeps working. A throwing error handler can never itself escape into the host's own ticker.
@@ -116,9 +118,29 @@ A binding whose `get()`/`set()` throws (a stale or destroyed host object) cancel
 
 Motion is delegated to `MotionRuntime` through `UiMotionDriver` (`tween` + `cancelScope`), a strict structural subset that a `MotionRuntime` instance satisfies with no adapter. Each controller owns one tween at a time in a reserved scope (`ui:button:<id>`, `ui:window:<id>`) and arms its driver callbacks with a lifecycle generation, so stale completions and controller-initiated replacements are ignored while a cancellation delivered through the driver settles the controller.
 
+## Offer Runtime
+
+`OfferRuntime` is the production LiveOps chain of Trail Arrow 0.1.22 (`OfferChain.ts`, decision of 15.09) ported 1:1 into `src/offers/` as pure functions plus a thin `CoreRuntimeModule`: a one-time welcome offer (12 h) from `startLevel`, then a ladder of `topTier` tiers × two variants (24 h each) that climbs a tier 24 h after a purchase and descends a tier 48 h after an expiry, showing the opposite variant on every revisit. One offer is active at a time.
+
+Everything external is injected and nothing is owned:
+
+```ts
+const offers = new OfferRuntime({
+  config: { ...DEFAULT_OFFER_CHAIN_TIMING, welcome, tiers },     // productIds, titleKeys, timers, rewards (host data)
+  state,                                                          // OfferStateStore: ten numeric keys in the host's profile
+  input: { now: serverNow, level: () => profile.level, hasPrice: catalog.has, welcomeOwned: () => profile.starterPack > 0 },
+  onEvent: (e) => analytics.track(e)                              // activated / expired / purchased{moved} / blocked_no_price
+});
+core.registerRuntime('offers', offers);
+// host: on a successful receipt
+grant(offers.offerByProduct(productId)?.rewards); offers.onPurchased(productId);
+```
+
+Production invariants the module preserves: **one transition per tick** in the strict order expiry → level gate → welcome → next tier (an expiry and the following activation are always two ticks, even after a long background); the **server clock is injected** (`input.now()` in unix seconds — Trail Arrow's `LOGIN_AT + app.time`), and `update(frameMs)` only paces the once-a-second tick, never computes a deadline; the **catalog is live** (`hasPrice` is asked on every decision and the chain falls back to the other variant, then to neighbouring tiers, and reports `blocked_no_price` once per runtime when nothing is priced); **late purchase semantics** (a receipt for the offer that just expired counts as bought for 24 h while nothing else is active); the **state is non-monotonic** (ten keys whose timers move back and forth, so a cloud merge must take the whole block from one winner); **rewards are host-owned** data on `OfferDef`. `clampTimes()` repairs a save written under a future clock. See `docs/superpowers/specs/2026-09-16-offer-runtime-v0.4-design.md`.
+
 ## Pixi Ready UI
 
-`game-core/pixi` (source `src/pixi/`, bundle `dist/pixi/`, art `assets/pixi-ui/`) contains `LevelMapView`, `HudView`, `UiButton`, `ModalWindow` with `ResultWindowView` / `LivesWindowView` / `ShopWindowView` / `SettingsWindowView` / `NoAdsWindowView` / `StarterPackWindowView`, `loadReadyUiAssets` and a minimal theme; geometry, assets and entrances are taken 1:1 from the Trail Arrow prefabs. The views are PixiJS containers laid out in viewport px over a contain-fit design box; every tap is a `ButtonController`, every modal a `WindowController`, every animation a `MotionRuntime` tween or sequence in a view-owned scope, so `core.cancelAll()` settles the whole interface and no business callback (level selection, NEXT, BUY) can fire from a cancelled press or a force-hidden window — they run only as settled taps and `close()` continuations. The standalone showcase (`npm run showcase`) proves the layer without any game attached.
+`game-core/pixi` (source `src/pixi/`, bundle `dist/pixi/`, art `assets/pixi-ui/`) contains `LevelMapView`, `HudView`, `UiButton`, `ModalWindow` with `ResultWindowView` / `LivesWindowView` / `ShopWindowView` / `SettingsWindowView` / `NoAdsWindowView` / `StarterPackWindowView`, `loadReadyUiAssets` and a minimal theme; geometry, assets and entrances are taken 1:1 from the Trail Arrow prefabs. The kit never imports `OfferRuntime`: `StarterPackWindowView` only receives data (`show` params, `setTimer`, `setBuyEnabled`) from the host's offer adapter. The views are PixiJS containers laid out in viewport px over a contain-fit design box; every tap is a `ButtonController`, every modal a `WindowController`, every animation a `MotionRuntime` tween or sequence in a view-owned scope, so `core.cancelAll()` settles the whole interface and no business callback (level selection, NEXT, BUY) can fire from a cancelled press or a force-hidden window — they run only as settled taps and `close()` continuations. The standalone showcase (`npm run showcase`) proves the layer without any game attached.
 
 The same entry also ships Game Core's reusable **Pixi FX** (`src/pixi/fx/`), the first being
 `ClickRippleEffect`: Trail Arrow's production "ocean" (rings from a tap on empty space), its

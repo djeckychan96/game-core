@@ -158,9 +158,13 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   rotated −32° over the corner, description band at y 248, green price button at y 517;
   `onBuy(params)` continuation, no purchase logic inside.
 - **StarterPackWindowView** — 975 × 1355 warm panel, the chest hero, `STARTER PACK` rotated
-  −14°, rewards row (coins, ∞-lives duration), red booster bar with the bulb, price button at
-  y 542; configurable `rewards` / `title`, `onBuy(params)` continuation. Ready for a future
-  OfferRuntime: everything shown is data.
+  −14° (a longer tier title shrinks to the donor's 430-unit cap), rewards row (coins, ∞-lives
+  duration), red booster bar with the bulb, price button at y 542; configurable `rewards` /
+  `title`, `onBuy(params)` continuation. Data-only hooks for an `OfferRuntime` host adapter:
+  `setTimer(text)` draws the offer countdown under the header along its tilt (donor
+  `layoutTimer`: half the header height + 40; empty text hides it), `setBuyEnabled(enabled)`
+  blocks BUY while the host's purchase is in flight (donor `setPurchaseState`, alpha 0.85). The
+  view holds no LiveOps logic and the kit never imports `OfferRuntime`.
 
 Only one window is active per `UiRuntime` at a time (foundation rule); `ui.isBlocking()` is true
 while any of them is open.
@@ -274,6 +278,17 @@ taps the UI consumes and map scrolls never do. A win on the current level unlock
 scrolls to it. Demo data only (`examples/pixi-showcase/demoData.ts`). `window.__showcase` exposes
 the views, the ripple effect and the runtimes.
 
+The page also hosts the **OfferRuntime demo** (`examples/pixi-showcase/offerDemo.ts`): Trail
+Arrow's production ladder and a fake catalog run on a fake server clock that the Pixi ticker
+advances (no `Date`, no timers). The welcome offer activates on the first tick and pops once per
+session like the donor; the starter icon shows only while an offer is active, with the countdown
+under it; the window gets title / price / rewards / timer from the runtime; BUY runs a demo
+purchase (a MotionRuntime delay stands in for the payment sheet, then the host grants the coins
+and calls `offers.onPurchased`). The OFFER strip above the toolbar jumps the clock — `+12H` ·
+`+24H` · `+48H` · `EXPIRE` (to the active offer's end) · `NEXT` (to the next activation) ·
+`RESET` — with one explicit `tick()` per press, and its caption shows the chain state. No real
+IAP anywhere.
+
 Visual checks (the sandboxed in-app browser has no WebGL; use the installed Google Chrome):
 
 ```bash
@@ -287,13 +302,24 @@ and a level badge must not), a real drag (no ripple), a real CONTINUE tap, a rea
 `core.cancelAll()`, and fails on any unexpected console error. Ripple frames are captured with the
 host clock frozen and stepped by hand, so the shots are deterministic on SwiftShader.
 
+```bash
+SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:offers   # the OfferRuntime chain proof
+```
+
+drives the chain end to end at 390 × 844: the welcome window with its data and timer, the timer
+following a clock jump and the host ticker, a real BUY tap (BUY disabled while the demo payment
+is pending) that moves the chain into the 24 h cooldown and credits the coins, NEXT → tier 2 A,
+EXPIRE → tier 1 A → EXPIRE → tier 1 B (the variant flips), and the window closing by itself when
+its offer expires; it checks the exact event log and writes `showcase-shots/offer-*.png`.
+
 ## Tests
 
 `tests/pixi/` runs the kit headlessly in Vitest (a tiny fake canvas 2D context behind Pixi's
 `DOMAdapter`, `Texture.WHITE` for art): public entry and package wiring, level data mapping and
 states, selection vs swipe, scroll/focus positioning, resize, `setProgress`, windowed builds,
 destroy/listener cleanup, `cancelAll` never firing business callbacks, HUD counters/taps/layout,
-window lifecycles and close continuations, and the click ripple (production defaults, a frame-by-
+window lifecycles and close continuations, the starter-pack timer placement and BUY lock
+(`setTimer` / `setBuyEnabled`), and the click ripple (production defaults, a frame-by-
 frame check against the donor formula transcribed from `ArrowRenderer.updateOceanRipples`, both
 rings ending together, pool reuse, `maxActive = 8` recycling, screen-space sizing under a zoomed
 world, global → local coordinates, `configure` validation, pause/resume/cancel through the motion

@@ -31,6 +31,13 @@ if (/class\s+Application\b/.test(pixiSource) || /WebGLRenderer/.test(pixiSource)
 const coreSource = readFileSync(coreBundle, 'utf-8');
 if (/pixi\.js/.test(coreSource)) fail('root bundle references pixi.js');
 if (/LevelMapView|HudView|ResultWindowView|ClickRippleEffect/.test(coreSource)) fail('root bundle contains Pixi kit classes');
+// the offer chain lives in the root entry and stays out of the kit (the window is data-only)
+if (!/OfferRuntime/.test(coreSource)) fail('root bundle lacks OfferRuntime');
+if (/OfferRuntime|tickOffers|onOfferPurchased/.test(pixiSource)) fail('dist/pixi bundle references the offers module');
+const coreTypes = readFileSync(resolve(rootDir, pkg.types), 'utf-8');
+for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent']) {
+  if (!coreTypes.includes(name)) fail(`${pkg.types} lacks ${name}`);
+}
 
 const mod = await import(pathToFileURL(pixiBundle).href);
 const expected = [
