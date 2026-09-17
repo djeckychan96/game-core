@@ -89,6 +89,12 @@ export interface YandexPlatformOptions {
    * unauthorized one. The profile-id policy (the donor's `onSdkIdArrived` → `identity_link`) is the host's.
    */
   onPlayer?: (playerId: string | null) => void;
+  /**
+   * `scopes` of every `getPlayer` call — the boot one and the guest-mode retries alike. Default false =
+   * production (SoliPix: `getPlayer({ scopes: false })`): the player object and the cloud without the
+   * personal-data permission dialog. True only for a game that shows the player's name / avatar.
+   */
+  playerScopes?: boolean;
   onDiagnostic?: (code: YandexDiagnosticCode, detail?: unknown) => void;
   /**
    * Default true = production: `gameplay.ready()` also calls `GameplayAPI.start()` — until the first
@@ -116,6 +122,8 @@ export class YandexPlatform implements GamePlatform {
   // no `lifecycle`: Yandex production has no shortcut
 
   private readonly options: YandexPlatformOptions;
+  /** One object for the boot call and the retries, so they can never drift apart. */
+  private readonly playerRequest: { scopes: boolean };
   private readonly timers: PlatformTimers;
   private readonly now: () => number;
 
@@ -140,6 +148,7 @@ export class YandexPlatform implements GamePlatform {
 
   constructor(options: YandexPlatformOptions = {}) {
     this.options = options;
+    this.playerRequest = { scopes: options.playerScopes === true };
     this.timers = options.timers ?? defaultPlatformTimers;
     this.now = options.now ?? (() => Date.now());
 
@@ -295,7 +304,7 @@ export class YandexPlatform implements GamePlatform {
 
   private async fetchPlayer(sdk: YandexSdk): Promise<void> {
     try {
-      this.player = await withTimeout(Promise.resolve().then(() => sdk.getPlayer()), YANDEX_TIMEOUTS.player, 'player', this.timers);
+      this.player = await withTimeout(Promise.resolve().then(() => sdk.getPlayer(this.playerRequest)), YANDEX_TIMEOUTS.player, 'player', this.timers);
       this.announcePlayer();
     } catch (error) {
       this.diagnostic('guest_mode', error);
@@ -312,7 +321,7 @@ export class YandexPlatform implements GamePlatform {
       this.playerRetryActive = false;
       this.playerRetryTimer = null;
       if (this.disposed || this.player) return;
-      withTimeout(Promise.resolve().then(() => sdk.getPlayer()), YANDEX_TIMEOUTS.player, 'player_bg', this.timers).then(
+      withTimeout(Promise.resolve().then(() => sdk.getPlayer(this.playerRequest)), YANDEX_TIMEOUTS.player, 'player_bg', this.timers).then(
         (player) => {
           if (this.disposed) return;
           this.player = player;

@@ -22,6 +22,8 @@ const never = <T>(): Promise<T> => new Promise<T>(() => {});
  */
 export class FakeYandex {
   readonly calls: string[] = [];
+  /** The options object of every `getPlayer` call, boot and retries alike. */
+  readonly playerRequests: unknown[] = [];
   /** How many of the next `YaGames.init()` calls reject. */
   initFailures = 0;
   initMode: FakeMode = 'ok';
@@ -149,8 +151,9 @@ export class FakeYandex {
         this.rewarded = callbacks;
       }
     },
-    getPlayer: () => {
+    getPlayer: (options) => {
       this.calls.push('getPlayer');
+      this.playerRequests.push(options);
       if (this.playerMode === 'hang') return never();
       if (this.playerMode === 'fail') return Promise.reject(new Error('player_down'));
       return Promise.resolve(this.player);
