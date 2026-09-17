@@ -58,7 +58,7 @@ test('runtimes stay independent: offers never imports analytics, and the composi
   for (const [file, source] of sources(offersDir)) expect(/analytics/i.test(source), `${file} mentions analytics`).toBe(false);
   for (const [file, source] of sources(analyticsDir)) expect(/offers\//.test(source), `${file} imports offers`).toBe(false);
   const files = sources(compositionDir);
-  expect(files.map(([name]) => name)).toEqual(['offerAnalytics.ts', 'purchaseAnalytics.ts']);
+  expect(files.map(([name]) => name)).toEqual(['adsAnalytics.ts', 'offerAnalytics.ts', 'purchaseAds.ts', 'purchaseAnalytics.ts']);
   for (const [file, source] of files) {
     for (const [name, pattern] of forbidden) expect(pattern.test(source), `${file} references ${name}`).toBe(false);
     const imports = [...source.matchAll(/import\s+(type\s+)?[^;]*?from\s+'([^']+)'/g)];
