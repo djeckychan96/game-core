@@ -45,10 +45,18 @@ if (/YaGames|getPayments|consumePurchase|FBInstant/.test(coreSource)) fail('root
 // the ad decision layer lives in the root entry; it decides and never shows — no ad SDK call may appear in the root bundle
 if (!/AdsRuntime/.test(coreSource) || !/parseAdsTsv/.test(coreSource) || !/createAdsAnalyticsHandler/.test(coreSource)) fail('root bundle lacks AdsRuntime');
 if (/AdsRuntime|parseAdsTsv|createAdsAnalyticsHandler|createPurchaseAdsHandler/.test(pixiSource)) fail('dist/pixi bundle references the ads module');
-if (/showFullscreenAdv|showRewardedVideo|showInterstitial|loadBannerAdAsync/.test(coreSource)) fail('root bundle references an advertising SDK');
+// (`showInterstitial` is ALSO the normalized PlatformAds contract name since v0.8 — the root bundle may define it
+// (the contract check, the DEV platform) but must never CALL it: showing an ad stays the host's line)
+if (/showFullscreenAdv|showRewardedVideo|loadBannerAdAsync|hideBannerAdAsync/.test(coreSource)) fail('root bundle references an advertising SDK');
+if (/\.(showInterstitial|showRewarded|showBanner)\s*\(/.test(coreSource)) fail('root bundle calls an ad show method');
+// the platform layer lives in the root entry: the contract, the facade, the catalog and the DEV platform — never an SDK
+// global, never a storage global (the DEV platform's store is injected); the kit never touches a platform
+if (!/PlatformRuntime/.test(coreSource) || !/createDevPlatform/.test(coreSource) || !/validateGamePlatformConfig/.test(coreSource)) fail('root bundle lacks the platform layer');
+if (/PlatformRuntime|PlatformCatalog|createDevPlatform|createPlatformAnalyticsContext/.test(pixiSource)) fail('dist/pixi bundle references the platform module');
+if (/GSInstant|vkBridge|onConnectorInit|CONNECTOR_CONFIG|\blocalStorage\b/.test(coreSource)) fail('root bundle references a platform SDK global or localStorage');
 if (/eyJ[A-Za-z0-9_-]{10,}\./.test(coreSource)) fail('root bundle contains something that looks like a JWT');
 const coreTypes = readFileSync(resolve(rootDir, pkg.types), 'utf-8');
-for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler', 'PurchaseRuntime', 'PaymentsAdapter', 'GrantedPurchaseStore', 'PurchaseEvent', 'createPurchaseAnalyticsHandler', 'AdsRuntime', 'AdsConfig', 'AdsStateStore', 'AdsInput', 'AdsDenyReason', 'createAdsAnalyticsHandler', 'createPurchaseAdsHandler']) {
+for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler', 'PurchaseRuntime', 'PaymentsAdapter', 'GrantedPurchaseStore', 'PurchaseEvent', 'createPurchaseAnalyticsHandler', 'AdsRuntime', 'AdsConfig', 'AdsStateStore', 'AdsInput', 'AdsDenyReason', 'createAdsAnalyticsHandler', 'createPurchaseAdsHandler', 'PlatformRuntime', 'GamePlatform', 'PlatformAds', 'PlatformAdResult', 'PlatformPayments', 'PlatformProduct', 'PlatformCatalog', 'PlatformStorage', 'GamePlatformConfig', 'createDevPlatform', 'createPlatformAnalyticsContext']) {
   if (!coreTypes.includes(name)) fail(`${pkg.types} lacks ${name}`);
 }
 
