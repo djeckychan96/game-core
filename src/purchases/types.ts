@@ -28,11 +28,11 @@ export interface PlatformPurchaseResult extends PlatformPurchase {
 }
 
 /**
- * What `restore()` does with a purchase it has not granted yet:
- * - `after-consume` (Yandex, the default) — consume first, grant only what was consumed; a failed
- *   consume leaves the purchase for the next `restore()`. Never over-grants, even when the registry
- *   cannot persist (private mode) and the payment service is down.
- * - `before-consume` (CleverApps) — grant and mark first, then consume and ignore its failure; the
+ * What `restore()` does with a purchase it has not granted yet — the donor's two platforms differ:
+ * - `after-consume` (Yandex, the default) — consume → mark → grant: only what was consumed is marked
+ *   and granted; a failed consume leaves the purchase for the next `restore()`. Never over-grants,
+ *   even when the registry cannot persist (private mode) and the payment service is down.
+ * - `before-consume` (CleverApps) — mark → consume → grant: the consume failure is ignored; the
  *   next `restore()` finishes the consume without a second grant.
  * An adapter without `consume` has nothing to wait for — both read as `before-consume`.
  */
@@ -84,9 +84,12 @@ export type PurchaseErrorReason =
   | 'adapter_threw'
   /** The platform confirmed a payment without saying for which product. */
   | 'no_product_id'
-  /** `resolveGrant` has no rewards for a paid product (config out of sync with the platform console). */
+  /**
+   * `resolveGrant` has no rewards for a paid product (config out of sync with the platform console).
+   * Like in the donor, the purchase is already marked and consumed by then — it is reported, not retried.
+   */
   | 'no_grant'
-  /** `resolveGrant` / `grant` threw. */
+  /** `resolveGrant` / `grant` threw — same consequence as `no_grant`. */
   | 'grant_threw'
   /** `adapter.restore()` rejected or threw. */
   | 'restore_failed';
@@ -139,8 +142,9 @@ export interface PurchaseRuntimeOptions<TGrant = unknown> {
   resolveGrant(productId: string, context: PurchaseGrantContext): TGrant | null | undefined;
   /**
    * Gives the rewards — synchronously, in memory; the host persists the profile on the `granted`
-   * event. Called at most once per token. A throw reads as "not granted": the purchase is neither
-   * marked nor consumed and comes back with the next `restore()`.
+   * event. Called at most once per token, and LAST: the token is already marked and the consume
+   * was attempted (the donor's order), so a throw here loses the purchase — it is reported as
+   * `grant_threw`, never retried. Do not throw for a product `resolveGrant` knows.
    */
   grant(productId: string, rewards: TGrant, context: PurchaseGrantContext): void;
   onEvent?: PurchaseEventHandler<TGrant>;
@@ -161,7 +165,8 @@ export interface PurchaseResult {
   /**
    * The payment may have gone through although no grant happened here (donor: a cancelled or hung
    * `purchase()` with the money taken) — the host should run `restore()`, the donor does it in
-   * three waves 3 s / 15 s / 45 s later. False for `ok`, `duplicate`, `busy`, `disposed`.
+   * three waves 3 s / 15 s / 45 s later. False for `ok`, `duplicate`, `busy`, `disposed` and for a
+   * failed grant (`no_grant` / `grant_threw`: the token is already marked, a restore would not grant it).
    */
   restoreAdvised: boolean;
 }

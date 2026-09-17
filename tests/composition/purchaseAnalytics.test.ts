@@ -85,6 +85,30 @@ test('composition: a real PurchaseRuntime through onEvent logs started / ok / ca
   expect(host.runtime.getStats().callbackErrors).toBe(0);
 });
 
+test('revenue is never double-counted: one Hazar purchase event per payment, whether it is granted directly or by a restore', async () => {
+  // donor: trackPurchase has ONE call site (DataUpdateSystem.onShopPurchase), reached by a direct ok and by
+  // every restored receipt — and the platform hands the game only receipts that were not granted yet
+  const transport = new FakeTransport();
+  const analytics = new AnalyticsRuntime({ transport, context: makeContext(), batchSize: 50 });
+  const host = makeHost({ onEvent: createPurchaseAnalyticsHandler(analytics, price) });
+
+  host.payments.consumeFailures = 2;
+  await host.runtime.purchase('gold_1', 'shop'); // paid + granted, the receipt keeps hanging (consume failed)
+  await host.runtime.restore();                   // the waves see the SAME receipt…
+  await host.reload().restore();                  // …and so does the next launch
+  host.payments.mode = 'paid-but-null';
+  await host.runtime.purchase('starter_pack', 'offer_window'); // paid, the SDK answer is lost → no revenue yet
+  await host.runtime.restore();                   // the restore is this payment's only revenue point
+  await host.runtime.restore();
+  await analytics.flush();
+
+  const events = transport.batches.flat().map((e) => e.event);
+  const money = events.filter((e) => e.name === 'purchase').map((e) => [e.data.offer_name, e.data.order_id, e.data.status]);
+  expect(money).toEqual([['gold_1', 'tok-1', 'success'], ['starter_pack', 'tok-2', 'restore']]);
+  expect(events.filter((e) => e.data.action === 'purchase_duplicate')).toHaveLength(2); // telemetry only, no revenue
+  expect(host.wallet.coins).toBe(1000 + 500);
+});
+
 test('a broken analytics side never costs the player the purchase: the host handler still runs, the grant stands', async () => {
   const onPurchaseError = vi.fn();
   const saves: string[] = [];

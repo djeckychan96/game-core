@@ -27,7 +27,7 @@ function tokenOf(purchase: PlatformPurchase): string | undefined {
   return typeof purchase.token === 'string' && purchase.token !== '' ? purchase.token : undefined;
 }
 
-type GrantOutcome = 'granted' | 'duplicate' | PurchaseErrorReason;
+type DeliverOutcome = 'granted' | 'no_grant' | 'grant_threw';
 
 /**
  * The real-money purchase pipeline as a Game Core module: Trail Arrow's `DataUpdateSystem`
@@ -37,15 +37,19 @@ type GrantOutcome = 'granted' | 'duplicate' | PurchaseErrorReason;
  * Two rules hold on every path:
  * 1. Nothing is granted before the platform confirmed the payment (`status: 'ok'` from
  *    `purchase()`, or a purchase listed by `restore()`).
- * 2. One payment is granted once. "Was this token granted?" → `grant` → "mark it" is a single
- *    synchronous block, so a reload, a retry, a concurrent `restore()` or a repeated platform
- *    answer can never pass the check twice; the token is marked BEFORE the consume is attempted
- *    (donor: a failed consume must not pay the receipt out again on the next launch).
+ * 2. One payment is granted once. "Was this token granted?" + "mark it" is a single synchronous
+ *    block (`claim`), so a reload, a retry, a concurrent `restore()` or a repeated platform answer
+ *    can never pass the check twice.
  *
- * Direct purchase: platform ok → dedupe → grant → mark → `granted` event (the host saves) →
- * consume (a failure is only reported — the next `restore()` finishes it without a grant).
- * Restore: the same block per purchase; `PaymentsAdapter.restoreGrant` decides whether the
- * consume has to succeed first (Yandex) or follows the grant (CleverApps).
+ * The order is the donor's, on every path the grant comes LAST (in the donor the platform handler
+ * marks and consumes, and only its answer makes the game grant):
+ * - direct purchase (Yandex and CleverApps alike): platform ok → mark → consume (a failure is only
+ *   reported — the next `restore()` finishes it without a grant) → grant → `granted` event;
+ * - restore, `after-consume` (Yandex): known? → consume (a failure keeps the receipt: no mark, no
+ *   grant) → mark → grant;
+ * - restore, `before-consume` (CleverApps): known? → mark → consume (failure ignored) → grant;
+ * - a restore pass consumes every purchase first and grants after the pass, like the donor's
+ *   `check.consummations` answer.
  *
  * No timers live here: SDK timeouts belong to the adapter, the donor's restore waves (3 s / 15 s /
  * 45 s after a failed purchase, a restore at boot) to the host — `PurchaseResult.restoreAdvised`
@@ -136,24 +140,29 @@ export class PurchaseRuntime<TGrant = unknown> {
       }
 
       const context: PurchaseGrantContext = { productId: paidProductId, token, restored: false, source, requestedProductId: productId };
-      const outcome = this.grantOnce(context);
-      if (outcome === 'granted' || outcome === 'duplicate') {
-        await this.consume(answer, context);
-        return this.result(outcome === 'granted' ? 'ok' : 'duplicate', paidProductId, token);
-      }
-      // not granted → not marked, not consumed: the purchase comes back with restore(). A missing
-      // reward mapping fails the same way every time, so no in-session restore is advised for it.
-      return this.result('error', productId, token, outcome, outcome !== 'no_grant');
+      // donor (both platforms): markGranted BEFORE the consume attempt → consume, failure swallowed →
+      // the ok answer → the game grants. From the claim on, the purchase is carried through even if
+      // dispose() arrives during the consume: it is marked, nothing would ever grant it again.
+      const claimed = this.claim(context);
+      await this.consume(answer, context);
+      if (!claimed) return this.result('duplicate', paidProductId, token);
+      const outcome = this.deliver(context);
+      if (outcome === 'granted') return this.result('ok', paidProductId, token);
+      // like the donor ("paid product has no reward mapping"): the token is marked and the consume
+      // was attempted before the grant, so a restore would not bring this purchase back
+      return this.result('error', productId, token, outcome, false);
     } finally {
       this.pending = null;
     }
   }
 
   /**
-   * One pass over the purchases the platform still holds: every one goes through the same
-   * grant-once block as a direct purchase, a known token is only consumed. A second call while
-   * one runs returns `busy` (donor: two parallel restores saw the same receipt and paid it
-   * twice). Never rejects. When to call it — at boot, after a failed purchase — is the host's.
+   * One pass over the purchases the platform still holds: a known token is only consumed, an
+   * unknown one is claimed and consumed in the order of `PaymentsAdapter.restoreGrant`, and the
+   * claimed ones are granted after the pass (the donor grants from the `check.consummations`
+   * answer, i.e. after every consume). A second call while one runs returns `busy` (donor: two
+   * parallel restores saw the same receipt and paid it twice). Never rejects. When to call it —
+   * at boot, after a failed purchase — is the host's.
    */
   async restore(): Promise<RestoreResult> {
     if (this.disposed) return { status: 'disposed', found: 0, granted: [] };
@@ -170,7 +179,7 @@ export class PurchaseRuntime<TGrant = unknown> {
       }
       const purchases = Array.isArray(listed) ? (listed as readonly PlatformPurchase[]).filter((it) => !!it) : [];
       const consumeFirst = this.payments.restoreGrant !== 'before-consume' && typeof this.payments.consume === 'function';
-      const grantedNow: RestoredPurchase[] = [];
+      const claimedNow: PurchaseGrantContext[] = [];
 
       for (const purchase of purchases) {
         if (this.disposed) break;
@@ -185,17 +194,22 @@ export class PurchaseRuntime<TGrant = unknown> {
         const context: PurchaseGrantContext = { productId, token, restored: true, source: undefined, requestedProductId: undefined };
 
         if (consumeFirst && !(token !== undefined && this.isGranted(token))) {
-          // Yandex: grant only what was consumed; a failed consume keeps the purchase for the next pass.
-          // Once the consume went through, the grant below runs even if dispose() arrived meanwhile —
-          // a consumed purchase never comes back, dropping it would lose the payment.
+          // Yandex: known? → consume → mark → grant. A failed consume keeps the purchase for the next
+          // pass — not marked, not granted. The claim re-checks the registry after the await.
           if (!(await this.consume(purchase, context))) continue;
-          if (this.grantOnce(context) === 'granted') grantedNow.push({ productId, token });
+          if (this.claim(context)) claimedNow.push(context);
           continue;
         }
-        // a known token is only consumed; CleverApps: grant + mark first, then a best-effort consume
-        const outcome = this.grantOnce(context);
-        if (outcome === 'granted') grantedNow.push({ productId, token });
-        if (outcome === 'granted' || outcome === 'duplicate') await this.consume(purchase, context);
+        // CleverApps: known? → mark → consume (failure ignored) → grant; a known token is only consumed
+        const claimed = this.claim(context);
+        await this.consume(purchase, context);
+        if (claimed) claimedNow.push(context);
+      }
+      // what was claimed is marked (and consumed, or tried): it is granted even if dispose() arrived
+      // during the pass — nothing would ever grant it again
+      const grantedNow: RestoredPurchase[] = [];
+      for (const context of claimedNow) {
+        if (this.deliver(context) === 'granted') grantedNow.push({ productId: context.productId, token: context.token });
       }
       return { status: this.disposed ? 'disposed' : 'ok', found: purchases.length, granted: grantedNow };
     } finally {
@@ -240,21 +254,35 @@ export class PurchaseRuntime<TGrant = unknown> {
 
   /**
    * Stops the runtime: new calls return `disposed`, and a platform answer that arrives later is
-   * not acted on (no grant, no mark, no consume — the purchase stays on the platform).
+   * not acted on (no mark, no consume, no grant — the purchase stays on the platform). A purchase
+   * that was already claimed (marked) when dispose() arrived is still carried through to its grant.
    */
   dispose(): void {
     this.disposed = true;
     this.pending = null;
   }
 
-  /** The grant-once block. Synchronous on purpose: nothing can interleave between the check and the mark. */
-  private grantOnce(context: PurchaseGrantContext): GrantOutcome {
-    const { productId, token, restored, source, requestedProductId } = context;
-    if (token !== undefined && this.isGranted(token)) {
+  /**
+   * The idempotency claim — the donor's `markGranted`, with the "already granted?" check in the
+   * same synchronous block so nothing can interleave between the check and the mark. False = the
+   * token was granted before (`duplicate`). A purchase without a token cannot be claimed or
+   * deduplicated: it always passes (donor: granted without marking).
+   */
+  private claim(context: PurchaseGrantContext): boolean {
+    const { productId, token, restored, source } = context;
+    if (token === undefined) return true;
+    if (this.isGranted(token)) {
       this.duplicates++;
       this.emit({ type: 'duplicate', productId, token, restored, source });
-      return 'duplicate';
+      return false;
     }
+    this.markGranted(token);
+    return true;
+  }
+
+  /** The grant itself — last on every path, like the donor's game layer after the platform handler answered. */
+  private deliver(context: PurchaseGrantContext): DeliverOutcome {
+    const { productId, token, restored, source, requestedProductId } = context;
     let rewards: TGrant | null | undefined;
     try {
       rewards = this.resolveGrant(productId, context);
@@ -273,7 +301,6 @@ export class PurchaseRuntime<TGrant = unknown> {
       this.report('grant_threw', productId, token, source, restored, error);
       return 'grant_threw';
     }
-    if (token !== undefined) this.markGranted(token);
     this.granted++;
     if (restored) this.restored++;
     this.emit({ type: 'granted', productId, token, rewards, restored, source, requestedProductId });

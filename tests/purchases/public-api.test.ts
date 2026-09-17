@@ -156,8 +156,10 @@ test('a package consumer sees exactly the PurchaseRuntime public API and none of
     const rewardsOf = (productId: string): Rewards | undefined => offers.offerByProduct(productId)?.rewards;
     void [minimal, publicMethods, status, list, pending, stats, payer, handler, record, rewardsOf];
 
-    // @ts-expect-error the grant-once block is internal
-    purchases.grantOnce;
+    // @ts-expect-error the idempotency claim is internal
+    purchases.claim;
+    // @ts-expect-error the grant step is internal
+    purchases.deliver;
     // @ts-expect-error the registry is reachable only through the injected store
     purchases.grantedStore;
     // @ts-expect-error event dispatch is internal

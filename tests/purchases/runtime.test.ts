@@ -8,11 +8,11 @@ const errorsOf = (events: PurchaseEvent<DemoRewards>[]) =>
 
 // ---------------------------------------------------------------- direct purchase
 
-test('a successful purchase grants exactly once: platform ok → grant → mark → granted event → consume → ok', async () => {
+test('a successful purchase grants exactly once, in the donor order: platform ok → mark → consume → grant → granted event → ok', async () => {
   const host = makeHost();
   const consume = host.payments.consume.bind(host.payments);
   host.payments.consume = (purchase) => {
-    host.order.push(`consume:${purchase.token}`);
+    host.order.push(`consume:${purchase.token}:marked=${host.store.has(purchase.token!)}`);
     return consume(purchase);
   };
 
@@ -22,13 +22,13 @@ test('a successful purchase grants exactly once: platform ok → grant → mark 
   expect(host.wallet.coins).toBe(1000);
   expect(host.grants).toEqual(['gold_1:tok-1']);
   expect(host.contexts[0]).toEqual({ productId: 'gold_1', token: 'tok-1', restored: false, source: 'shop', requestedProductId: 'gold_1' });
-  // the donor's safety property: the token is in the registry BEFORE the consume is attempted,
-  // and check → grant → mark is one synchronous block (nothing marked while the grant runs)
+  // donor (Yandex :562-567, CleverApps :658-662): markGranted BEFORE the consume attempt, the grant
+  // only after the platform handler answered — i.e. after the consume
   expect(host.order).toEqual([
     'event:started',
-    'grant:gold_1', 'marked-during-grant:false',
-    'event:granted', 'marked-at-event:true',
-    'consume:tok-1'
+    'consume:tok-1:marked=true',
+    'grant:gold_1', 'marked-during-grant:true',
+    'event:granted', 'marked-at-event:true'
   ]);
   expect(host.events[1]).toEqual({
     type: 'granted', productId: 'gold_1', token: 'tok-1', rewards: CATALOG['gold_1'], restored: false, source: 'shop', requestedProductId: 'gold_1'
@@ -120,12 +120,13 @@ test('a token that was already granted is never granted again — the receipt is
   expect(host.runtime.getStats()).toMatchObject({ granted: 1, duplicates: 1 });
 });
 
-test('a failed consume after the grant: the purchase is ok, and no restore / reload ever grants it again', async () => {
+test('a failed consume does not stop the grant (the payment went through), and no restore / reload ever grants it again', async () => {
   const host = makeHost();
   host.payments.consumeFailures = 2;
   const result = await host.runtime.purchase('gold_1');
   expect(result.status).toBe('ok');
-  expect(host.types()).toEqual(['started', 'granted', 'consume_failed']);
+  expect(host.types()).toEqual(['started', 'consume_failed', 'granted']);
+  expect(host.wallet.coins).toBe(1000);
   expect(host.payments.held).toHaveLength(1); // the receipt hangs on the platform
 
   // same session: the restore only tries to consume (fails again)
@@ -171,15 +172,17 @@ test('the grant follows the product the PLATFORM reports, not the requested one'
   expect(host.events.at(-1)).toMatchObject({ type: 'granted', productId: 'gold_2', requestedProductId: 'gold_1' });
 });
 
-test('a foreign product nobody can grant: error no_grant, NOT marked and NOT consumed — it stays recoverable', async () => {
+test('a foreign product nobody can grant: error no_grant — like the donor it is already marked and consumed, only reported', async () => {
   const host = makeHost();
   host.payments.answerProductId = 'someone_elses_product';
   const result = await host.runtime.purchase('gold_1');
   expect(result).toMatchObject({ status: 'error', reason: 'no_grant', productId: 'gold_1', token: 'tok-1', restoreAdvised: false });
   expect(host.wallet.coins).toBe(0);
-  expect(host.store.tokens()).toEqual([]);
-  expect(host.payments.consumeCalls).toEqual([]);
-  expect(host.payments.held).toHaveLength(1);
+  // donor: the platform handler marks + consumes before the game sees the product ("[IAP] paid product has no reward mapping")
+  expect(host.store.tokens()).toEqual(['tok-1']);
+  expect(host.payments.consumeCalls).toHaveLength(1);
+  expect(host.payments.held).toEqual([]);
+  expect(errorsOf(host.events)).toEqual(['no_grant']);
   expect(host.runtime.isPayer()).toBe(true); // the money WAS taken
 });
 
@@ -192,7 +195,7 @@ test('an ok answer without a product id grants nothing', async () => {
   expect(host.store.tokens()).toEqual([]);
 });
 
-test('a throwing grant: nothing is marked or consumed, and the next restore delivers the purchase once', async () => {
+test('a throwing grant: reported as grant_threw; the token is already marked and consumed (donor order), so it is never granted later either', async () => {
   let broken = true;
   const wallet = { coins: 0 };
   const payments = new FakePayments();
@@ -210,16 +213,17 @@ test('a throwing grant: nothing is marked or consumed, and the next restore deli
   });
 
   const result = await runtime.purchase('gold_1');
-  expect(result).toMatchObject({ status: 'error', reason: 'grant_threw', token: 'tok-1', restoreAdvised: true });
-  expect(store.tokens()).toEqual([]);
-  expect(payments.consumeCalls).toEqual([]);
-  expect(payments.held).toHaveLength(1);
+  expect(result).toMatchObject({ status: 'error', reason: 'grant_threw', token: 'tok-1', restoreAdvised: false });
+  expect(store.tokens()).toEqual(['tok-1']);
+  expect(payments.consumeCalls).toHaveLength(1);
+  expect(payments.held).toEqual([]);
 
+  // the runtime keeps working, and the lost purchase can never turn into a double grant
   broken = false;
-  expect(await runtime.restore()).toEqual({ status: 'ok', found: 1, granted: [{ productId: 'gold_1', token: 'tok-1' }] });
   expect(await runtime.restore()).toEqual({ status: 'ok', found: 0, granted: [] });
-  expect(wallet.coins).toBe(1000);
-  expect(events).toEqual(['started', 'error:grant_threw', 'granted']);
+  expect((await runtime.purchase('gold_2')).status).toBe('ok');
+  expect(wallet.coins).toBe(3500);
+  expect(events).toEqual(['started', 'error:grant_threw', 'started', 'granted']);
 });
 
 test('a throwing resolveGrant is a grant failure too', async () => {
@@ -228,9 +232,10 @@ test('a throwing resolveGrant is a grant failure too', async () => {
       throw new Error('catalog exploded');
     }
   });
-  expect(await host.runtime.purchase('gold_1')).toMatchObject({ status: 'error', reason: 'grant_threw' });
-  expect(host.store.tokens()).toEqual([]);
-  expect(host.payments.consumeCalls).toEqual([]);
+  expect(await host.runtime.purchase('gold_1')).toMatchObject({ status: 'error', reason: 'grant_threw', restoreAdvised: false });
+  expect(host.wallet.coins).toBe(0);
+  expect(host.store.tokens()).toEqual(['tok-1']);
+  expect(host.payments.consumeCalls).toHaveLength(1);
 });
 
 test('a purchase without a token is granted but cannot be marked (donor: better a rare double grant than an unpaid purchase)', async () => {
@@ -304,6 +309,43 @@ test('the payment went through but purchase() answered empty: cancelled now, gra
   expect(host.grants).toEqual(['gold_1:tok-1']);
 });
 
+test('restore order is the donor\'s: Yandex known? → consume → mark → grant, CleverApps known? → mark → consume → grant; grants after the pass', async () => {
+  const run = async (policy: 'after-consume' | 'before-consume') => {
+    const order: string[] = [];
+    const inner = createGrantedPurchaseStore();
+    const payments = new FakePayments();
+    payments.restoreGrant = policy;
+    const consume = payments.consume.bind(payments);
+    payments.consume = (purchase) => {
+      order.push(`consume:${purchase.token}`);
+      return consume(purchase);
+    };
+    const runtime = new PurchaseRuntime<DemoRewards>({
+      payments,
+      granted: { has: (token) => (order.push(`has:${token}`), inner.has(token)), add: (token) => (order.push(`mark:${token}`), inner.add(token)) },
+      resolveGrant: (productId) => CATALOG[productId],
+      grant: (_productId, _rewards, context) => order.push(`grant:${context.token}`),
+      onEvent: (event) => event.type === 'granted' && order.push(`event:granted:${event.token}`)
+    });
+    payments.hold('gold_1', 'a');
+    payments.hold('gold_2', 'b');
+    expect((await runtime.restore()).granted.map((it) => it.token)).toEqual(['a', 'b']);
+    return order;
+  };
+  // Yandex check.consummations (:603-609): alreadyGranted? → consumePurchase → markGranted; the game grants from the answer
+  expect(await run('after-consume')).toEqual([
+    'has:a', 'consume:a', 'has:a', 'mark:a',
+    'has:b', 'consume:b', 'has:b', 'mark:b',
+    'grant:a', 'event:granted:a', 'grant:b', 'event:granted:b'
+  ]);
+  // CleverApps checkConsummations (:522-531): already? → markGranted → consume (failure ignored); the game grants from the answer
+  expect(await run('before-consume')).toEqual([
+    'has:a', 'mark:a', 'consume:a',
+    'has:b', 'mark:b', 'consume:b',
+    'grant:a', 'event:granted:a', 'grant:b', 'event:granted:b'
+  ]);
+});
+
 test('after-consume (Yandex, default): a purchase whose consume fails is NOT granted and waits for the next restore', async () => {
   const host = makeHost();
   host.payments.hold('gold_1', 'old-1');
@@ -331,7 +373,7 @@ test('after-consume never over-grants even when the registry cannot persist and 
   expect(host.wallet.coins).toBe(1000);
 });
 
-test('before-consume (CleverApps): granted and marked first, a failed consume is finished later without a grant', async () => {
+test('before-consume (CleverApps): marked first, the consume failure is ignored, granted; the consume is finished later without a grant', async () => {
   const host = makeHost();
   host.payments.restoreGrant = 'before-consume';
   host.payments.hold('gold_1', 'pay-1');
@@ -340,7 +382,7 @@ test('before-consume (CleverApps): granted and marked first, a failed consume is
   expect((await host.runtime.restore()).granted).toEqual([{ productId: 'gold_1', token: 'pay-1' }]);
   expect(host.wallet.coins).toBe(1000);
   expect(host.store.tokens()).toEqual(['pay-1']);
-  expect(host.types()).toEqual(['granted', 'consume_failed']);
+  expect(host.types()).toEqual(['consume_failed', 'granted']);
 
   expect(await host.reload().restore()).toEqual({ status: 'ok', found: 1, granted: [] });
   expect(host.wallet.coins).toBe(1000);
@@ -370,18 +412,17 @@ test('a restored purchase without a token is granted without marking; without a 
   expect(host.store.tokens()).toEqual([]);
 });
 
-test('a restored product without a reward mapping is reported, not consumed, and granted once the catalog knows it', async () => {
-  const catalog: Record<string, DemoRewards> = {};
-  const host = makeHost({ resolveGrant: (productId) => catalog[productId] });
-  host.payments.restoreGrant = 'before-consume';
-  host.payments.hold('new_pack', 'np-1');
-  expect((await host.runtime.restore()).granted).toEqual([]);
-  expect(errorsOf(host.events)).toEqual(['no_grant']);
-  expect(host.payments.held).toHaveLength(1);
-
-  catalog['new_pack'] = { coins: 77 }; // the fixed build
-  expect((await host.runtime.restore()).granted).toEqual([{ productId: 'new_pack', token: 'np-1' }]);
-  expect(host.wallet.coins).toBe(77);
+test('a restored product without a reward mapping is reported loudly; like the donor it is already marked and consumed', async () => {
+  for (const policy of ['after-consume', 'before-consume'] as const) {
+    const host = makeHost({ resolveGrant: () => undefined });
+    host.payments.restoreGrant = policy;
+    host.payments.hold('new_pack', 'np-1');
+    expect(await host.runtime.restore(), policy).toEqual({ status: 'ok', found: 1, granted: [] });
+    expect(errorsOf(host.events), policy).toEqual(['no_grant']);
+    expect(host.store.tokens(), policy).toEqual(['np-1']);
+    expect(host.payments.held, policy).toEqual([]);
+    expect(host.wallet.coins).toBe(0);
+  }
 });
 
 test('two parallel restores never pay one receipt twice: the second is busy (donor review 15.09 №11)', async () => {
