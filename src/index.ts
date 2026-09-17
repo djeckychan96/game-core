@@ -192,6 +192,43 @@ export type {
   AdsRuntimeOptions,
   AdsRuntimeStats
 } from './ads';
+export { PlatformRuntime, PlatformCatalog, normalizePlatformProducts, validateGamePlatformConfig, createDevPlatform, PLATFORM_CODES, PLATFORM_PROVIDERS } from './platform';
+export type {
+  PlatformRuntimeOptions,
+  PlatformCatalogSource,
+  PlatformCatalogOptions,
+  PlatformCatalogErrorPhase,
+  PlatformCatalogErrorHandler,
+  PlatformCatalogRefreshStatus,
+  PlatformCatalogRefresh,
+  PlatformProvider,
+  PlatformAnalyticsConfig,
+  PlatformConnectorConfig,
+  PlatformTargetConfig,
+  GamePlatformConfig,
+  DevKeyValueStore,
+  DevAdType,
+  DevPurchaseOutcome,
+  DevPlatformOptions,
+  DevPlatformState,
+  DevPlatformControl,
+  DevPlatform,
+  PlatformCode,
+  PlatformDeviceType,
+  PlatformIdentity,
+  PlatformEnvironment,
+  PlatformStorage,
+  PlatformGameplay,
+  PlatformAdStatus,
+  PlatformAdResult,
+  PlatformAds,
+  PlatformProduct,
+  PlatformPayments,
+  PlatformLifecycle,
+  GamePlatform,
+  PlatformCapability,
+  PlatformCapabilities
+} from './platform';
 // composition-level wiring between runtimes (types only on both sides — no runtime coupling)
 export { createOfferAnalyticsHandler, offerEventToAnalytics } from './composition/offerAnalytics';
 export type { OfferAnalyticsSink, OfferAnalyticsRecord } from './composition/offerAnalytics';
@@ -201,3 +238,5 @@ export { createAdsAnalyticsHandler, adsEventToAnalytics } from './composition/ad
 export type { AdsAnalyticsSink, AdsAnalyticsRecord } from './composition/adsAnalytics';
 export { createPurchaseAdsHandler, isConfirmedPayment } from './composition/purchaseAds';
 export type { PurchaseAdsSink } from './composition/purchaseAds';
+export { createPlatformAnalyticsContext, readPlatformAnalyticsFields } from './composition/platformAnalytics';
+export type { PlatformAnalyticsSource, PlatformAnalyticsFields, PlatformAnalyticsHostContext } from './composition/platformAnalytics';
