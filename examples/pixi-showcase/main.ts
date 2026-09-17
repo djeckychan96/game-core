@@ -7,7 +7,7 @@
 // TOOLBAR (opens each window directly) and the OFFER strip (drives the OfferRuntime demo's fake
 // clock); both are deliberately styled unlike the game UI.
 import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, UiRuntime, type OfferDef, type OfferEvent } from 'game-core';
+import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, UiRuntime, createOfferAnalyticsHandler, type OfferDef, type OfferEvent } from 'game-core';
 import {
   ClickRippleEffect,
   DEFAULT_CLICK_RIPPLE,
@@ -28,6 +28,7 @@ import {
   type ReadyUiTextures
 } from 'game-core/pixi';
 import { DEMO_MAX_LIVES, DEMO_REFILL_PRICE, DEMO_SHOP_ITEMS, createDemoState } from './demoData';
+import { DemoAnalyticsTransport, demoAnalyticsContext, eventLabel } from './analyticsDemo';
 import { DEMO_OFFER_CATALOG, DEMO_OFFER_CHAIN, REWARD_COINS, formatClock, offerLabel, offerToWindowParams } from './offerDemo';
 
 interface SafeInsets {
@@ -49,7 +50,7 @@ function readSafeInsets(): SafeInsets {
 const PLAY_SCALE = 1.424;
 const PLAY_BOTTOM_RATIO = 98 / 844;
 const TOOLBAR_H = 30;
-const OFFER_STRIP_H = 30;
+const OFFER_STRIP_H = 40; // pills + the OFFERS status line + the ANALYTICS status line
 /** The donor's pan threshold: a finger that travelled further panned/scrolled, it did not tap. */
 const EMPTY_TAP_THRESHOLD_PX = 12;
 /** The demo's fake server clock starts here (unix seconds). A game injects `serverNow()` instead. */
@@ -183,6 +184,19 @@ async function boot(): Promise<void> {
     return starterWindow.show({ price: '$0.99', rewards: { coins: 3500, infiniteLives: '1h', boosters: 'x3' } });
   };
 
+  // --- AnalyticsRuntime demo: a fake transport, paced by the same core.update as everything else ---
+  // Core-owned behavior (the offer chain) is instrumented at composition level below
+  // (`createOfferAnalyticsHandler`); the page adds its own events like a game would.
+  const analyticsTransport = new DemoAnalyticsTransport();
+  const analytics = new AnalyticsRuntime({
+    transport: analyticsTransport,
+    context: demoAnalyticsContext(() => state.currentLevel),
+    now: () => Math.floor(clock.nowMs / 1000)
+  });
+  core.registerRuntime('analytics', analytics);
+  analytics.trackSessionStart({ sessionNumber: 1 });
+  analytics.trackLoadingDone(performance.now()); // the host measures; Core has no clock
+
   // --- OfferRuntime demo: Trail Arrow's LiveOps chain on the fake clock ---
   // The runtime knows nothing about this page: state, clock, level, catalog and "welcome owned"
   // are injected; rewards are granted here (host), the window only receives data.
@@ -191,6 +205,7 @@ async function boot(): Promise<void> {
   let shownOfferId: string | null = null; // productId the starter window currently shows, null for the static demo
   let purchasing = false;                  // the demo payment sheet is open (donor `purchasing`)
   let offerAutoShown = false;              // donor: the current offer pops once per session
+  let demoOrders = 0;
   const offers = new OfferRuntime({
     config: DEMO_OFFER_CHAIN,
     state: offerState,
@@ -200,7 +215,7 @@ async function boot(): Promise<void> {
       hasPrice: (productId) => DEMO_OFFER_CATALOG[productId] !== undefined,
       welcomeOwned: () => state.starterPackOwned
     },
-    onEvent: (event) => {
+    onEvent: createOfferAnalyticsHandler(analytics, (event) => {
       offerEvents.push(event);
       if (event.type === 'activated') {
         toast(`OFFER ACTIVATED · ${offerLabel(event.offer)} · ${event.offer.productId}`);
@@ -213,7 +228,7 @@ async function boot(): Promise<void> {
         toast('OFFER BLOCKED · no catalog price');
       }
       refreshOfferUi();
-    }
+    })
   });
   core.registerRuntime('offers', offers);
 
@@ -243,6 +258,16 @@ async function boot(): Promise<void> {
         purchasing = false;
         const def = offers.offerByProduct(productId);
         if (def) grantRewards(def);
+        // the money event is the purchase flow's (a fake one here); the chain only adds offer_purchased
+        demoOrders++;
+        analytics.purchase({
+          offerName: productId,
+          revenue: Number((DEMO_OFFER_CATALOG[productId] ?? '$0').replace('$', '')),
+          currency: 'USD',
+          orderId: `demo-order-${demoOrders}`,
+          status: 'success',
+          source: 'offer_window'
+        });
         offers.onPurchased(productId); // moved or not, the event above reports it
         refreshOfferUi();
       },
@@ -355,6 +380,26 @@ async function boot(): Promise<void> {
   playSub.y = 40;
   playButton.addChild(playSub);
 
+  // --- analytics demo actions: a fake rewarded ad and an explicit flush (a host: visibilitychange) ---
+  const analyticsDemoAd = () => {
+    analytics.advertisement({ type: 'rewarded', placement: 'showcase_strip', status: 'complete' });
+    toast('ANALYTICS · advertisement queued (fake rewarded)');
+    refreshAnalyticsUi();
+  };
+  const analyticsDemoFlush = () => {
+    void analytics.flush().then(() => {
+      toast(`ANALYTICS · flushed · batch #${analyticsTransport.batches.length}: ${analyticsTransport.lastBatch.length} event(s)`);
+      refreshAnalyticsUi();
+    });
+  };
+  const refreshAnalyticsUi = () => {
+    const stats = analytics.getStats();
+    const last = analyticsTransport.lastBatch.map(eventLabel).join(', ');
+    analyticsStatus.text = `ANALYTICS · queued ${stats.queued} · sent ${stats.sent} · batches ${stats.batchesSent} · last [${last}]`;
+    analyticsStatus.scale.set(1);
+    analyticsStatus.scale.set(Math.min(1, (app.screen.width - 12) / Math.max(1, analyticsStatus.width))); // a long batch still fits a phone
+  };
+
   // --- offer icons on the map (donor: starter pack left with the chain timer under it, no ads right) ---
   const starterIcon = new UiButton({ ui, id: 'showcase:offer-starter', theme, texture: textures.starterIcon, width: 100, height: 100, pressScale: 0.9, onTap: () => openOffer() });
   const offerIconTimer = createLabel(theme, '', { fontSize: 15, stroke: 3 });
@@ -399,7 +444,8 @@ async function boot(): Promise<void> {
   offerStrip.addChild(offerStripBg);
   const offerItems: Array<[string, () => void]> = [
     ['+12H', () => jumpClock(12 * 3600, '+12H')], ['+24H', () => jumpClock(24 * 3600, '+24H')], ['+48H', () => jumpClock(48 * 3600, '+48H')],
-    ['EXPIRE', offerExpire], ['NEXT', offerNext], ['RESET', offerReset]
+    ['EXPIRE', offerExpire], ['NEXT', offerNext], ['RESET', offerReset],
+    ['AD', () => analyticsDemoAd()], ['FLUSH', () => analyticsDemoFlush()]
   ];
   const offerPills = offerItems.map(([label, onTap], i) => {
     const pill = makePill(`showcase:offer:${i}`, label, onTap, 0x5a3a2a);
@@ -408,6 +454,8 @@ async function boot(): Promise<void> {
   });
   const offerStatus = createLabel(theme, 'OFFERS', { fontSize: 8, stroke: false, fill: 0xffd9a0 });
   offerStrip.addChild(offerStatus);
+  const analyticsStatus = createLabel(theme, 'ANALYTICS', { fontSize: 8, stroke: false, fill: 0xa0e0ff });
+  offerStrip.addChild(analyticsStatus);
 
   screen.addChild(map, hud, starterIcon, offerIconTimer, noAdsIcon, playButton, offerStrip, toolbar);
 
@@ -488,7 +536,8 @@ async function boot(): Promise<void> {
     const offerTop = toolbarTop - 4 - OFFER_STRIP_H;
     offerStripBg.clear().rect(0, offerTop, w, OFFER_STRIP_H).fill({ color: 0x1a1008, alpha: 0.82 });
     placeRow(offerPills, offerTop + 11);
-    offerStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 6);
+    offerStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 16);
+    analyticsStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 6);
 
     // PLAY: donor size and its 98/844 bottom margin, never under the strips
     const playScale = Math.min(PLAY_SCALE * s, (w - 40) / 522);
@@ -539,6 +588,7 @@ async function boot(): Promise<void> {
         livesWindow.setTimer(formatTimer(state.refillSeconds));
       }
       refreshOfferUi(); // once a second, like the donor's map icon and window timers
+      refreshAnalyticsUi();
     }
   };
 
@@ -552,6 +602,8 @@ async function boot(): Promise<void> {
     offers, offerState, offerEvents,
     offerClock: { now: () => Math.floor(clock.nowMs / 1000), jump: (seconds: number) => jumpClock(seconds, `+${seconds}s`), expire: offerExpire, next: offerNext, reset: offerReset },
     offerDemo: { shownOfferId: () => shownOfferId, purchasing: () => purchasing, iconTimer: offerIconTimer, status: offerStatus },
+    analytics, analyticsTransport,
+    analyticsDemo: { ad: analyticsDemoAd, flush: analyticsDemoFlush, status: analyticsStatus },
     layout,
     stats: () => core.getStats()
   };

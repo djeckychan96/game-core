@@ -31,6 +31,7 @@
     "showcase:build": "vite build --config vite.showcase.config.ts",
     "showcase:shots": "node scripts/showcase-screenshots.mjs",
     "showcase:offers": "node scripts/offer-demo-check.mjs",
+    "showcase:analytics": "node scripts/analytics-demo-check.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
     "ocean:compare": "node scripts/ocean-compare.mjs"
   },
