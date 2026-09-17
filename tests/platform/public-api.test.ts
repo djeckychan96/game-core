@@ -18,8 +18,12 @@ function platformSources(): Array<[string, string]> {
   return files.sort().map((file) => [file.slice(platformDir.length), stripComments(readFileSync(file, 'utf-8'))]);
 }
 
+// SDK adapters and their support live in src/platform too, but belong to their OWN public entries
+// (`game-core/platform/yandex`), never to the root one — see tests/platform/yandex/public-api.test.ts
+const isAdapterEntryFile = (name: string): boolean => name.startsWith('adapters/yandex/') || name.startsWith('support/');
+
 test('src/platform is a root module: no renderer, no DOM, no storage global, no clock, no timer, no network and no platform SDK — DEV included', () => {
-  const files = platformSources();
+  const files = platformSources().filter(([name]) => !isAdapterEntryFile(name));
   expect(files.map(([name]) => name)).toEqual(['PlatformRuntime.ts', 'adapters/dev.ts', 'catalog.ts', 'config.ts', 'index.ts', 'types.ts']);
   const forbidden: Array<[string, RegExp]> = [
     ['Date', /\bDate\b/],
@@ -54,8 +58,12 @@ test('src/platform is a root module: no renderer, no DOM, no storage global, no 
       // the one way out of the module: PurchaseRuntime's PaymentsAdapter contract, as a TYPE
       const contract = Boolean(typeOnly) && /^(\.\.\/)+purchases\/types$/.test(specifier!);
       expect(inside || contract, `${file} imports ${specifier}`).toBe(true);
+      expect(/yandex|support\//.test(specifier!), `${file} reaches into an adapter entry: ${specifier}`).toBe(false);
     }
   }
+  // and the root entry itself never re-exports an SDK adapter
+  const rootIndex = stripComments(readFileSync(fileURLToPath(new URL('../../src/index.ts', import.meta.url)), 'utf-8'));
+  expect(/yandex|support\/|YaGames/i.test(rootIndex)).toBe(false);
 });
 
 test('the root entry exports the platform layer; the payments capability IS a PaymentsAdapter and the codes ARE analytics platforms', () => {
