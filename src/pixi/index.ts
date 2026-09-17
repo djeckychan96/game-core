@@ -5,6 +5,16 @@
 // `CoreRuntime`): every button is a ButtonController, every window a WindowController, every
 // animation a MotionRuntime tween. The host owns the Pixi Application and its ticker and drives
 // the kit through `core.update(frameMs)`; the kit never creates a ticker or requestAnimationFrame.
+// A game that is not drawn with Pixi gets that Application from `createReadyUiOverlay` instead —
+// still host-driven (`overlay.update(frameMs)`), still no second frame loop.
+export { ReadyUiOverlay, createReadyUiOverlay } from './ReadyUiOverlay';
+export type {
+  ReadyUiOverlayOptions,
+  ReadyUiOverlayInputMode,
+  ReadyUiOverlayInsets,
+  ReadyUiOverlayLayout,
+  ReadyUiOverlayRegion
+} from './ReadyUiOverlay';
 export { LevelMapView } from './LevelMapView';
 export type {
   LevelMapViewOptions,
