@@ -300,3 +300,16 @@ for screen points, so a stage offset or a zoomed world is absorbed by parenting,
 knowledge inside the effect.
 
 `UiRuntime.update()` is a no-op; it participates in `CoreRuntime`'s `cancelScope`/`cancelAll`/`dispose` fan-out so that `core.cancelAll()` leaves the whole Game Core consistent: every button idle, every window hidden with its view cleanup fired once, `activeWindow` null, blocking false, no motion left. Whichever module reaches a controller first — `ui` or `motion` — the outcome is the same settle, so registration order does not matter. Every host callback is error-isolated through `onUiError`, mirroring `onMotionError`/`onEffectError`. See `docs/superpowers/specs/2026-09-15-ui-runtime-v0.3-design.md` for the full design.
+
+### ReadyUiOverlay (v0.9)
+
+`createReadyUiOverlay` (`src/pixi/ReadyUiOverlay.ts`, `game-core/pixi` only) is the host infrastructure for games that
+are not drawn with Pixi — DOM gameplay, a Three.js canvas, another renderer. It is the one kit module allowed to create a
+Pixi `Application` and DOM, and it is the generic half of the Gorodki integration: a transparent never-started
+Application inside the container it is given, DPR / host-callable resize / safe area, the Ready UI asset load,
+visibility, dispose. The clock stays the host's: `overlay.update(frameMs)` runs the optional core runtime, advances
+Pixi's disarmed global tickers on the host's frame times and renders once — no second `requestAnimationFrame` exists.
+Input is native DOM hit testing on the overlay's own hit layer: `'passthrough'` (nothing), `'ui'` (only the
+interactive regions, via `clip-path`), `'modal'` (everything; automatic while `ui.isBlocking()`), so DOM gameplay keeps
+its taps and drags without synthetic events. It imports no runtime (`core` / `ui` are structural options), owns no game
+state and is not a screen manager: views, navigation, the model and every callback stay in the game.

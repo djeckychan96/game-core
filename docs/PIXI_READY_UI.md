@@ -73,6 +73,50 @@ Copy or serve `game-core/assets/pixi-ui/**` (69 webp files + `fonts/FiraSans-Bla
 ~1.3 MB); `READY_UI_ASSET_FILES` lists them so a build step can bundle them. `package.json`
 also exposes them as `game-core/assets/pixi-ui/...` for hosts that import asset URLs.
 
+## ReadyUiOverlay — the Ready UI over a game that is not Pixi (v0.9)
+
+A game drawn with DOM, Three.js or any other renderer has no Pixi Application to put the views on.
+`createReadyUiOverlay` is that host infrastructure, extracted from the Gorodki integration, where it
+was about a third of `game-core-ui.js` (62 of its 197 non-blank lines: the safe-area probe, ticker
+disarming, Application init, canvas mount, asset load, hit test, renderer resize, update / render /
+dispose). The other two thirds there — views, callbacks, layout numbers, screens — are game-specific
+and stay in a game. The overlay knows nothing about a game.
+
+```ts
+import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
+import { HudView, createReadyUiOverlay } from 'game-core/pixi';
+
+const core = new CoreRuntime(), motion = new MotionRuntime(), ui = new UiRuntime({ motion });
+core.registerRuntime('motion', motion); core.registerRuntime('ui', ui);
+
+const overlay = await createReadyUiOverlay({ container, core, ui, assets: { baseUrl: '/pixi-ui/' } });
+const hud = overlay.add(new HudView({ ui, motion, textures: overlay.textures, /* … */ }));
+
+function layout() {                                       // the host calls it: window resize, orientation change
+  const { width, height, safeArea, resolution } = overlay.resize();
+  hud.resize(width, height, { insets: safeArea, pixelRatio: resolution });
+  overlay.setInteractiveRegions([{ x: 0, y: 0, width, height: hud.barHeight }]);
+}
+function frame(frameMs) { game.update(frameMs); overlay.update(frameMs); }   // the game's existing loop
+// … overlay.dispose() on teardown
+```
+
+| Concern | Behavior |
+| --- | --- |
+| **Clock** | Host-driven, one frame source. `overlay.update(frameMs)` = `core.update` (optional) → Pixi's global `Ticker.system` / `Ticker.shared` on a clock made of the host's frame times → modal sync → one `app.render()`. The Application never starts its ticker; the global tickers are disarmed BEFORE `init` (the renderer's scheduler would auto-start a second rAF loop) and given back by `dispose()`. `driveSharedTickers: false` leaves them alone for a page that already runs another Pixi application. No `requestAnimationFrame`, timer, observer or `window` / `document` listener is created. |
+| **DOM** | One wrapper (`overlay.layer`, `data-game-core="ready-ui-overlay"`, `z-index` option, default 10) appended as the container's last child: the transparent render canvas (`pointer-events: none`, always), a transparent hit layer Pixi listens on, the safe-area probe. The container must establish a containing block; it and the gameplay DOM are never restyled. `document.body` = the full-viewport case (`position: fixed`, window size). |
+| **Input** | Native hit testing, no synthetic events: `'passthrough'` — the hit layer takes nothing, every tap / drag / click / wheel is the gameplay's; `'ui'` (default) — it exists only inside `setInteractiveRegions([...])` (rectangles or Pixi objects, re-read on `resize()`; CSS `clip-path`), the rest passes through; `'modal'` — it covers everything. While the optional `ui` runtime reports `isBlocking()` the effective mode is `'modal'` (synced in `update()`); full-screen screens (a level map) call `setInputMode('modal')` themselves. `overlay.isBlocking` is the gameplay gate, `overlay.hitTest(clientX, clientY)` serves coordinate-based games (Gorodki). A listener DELEGATED to the container still sees taps the Ready UI took, with `event.target === overlay.hitLayer`. |
+| **Resize** | Host-callable `overlay.resize(width?, height?)`: measures the container, re-reads the DPR (clamped to `maxResolution`, default 2) and the safe area (CSS `env()` clipped to the overlay's box, or the `safeArea` option), returns `{ width, height, resolution, safeArea }` for the views. No `ResizeObserver`. |
+| **Assets** | `loadReadyUiAssets(options.assets)` in parallel with the renderer init → `overlay.textures`; `textures` passes an already loaded record; `assets: false` loads nothing. A failed creation leaves no canvas and the tickers as they were. |
+| **Views** | `overlay.add(view)` / `remove(view)` on one `overlay.root` container; screens and navigation stay in the game. |
+| **Dispose** | Removes the layer, destroys the Application with the views still on `root`, returns the global tickers; repeat-safe; `update` / `resize` afterwards are no-ops. The host stops laying out its destroyed views. |
+
+Proof: `npm run showcase:overlay` — `examples/pixi-showcase/overlay.html` (the Ready UI over a draggable DOM
+card and a DOM button, the host's single rAF loop) on the installed Chrome: every animation frame is
+requested by the host loop (0 by PixiJS), a DOM click and a DOM drag pass through, the HUD region and a
+Pixi button take their taps, a window opened by a real gear tap blocks the DOM until it closes,
+`'passthrough'`, an orientation flip, a double `dispose()`.
+
 ## Components
 
 All views are `pixi.js` `Container`s laid out in **viewport CSS px** through `resize(width,
@@ -323,7 +367,10 @@ window lifecycles and close continuations, the starter-pack timer placement and 
 frame check against the donor formula transcribed from `ArrowRenderer.updateOceanRipples`, both
 rings ending together, pool reuse, `maxActive = 8` recycling, screen-space sizing under a zoomed
 world, global → local coordinates, `configure` validation, pause/resume/cancel through the motion
-scope, destroy with no callbacks afterwards).
+scope, destroy with no callbacks afterwards). `readyUiOverlay.test.ts` covers the overlay host on a
+fake DOM + fake Application with the real Pixi `Ticker` / `EventBoundary`: mount and layering, no
+animation frame ever requested, `update()` order and deltas, resize / DPR / safe area, add / remove,
+the three input modes, the `UiRuntime` modal sync, dispose, a failed load, the entry boundary.
 
 ## Assets (provenance)
 
