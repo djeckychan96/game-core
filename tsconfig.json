@@ -17,7 +17,8 @@
     ],
     "paths": {
       "game-core": ["./src/index.ts"],
-      "game-core/pixi": ["./src/pixi/index.ts"]
+      "game-core/pixi": ["./src/pixi/index.ts"],
+      "game-core/platform/yandex": ["./src/platform/adapters/yandex/index.ts"]
     }
   },
   "include": [
@@ -26,6 +27,7 @@
     "examples",
     "vite.config.ts",
     "vite.pixi.config.ts",
+    "vite.platform-yandex.config.ts",
     "vite.showcase.config.ts"
   ]
 }

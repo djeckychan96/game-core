@@ -16,6 +16,10 @@
       "types": "./dist/pixi/pixi/index.d.ts",
       "import": "./dist/pixi/game-core-pixi.es.js"
     },
+    "./platform/yandex": {
+      "types": "./dist/platform/yandex/platform/adapters/yandex/index.d.ts",
+      "import": "./dist/platform/yandex/game-core-platform-yandex.es.js"
+    },
     "./assets/*": "./assets/*"
   },
   "files": [
@@ -24,9 +28,10 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "npm run build:core && npm run build:pixi && node scripts/check-pixi-build.mjs",
+    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs",
     "build:core": "vite build",
     "build:pixi": "vite build --config vite.pixi.config.ts",
+    "build:platform-yandex": "vite build --config vite.platform-yandex.config.ts",
     "showcase": "vite --config vite.showcase.config.ts",
     "showcase:build": "vite build --config vite.showcase.config.ts",
     "showcase:shots": "node scripts/showcase-screenshots.mjs",
@@ -35,6 +40,7 @@
     "showcase:purchase": "node scripts/purchase-demo-check.mjs",
     "showcase:ads": "node scripts/ads-demo-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
+    "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
     "ocean:compare": "node scripts/ocean-compare.mjs"
   },
