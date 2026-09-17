@@ -94,7 +94,7 @@ function createFakeApp(doc: FakeDocument) {
   return app;
 }
 
-function setup(extra: Partial<ReadyUiOverlayOptions> = {}, host: 'container' | 'body' = 'container') {
+function setup(extra: Partial<ReadyUiOverlayOptions> = {}, host: 'container' | 'body' = 'container', loaded = true) {
   const doc = new FakeDocument();
   const container = host === 'body' ? doc.body : doc.createElement('div');
   container.clientWidth = 320;
@@ -105,7 +105,7 @@ function setup(extra: Partial<ReadyUiOverlayOptions> = {}, host: 'container' | '
   const kit = createKit();
   const create = () => createReadyUiOverlay({
     container: container as unknown as HTMLElement,
-    textures: kit.textures,
+    ...(loaded ? { textures: kit.textures } : {}),
     createApplication: () => app as unknown as Application,
     ...extra
   });
@@ -279,12 +279,12 @@ describe('ReadyUiOverlay', () => {
     const left = setup({ driveSharedTickers: false });
     await left.create();
     expect(Ticker.system.autoStart).toBe(true);
-    const failing = setup({ textures: undefined, assets: { baseUrl: '/nowhere/' } }); // the test adapter has no fetch
+    const failing = setup({ assets: { baseUrl: '/nowhere/' } }, 'container', false); // the test adapter has no fetch
     await expect(failing.create()).rejects.toBeDefined();
     expect(failing.container.children).toEqual([failing.gameplay]);
     expect(failing.app.destroys.length).toBe(1);
     expect(Ticker.system.autoStart).toBe(true);
-    const bare = await setup({ textures: undefined, assets: false }).create();
+    const bare = await setup({ assets: false }, 'container', false).create();
     expect(() => bare.textures).toThrow(/no textures/);
   });
 

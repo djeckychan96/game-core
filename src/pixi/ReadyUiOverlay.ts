@@ -1,6 +1,6 @@
 // ReadyUiOverlay — the reusable host infrastructure for putting the Pixi Ready UI over a game that is NOT drawn with Pixi
 // (DOM gameplay, a Three.js canvas, any other renderer). Extracted from the Gorodki integration, where this boilerplate was
-// ~130 of the ~210 lines of `game-core-ui.js`.
+// about a third of `game-core-ui.js` (62 of its 197 non-blank lines); the rest there is game-specific and stays in a game.
 //
 // It owns: one transparent Pixi Application, its canvas + hit layer inside the host's container, DPR / resolution, the
 // host-callable resize with safe-area insets, the manual clock, the Ready UI asset load, visibility, the input policy and
@@ -297,9 +297,9 @@ export class ReadyUiOverlay {
     const rect = this.layer.getBoundingClientRect();
     return {
       top: Math.max(0, px(style.paddingTop) - rect.top),
-      left: Math.max(0, px(style.paddingLeft) - rect.left),
       right: Math.max(0, px(style.paddingRight) - (this.win.innerWidth - rect.left - width)),
-      bottom: Math.max(0, px(style.paddingBottom) - (this.win.innerHeight - rect.top - height))
+      bottom: Math.max(0, px(style.paddingBottom) - (this.win.innerHeight - rect.top - height)),
+      left: Math.max(0, px(style.paddingLeft) - rect.left)
     };
   }
 
