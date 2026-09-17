@@ -34,8 +34,12 @@ if (/LevelMapView|HudView|ResultWindowView|ClickRippleEffect/.test(coreSource)) 
 // the offer chain lives in the root entry and stays out of the kit (the window is data-only)
 if (!/OfferRuntime/.test(coreSource)) fail('root bundle lacks OfferRuntime');
 if (/OfferRuntime|tickOffers|onOfferPurchased/.test(pixiSource)) fail('dist/pixi bundle references the offers module');
+// the analytics pipeline lives in the root entry too; the kit never logs anything itself
+if (!/AnalyticsRuntime/.test(coreSource) || !/createHazarAnalyticsTransport/.test(coreSource)) fail('root bundle lacks AnalyticsRuntime');
+if (/AnalyticsRuntime|createHazarAnalyticsTransport|createOfferAnalyticsHandler/.test(pixiSource)) fail('dist/pixi bundle references the analytics module');
+if (/eyJ[A-Za-z0-9_-]{10,}\./.test(coreSource)) fail('root bundle contains something that looks like a JWT');
 const coreTypes = readFileSync(resolve(rootDir, pkg.types), 'utf-8');
-for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent']) {
+for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler']) {
   if (!coreTypes.includes(name)) fail(`${pkg.types} lacks ${name}`);
 }
 

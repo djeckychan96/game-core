@@ -9,6 +9,7 @@ Game Core is a reusable runtime library for shared HTML5 game systems. It is org
 - `MotionRuntime` (module name `"motion"`) — numeric tween/delay/sequence scheduling over host-supplied bindings, for UI/game motion that isn't pooled FX.
 - `UiRuntime` (module name `"ui"`) — renderer-agnostic button and modal-window lifecycles, a single "UI is blocking gameplay" flag, and pure contain-fit layout arithmetic; animates through `MotionRuntime` behind a narrow driver interface.
 - `OfferRuntime` (module name `"offers"`) — the LiveOps offer chain of Trail Arrow 0.1.22 (one welcome offer, then a ladder of tiers × two variants) over an injected state store, server clock and live catalog gate; emits generic events, never does IAP, rewards or analytics itself.
+- `AnalyticsRuntime` (module name `"analytics"`) — the one analytics API of a game: Hazar-compatible envelopes built from an injected context, queued and sent in batches through an injected transport on the `update(frameMs)` cadence, with retry, a queue cap and an optional injected queue store.
 
 The host owns rendering, asset loading, DOM, canvases, application objects, and tickers, and is the only thing that ever calls `CoreRuntime.update(frameMs)`.
 
@@ -129,7 +130,7 @@ const offers = new OfferRuntime({
   config: { ...DEFAULT_OFFER_CHAIN_TIMING, welcome, tiers },     // productIds, titleKeys, timers, rewards (host data)
   state,                                                          // OfferStateStore: ten numeric keys in the host's profile
   input: { now: serverNow, level: () => profile.level, hasPrice: catalog.has, welcomeOwned: () => profile.starterPack > 0 },
-  onEvent: (e) => analytics.track(e)                              // activated / expired / purchased{moved} / blocked_no_price
+  onEvent: createOfferAnalyticsHandler(analytics)                 // activated / expired / purchased{moved} / blocked_no_price → `interaction`
 });
 core.registerRuntime('offers', offers);
 // host: on a successful receipt
@@ -137,6 +138,42 @@ grant(offers.offerByProduct(productId)?.rewards); offers.onPurchased(productId);
 ```
 
 Production invariants the module preserves: **one transition per tick** in the strict order expiry → level gate → welcome → next tier (an expiry and the following activation are always two ticks, even after a long background); the **server clock is injected** (`input.now()` in unix seconds — Trail Arrow's `LOGIN_AT + app.time`), and `update(frameMs)` only paces the once-a-second tick, never computes a deadline; the **catalog is live** (`hasPrice` is asked on every decision and the chain falls back to the other variant, then to neighbouring tiers, and reports `blocked_no_price` once per runtime when nothing is priced); **late purchase semantics** (a receipt for the offer that just expired counts as bought for 24 h while nothing else is active); the **state is non-monotonic** (ten keys whose timers move back and forth, so a cloud merge must take the whole block from one winner); **rewards are host-owned** data on `OfferDef`. `clampTimes()` repairs a save written under a future clock. See `docs/superpowers/specs/2026-09-16-offer-runtime-v0.4-design.md`.
+
+## Analytics Runtime
+
+```
+gameplay events ─┐
+base events ─────┼─▶ AnalyticsRuntime ─▶ AnalyticsTransport ─▶ Hazar transport today ─▶ (another backend later)
+Core events ─────┘   envelope · queue      injected seam         createHazarAnalyticsTransport
+(composition)        batches · retry                             ({ endpoint, token, fetchFn })
+```
+
+`AnalyticsRuntime` (`src/analytics/`) is the single analytics API of a game. Games and Core talk to the runtime; only the transport knows the backend, so replacing Hazar later is a new `AnalyticsTransport`, not a rewrite of the game. **Core-owned behavior is instrumented at composition level; gameplay adds game-specific events**: the runtimes never import each other — `src/composition/offerAnalytics.ts` (types only on both sides) turns `OfferRuntime` events into Hazar `interaction` events (`offer_activated`, `offer_expired`, `offer_purchased{moved}`, `offer_blocked_no_price`), and the host plugs it in where it builds its core.
+
+```ts
+const analytics = new AnalyticsRuntime({
+  transport: createHazarAnalyticsTransport({ endpoint: ANALYTICS_ENDPOINT, token: ANALYTICS_JWT, fetchFn: fetch }), // host config, never in this repo
+  context: () => ({ app, platform: 'YA', appVersion: BUILD.version, buildVersion: BUILD.number, profileId: identity.profileId(),
+                    installedAt, device, platformOs, configName, configGroup, baseData: { level: profile.level, lives: profile.lives } }),
+  store: localStorageQueueStore,          // optional, host-owned: load() / save(pending)
+  now: serverNow                          // optional: stamps event.created_at (unix seconds)
+});
+core.registerRuntime('analytics', analytics);                       // core.update(frameMs) paces the flush
+const offers = new OfferRuntime({ …, onEvent: createOfferAnalyticsHandler(analytics) });
+
+analytics.trackSessionStart({ sessionNumber });                     // base events: typed helpers, Hazar names
+analytics.level({ level, levelId, status: 'win', durationMs });
+analytics.track('booster_used', { booster: 'bulb' });               // anything game-specific
+document.addEventListener('visibilitychange', () => document.hidden && analytics.flush()); // host lifecycle, not Core's
+```
+
+**Wire contract (Hazar ingest).** `POST https://analytics.hazargames.ru/ingest` (RU) or `https://analytics.hazargames.com/ingest` (EU), `Authorization: Bearer <JWT>`, `Content-Type: application/json`, body = a JSON **array** of `{ app, p, event: { name, app_ver, build_ver?, created_at?, data: { profile_id, installed_at?, device, platform_os?, config_name?, config_group?, …event fields } } }`. The JWT differs per project/platform and comes from the host's build config — no token lives in this repository, in fixtures or in docs. `fetchFn` is injected (Core never reads a global); a non-2xx answer or a network failure keeps the batch, HTTP 400/413/422 drops it as non-retryable (`AnalyticsTransportError`) so a poisoned batch cannot block a persisted queue.
+
+**Envelope.** The context is read on every `track`, so a profile id that changes when the platform SDK answers is picked up without re-init; `app_ver` is the host's real build version. Merge order: `context.baseData` < the event's data < the identity block (`profile_id`, `device`, `installed_at`, `platform_os`, `config_name`, `config_group`) — gameplay can never overwrite identity. An event without `profile_id` (or `app` / `platform` / `appVersion` / a valid `device`) is rejected and reported, never sent anonymous. `config_name` / `config_group` ride on every event when the context has them; Core does not interpret the experiment (a baseline is just the control group's value).
+
+**Queue.** Events accumulate and leave in batches: every `flushIntervalMs` of frame time (default 10 s), when `batchSize` (default 20) events are waiting, or on an explicit `flush()`. `install` / `sessions` / `loading` ask for a flush at once; flushes asked for by `track` coalesce to the end of the tick, so the boot events are one request. One `send` at a time — concurrent `flush()` calls share the running promise, which never rejects. A failed batch returns to the head of the queue in order and the next flush retries it; after a failure the batch-size trigger pauses until a flush succeeds (no request per event while offline). A `send` that never settles is failed by frame time (`sendTimeoutMs`, default 30 s). The queue is capped (`maxQueueSize`, default 500, oldest dropped). With a store, the pending snapshot (in flight + queued) is saved after every change and restored at construction; without one the queue is memory-only. No timers, no `Date`, no DOM listeners: `update(frameMs)` is the only clock, and nothing in the pipeline throws into gameplay (`onError` + `getStats()`).
+
+**Typed events** (camelCase in, Hazar snake_case out): `install`, `trackSessionStart` → `sessions`, `loading` / `trackLoadingStart` / `trackLoadingDone(loadMs)`, `tutorial`, `level`, `uiClick` → `ui_click`, `advertisement` (`type`, `placement`, `status`, `revenue?`), `economy` (`currency`, `action`, `delta`, `balance`), `purchase` (`offer_name`, `product_id?`, `revenue`, `currency`, `order_id`, `status`, `source`), `livesRefill` → `lives_refill`, `interaction(action, data)`; every helper takes game-specific extras in `data`. The purchase/ads/economy shapes are what the future `PurchaseRuntime` / `AdsRuntime` will report through the same composition-level wiring. Proof without a game: `npm run showcase:analytics` (fake transport, system Chrome). See `docs/superpowers/specs/2026-09-17-analytics-runtime-v0.5-design.md`.
 
 ## Pixi Ready UI
 
