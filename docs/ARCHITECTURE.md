@@ -173,7 +173,7 @@ document.addEventListener('visibilitychange', () => document.hidden && analytics
 
 **Queue.** Events accumulate and leave in batches: every `flushIntervalMs` of frame time (default 10 s), when `batchSize` (default 20) events are waiting, or on an explicit `flush()`. `install` / `sessions` / `loading` ask for a flush at once; flushes asked for by `track` coalesce to the end of the tick, so the boot events are one request. One `send` at a time — concurrent `flush()` calls share the running promise, which never rejects. A failed batch returns to the head of the queue in order and the next flush retries it; after a failure the batch-size trigger pauses until a flush succeeds (no request per event while offline). A `send` that never settles is failed by frame time (`sendTimeoutMs`, default 30 s). The queue is capped (`maxQueueSize`, default 500, oldest dropped). With a store, the pending snapshot (in flight + queued) is saved after every change and restored at construction; without one the queue is memory-only. No timers, no `Date`, no DOM listeners: `update(frameMs)` is the only clock, and nothing in the pipeline throws into gameplay (`onError` + `getStats()`).
 
-**Typed events** (camelCase in, Hazar snake_case out): `install`, `trackSessionStart` → `sessions`, `loading` / `trackLoadingStart` / `trackLoadingDone(loadMs)`, `tutorial`, `level`, `uiClick` → `ui_click`, `advertisement` (`type`, `placement`, `status`, `revenue?`), `economy` (`currency`, `action`, `delta`, `balance`), `purchase` (`offer_name`, `product_id?`, `revenue`, `currency`, `order_id`, `status`, `source`), `livesRefill` → `lives_refill`, `interaction(action, data)`; every helper takes game-specific extras in `data`. The purchase shape is what `PurchaseRuntime` reports through `src/composition/purchaseAnalytics.ts`; the ads/economy shapes are what a future `AdsRuntime` will report through the same composition-level wiring. Proof without a game: `npm run showcase:analytics` (fake transport, system Chrome). See `docs/superpowers/specs/2026-09-17-analytics-runtime-v0.5-design.md`.
+**Typed events** (camelCase in, Hazar snake_case out): `install`, `trackSessionStart` → `sessions`, `loading` / `trackLoadingStart` / `trackLoadingDone(loadMs)`, `tutorial`, `level`, `uiClick` → `ui_click`, `advertisement` (`type`, `placement`, `status`, `revenue?`), `economy` (`currency`, `action`, `delta`, `balance`), `purchase` (`offer_name`, `product_id?`, `revenue`, `currency`, `order_id`, `status`, `source`), `livesRefill` → `lives_refill`, `interaction(action, data)`; every helper takes game-specific extras in `data`. The purchase shape is what `PurchaseRuntime` reports through `src/composition/purchaseAnalytics.ts`; the advertisement shape is what `AdsRuntime` reports through `src/composition/adsAnalytics.ts`. Proof without a game: `npm run showcase:analytics` (fake transport, system Chrome). See `docs/superpowers/specs/2026-09-17-analytics-runtime-v0.5-design.md`.
 
 ## Purchase Runtime
 
@@ -214,6 +214,48 @@ await purchases.restore();                                           // host: at
 **Restore.** One `restore()` = one pass over what the platform still holds; a known token is only consumed; a second call while one runs is `busy` (donor review 15.09 №11: two parallel restores paid one receipt twice). `PaymentsAdapter.restoreGrant` keeps both production orders: `after-consume` (Yandex, default) — known? → consume → mark → grant, a failed consume keeps the purchase for the next pass (no mark, no grant), so nothing over-grants even when the registry cannot persist and the payment service is down; `before-consume` (CleverApps) — known? → mark → consume (failure ignored) → grant. Like the donor's `check.consummations` answer, a pass consumes everything first and grants after it. Boot restore, the three waves after a purchase that did not answer ok, and the retries of a failed `restore()` are host orchestration.
 
 **Registry.** `GrantedPurchaseStore` is `{ has, add }`; `createGrantedPurchaseStore` is the donor's list in memory (insertion order, last 50 tokens, `onChange` for persistence). A store that throws (private mode) degrades to "no registry", like the donor. **Payer / profile.** `isPayer()` = the host's knowledge OR a payment confirmed in this session; payment sums (`pay_*`), the profile schema and cloud save stay in the game, driven by the `granted` event. **Analytics.** `src/composition/purchaseAnalytics.ts` (types only on both sides) logs `purchase_started` / `purchase_ok` / `purchase_restored` / `purchase_cancelled` / `purchase_error` (+ `purchase_duplicate`, `purchase_consume_failed`) and, on every grant — direct or restored — the Hazar `purchase` event (`offer_name`, `revenue`, `currency`, `order_id`, `source`); revenue comes from the host's price resolver, never from the runtime. A restored receipt IS revenue, exactly as in the donor (its single `trackPurchase` point is reached from `check.consummations` too), and never a second time: `granted` fires once per claimed token, a known token only yields `purchase_duplicate`. `dispose()` refuses new calls and does not act on a platform answer that arrives later (the purchase stays on the platform) — a purchase that was already claimed is still carried through to its grant. Proof without a game: `npm run showcase:purchase` (fake adapter, system Chrome). See `docs/superpowers/specs/2026-09-17-purchase-runtime-v0.6-design.md`.
+
+## Ads Runtime
+
+```
+window / win-fail-exit flow ─▶ ads.canShowInter / canShowRewarded / canShowBanner   (or decide(placement) → { allowed, reason, segmentId })
+                                     │ allowed
+                                     ▼
+                     platform layer shows the ad (Yandex / CleverApps SDK — NOT in Core)
+                                     │ platform ok
+                                     ▼
+                              ads.registerShown(placement) ─▶ `shown` ─▶ composition: analytics.advertisement{status:'complete'}
+purchase confirmed ─▶ composition: ads.markPayer()            offered / denied ─▶ ad_offered / ad_denied
+```
+
+`AdsRuntime` (`src/ads/`) is Trail Arrow 0.1.22's `AdsGate` — 1:1 — over an injected config, state store and input. It decides WHO may see an ad (segment), WHEN (start level, calendar day / hour limits, two global cooldowns), in WHICH placement, and WHY not (`AdsDenyReason`). **It never calls an advertising SDK**; showing, watchdogs, audio / gameplay pause, the banner inset and rewarded availability stay in the platform layer of the game.
+
+```ts
+const ads = new AdsRuntime({
+  config: parseAdsTsv(segmentsTsv, placementsTsv),       // game data: ads_config/*.tsv; validateAdsConfig runs in the constructor
+  state: adsStateStore,                                   // host: localStorage or the cloud profile (MemoryAdsStateStore in tests)
+  input: {
+    now: () => Date.now(),                                // donor: the DEVICE clock (B3); the host decides
+    level: () => model.level,
+    hasNoAds: () => model.noAds > 0,
+    payCount: () => model.payCount, paySumCents: () => model.paySumCents, payMaxCents: () => model.payMaxCents,
+    currencyScale: () => (isUsdPlatform ? 1 / 85 : 1),    // thresholds are roubles in the donor's table
+    isPayer: () => model.starterPack > 0,                 // optional: any other payer fact
+    timezoneOffsetMinutes: () => new Date().getTimezoneOffset()   // optional: the LOCAL calendar of the counters (donor 1:1); omitted = UTC
+  },
+  onEvent: createAdsAnalyticsHandler(analytics)
+});
+core.registerRuntime('ads', ads);                         // update() is a no-op: nothing is paced by frame time
+if (ads.canShowInter('level_win_inter')) platform.showInterstitial().then((ok) => ok && ads.registerShown('level_win_inter'));
+```
+
+**Segments.** A payer — the sticky `markPayer()` flag, NO_ADS, `input.isPayer()`, or `payCount() > 0` — is segmented by average (`sum / count / 100`) and largest payment against `avgFrom…avgTo` / `maxFrom…maxTo` × `currencyScale()` (`pay_1…pay_10`), ignoring the level; everybody else by `levelFrom <= level < levelTo` (`np_1…np_6`, `deep_np`). The first match in config (TSV) order wins; nothing matched → `default`, which has NO placement rules on purpose — no ads at all (`validateAdsConfig` accepts a rule-less segment).
+
+**Decision order (the donor's, a deny reason per branch).** Interstitial: `no_ads` → `unknown_placement` → `wrong_type` → `no_segment` → `segment_disabled` → `no_rule` → `below_start_level` → `day_limit` → `hour_limit` → `inter_cooldown` → `reward_cooldown`. Rewarded: `unknown_placement` → `wrong_type` → `no_segment` → `no_rule` → `below_start_level` → `day_limit` → `hour_limit` — **no NO_ADS check and no cooldowns** (rewarded is opt-in value and survives the NO_ADS purchase). Banner: `no_ads` → `unknown_placement` → `no_segment` → `no_rule` → `below_start_level` — no type check, no counters, no cooldowns; payers have no banner row. `decide(placement, expect?)` is the primitive (`expect` picks the check like the donor's three functions; omitted = the placement's own type); `canShowInter` / `canShowRewarded` / `canShowBanner` are its boolean aliases.
+
+**Counters and cooldowns.** `registerShown(placement)` (a CONFIRMED show) raises the placement's day and hour counts and arms a GLOBAL cooldown clock: `lastInterAt` for an interstitial, `lastRewardAt` for anything else — a rewarded, the banner, an unknown placement. `delayBetweenInters` and `delayAfterReward` of the CURRENT segment gate every interstitial placement. Counts reset by the calendar: another day → all counts read 0, another hour of the same day → the hour parts read 0; buckets are `floor((now − tzOffset) / day|hour)` — the donor's `"Y-M-D"` / `"Y-M-D-H"` keys without `Date`. A decision never writes; only `registerShown` (which also persists the reset) and `markPayer` do. A store that throws reads as defaults and drops the write, like the donor's swallowed try/catch.
+
+**Events / analytics.** `offered` / `denied` — one per decision (the banner decision, which hosts poll, only when it changes); `shown` — one per `registerShown` with the counts after the increment. `src/composition/adsAnalytics.ts` (types only on both sides): `shown` → `advertisement({ type, placement, status: 'complete' })` — the donor sends `advertisement {type, placement}` WITHOUT a status and only after the platform confirmed the ad, so `'complete'` states the same fact; `offered` / `denied` → `interaction('ad_offered' | 'ad_denied')` with placement, type, segment, level and reason (new telemetry, eligibility untouched). `src/composition/purchaseAds.ts`: a confirmed payment of `PurchaseRuntime` → `ads.markPayer()`; the payment sums that pick the `pay_*` segment stay in the host's profile. **Known donor issues kept on purpose** (B1 calendar hour, B2 device-only counters, B3 device clock, B7 unknown placement arms `lastRewardAt`, B8 dead banner limits, and the host-side B5 / B6 / B10 / B12) are listed in the spec. Proof without a game: `npm run showcase:ads` (scripted fake player, system Chrome). See `docs/superpowers/specs/2026-09-17-ads-runtime-v0.7-design.md`.
 
 ## Pixi Ready UI
 

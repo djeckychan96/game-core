@@ -42,9 +42,13 @@ if (/AnalyticsRuntime|createHazarAnalyticsTransport|createOfferAnalyticsHandler/
 if (!/PurchaseRuntime/.test(coreSource) || !/createPurchaseAnalyticsHandler/.test(coreSource)) fail('root bundle lacks PurchaseRuntime');
 if (/PurchaseRuntime|createGrantedPurchaseStore|createPurchaseAnalyticsHandler/.test(pixiSource)) fail('dist/pixi bundle references the purchases module');
 if (/YaGames|getPayments|consumePurchase|FBInstant/.test(coreSource)) fail('root bundle references a platform payments SDK');
+// the ad decision layer lives in the root entry; it decides and never shows — no ad SDK call may appear in the root bundle
+if (!/AdsRuntime/.test(coreSource) || !/parseAdsTsv/.test(coreSource) || !/createAdsAnalyticsHandler/.test(coreSource)) fail('root bundle lacks AdsRuntime');
+if (/AdsRuntime|parseAdsTsv|createAdsAnalyticsHandler|createPurchaseAdsHandler/.test(pixiSource)) fail('dist/pixi bundle references the ads module');
+if (/showFullscreenAdv|showRewardedVideo|showInterstitial|loadBannerAdAsync/.test(coreSource)) fail('root bundle references an advertising SDK');
 if (/eyJ[A-Za-z0-9_-]{10,}\./.test(coreSource)) fail('root bundle contains something that looks like a JWT');
 const coreTypes = readFileSync(resolve(rootDir, pkg.types), 'utf-8');
-for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler', 'PurchaseRuntime', 'PaymentsAdapter', 'GrantedPurchaseStore', 'PurchaseEvent', 'createPurchaseAnalyticsHandler']) {
+for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler', 'PurchaseRuntime', 'PaymentsAdapter', 'GrantedPurchaseStore', 'PurchaseEvent', 'createPurchaseAnalyticsHandler', 'AdsRuntime', 'AdsConfig', 'AdsStateStore', 'AdsInput', 'AdsDenyReason', 'createAdsAnalyticsHandler', 'createPurchaseAdsHandler']) {
   if (!coreTypes.includes(name)) fail(`${pkg.types} lacks ${name}`);
 }
 
