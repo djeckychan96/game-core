@@ -142,6 +142,34 @@ export type {
   AnalyticsPurchaseEvent,
   AnalyticsLivesRefillEvent
 } from './analytics';
+export { PurchaseRuntime, createGrantedPurchaseStore, DEFAULT_GRANTED_PURCHASE_CAP } from './purchases';
+export type {
+  GrantedPurchaseStoreOptions,
+  MemoryGrantedPurchaseStore,
+  PlatformPurchase,
+  PlatformPurchaseStatus,
+  PlatformPurchaseResult,
+  RestoreGrantPolicy,
+  PaymentsAdapter,
+  GrantedPurchaseStore,
+  PurchaseGrantContext,
+  PurchaseErrorReason,
+  PurchaseEvent,
+  PurchaseEventType,
+  PurchaseEventHandler,
+  PurchaseErrorPhase,
+  PurchaseErrorContext,
+  PurchaseCallbackErrorHandler,
+  PurchaseRuntimeOptions,
+  PurchaseStatus,
+  PurchaseResult,
+  RestoredPurchase,
+  RestoreResult,
+  PurchasePending,
+  PurchaseRuntimeStats
+} from './purchases';
 // composition-level wiring between runtimes (types only on both sides — no runtime coupling)
 export { createOfferAnalyticsHandler, offerEventToAnalytics } from './composition/offerAnalytics';
 export type { OfferAnalyticsSink, OfferAnalyticsRecord } from './composition/offerAnalytics';
+export { createPurchaseAnalyticsHandler, purchaseEventToAnalytics } from './composition/purchaseAnalytics';
+export type { PurchaseAnalyticsSink, PurchaseAnalyticsRecord, PurchasePrice, PurchasePriceResolver } from './composition/purchaseAnalytics';
