@@ -269,7 +269,18 @@ if (ads.canShowInter('level_win_inter')) platform.showInterstitial().then((ok) =
 - `GamePlatformConfig` is the client-safe per-platform config shape (`provider`, `platformCode`, `analytics { endpoint, jwtRef }`, `connector`, `publicIds`): no field for a server secret, a JWT only by reference name; `validateGamePlatformConfig` refuses both.
 - `src/composition/platformAnalytics.ts` feeds `AnalyticsRuntime`'s context with `p` / player id / device override / language; everything else, the profile-id policy included, stays with the host.
 
-The module imports only `PaymentsAdapter` types from `src/purchases`. The Yandex and CleverApps adapters, autodetect and the JWT resolver are the next slice. Spec: `docs/superpowers/specs/2026-09-17-platform-layer-v0.8-design.md`.
+The module imports only `PaymentsAdapter` types from `src/purchases`. Spec: `docs/superpowers/specs/2026-09-17-platform-layer-v0.8-design.md`.
+
+### Platform adapter entries
+
+SDK adapters never enter the root bundle. Each is its own public entry, built separately like the Pixi kit, and knows the root as types only:
+
+| entry | source | bundle |
+|---|---|---|
+| `game-core` | `src/index.ts` | contract, `PlatformRuntime`, `PlatformCatalog`, DEV platform — no SDK name |
+| `game-core/platform/yandex` | `src/platform/adapters/yandex/` | `YandexPlatform` — the only bundle that names `YaGames` |
+
+`YandexPlatform` (v0.8-B1) is a 1:1 port of Trail Arrow's production Yandex integration: 20 s init + one retry + a 30 s dead-SDK memory, a player that never blocks the entry (guest mode, 5 × 15 s background retry), a cloud read of 8 s × 3 that REJECTS on failure and for a guest, one throttled `setData` in flight (≥ 3 s), the rewarded answer only when the show ends, the local rewarded-availability latch, audio / gameplay restored in `finally`, the 2 s / 120 s ad watchdog, every payments timeout, `restoreGrant: 'after-consume'`. The game's ECS components, sound and analytics calls are injected hooks; the mirror, rollback guard, `save_seq`, identity adoption, the granted registry, `registerShown` and every retry schedule stay in the host. `src/platform/support/` (`withTimeout`, `createAdWatchdog`) is adapter support — timers and `document` live only there and are injected. `scripts/check-platform-build.mjs` enforces the boundary on the built files. Spec: `docs/superpowers/specs/2026-09-17-platform-yandex-v0.8-b1-design.md`. CleverApps, autodetect and the JWT resolver are later slices.
 
 ## Pixi Ready UI
 
