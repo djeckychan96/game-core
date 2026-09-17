@@ -37,9 +37,14 @@ if (/OfferRuntime|tickOffers|onOfferPurchased/.test(pixiSource)) fail('dist/pixi
 // the analytics pipeline lives in the root entry too; the kit never logs anything itself
 if (!/AnalyticsRuntime/.test(coreSource) || !/createHazarAnalyticsTransport/.test(coreSource)) fail('root bundle lacks AnalyticsRuntime');
 if (/AnalyticsRuntime|createHazarAnalyticsTransport|createOfferAnalyticsHandler/.test(pixiSource)) fail('dist/pixi bundle references the analytics module');
+// the purchase pipeline lives in the root entry; the kit's BUY buttons only call the host, and the
+// root bundle never names a platform SDK (payments adapters are injected)
+if (!/PurchaseRuntime/.test(coreSource) || !/createPurchaseAnalyticsHandler/.test(coreSource)) fail('root bundle lacks PurchaseRuntime');
+if (/PurchaseRuntime|createGrantedPurchaseStore|createPurchaseAnalyticsHandler/.test(pixiSource)) fail('dist/pixi bundle references the purchases module');
+if (/YaGames|getPayments|consumePurchase|FBInstant/.test(coreSource)) fail('root bundle references a platform payments SDK');
 if (/eyJ[A-Za-z0-9_-]{10,}\./.test(coreSource)) fail('root bundle contains something that looks like a JWT');
 const coreTypes = readFileSync(resolve(rootDir, pkg.types), 'utf-8');
-for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler']) {
+for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'OfferChainInput', 'OfferEvent', 'AnalyticsRuntime', 'AnalyticsTransport', 'AnalyticsContext', 'AnalyticsQueueStore', 'AnalyticsEnvelope', 'createOfferAnalyticsHandler', 'PurchaseRuntime', 'PaymentsAdapter', 'GrantedPurchaseStore', 'PurchaseEvent', 'createPurchaseAnalyticsHandler']) {
   if (!coreTypes.includes(name)) fail(`${pkg.types} lacks ${name}`);
 }
 

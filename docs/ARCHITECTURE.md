@@ -173,7 +173,47 @@ document.addEventListener('visibilitychange', () => document.hidden && analytics
 
 **Queue.** Events accumulate and leave in batches: every `flushIntervalMs` of frame time (default 10 s), when `batchSize` (default 20) events are waiting, or on an explicit `flush()`. `install` / `sessions` / `loading` ask for a flush at once; flushes asked for by `track` coalesce to the end of the tick, so the boot events are one request. One `send` at a time — concurrent `flush()` calls share the running promise, which never rejects. A failed batch returns to the head of the queue in order and the next flush retries it; after a failure the batch-size trigger pauses until a flush succeeds (no request per event while offline). A `send` that never settles is failed by frame time (`sendTimeoutMs`, default 30 s). The queue is capped (`maxQueueSize`, default 500, oldest dropped). With a store, the pending snapshot (in flight + queued) is saved after every change and restored at construction; without one the queue is memory-only. No timers, no `Date`, no DOM listeners: `update(frameMs)` is the only clock, and nothing in the pipeline throws into gameplay (`onError` + `getStats()`).
 
-**Typed events** (camelCase in, Hazar snake_case out): `install`, `trackSessionStart` → `sessions`, `loading` / `trackLoadingStart` / `trackLoadingDone(loadMs)`, `tutorial`, `level`, `uiClick` → `ui_click`, `advertisement` (`type`, `placement`, `status`, `revenue?`), `economy` (`currency`, `action`, `delta`, `balance`), `purchase` (`offer_name`, `product_id?`, `revenue`, `currency`, `order_id`, `status`, `source`), `livesRefill` → `lives_refill`, `interaction(action, data)`; every helper takes game-specific extras in `data`. The purchase/ads/economy shapes are what the future `PurchaseRuntime` / `AdsRuntime` will report through the same composition-level wiring. Proof without a game: `npm run showcase:analytics` (fake transport, system Chrome). See `docs/superpowers/specs/2026-09-17-analytics-runtime-v0.5-design.md`.
+**Typed events** (camelCase in, Hazar snake_case out): `install`, `trackSessionStart` → `sessions`, `loading` / `trackLoadingStart` / `trackLoadingDone(loadMs)`, `tutorial`, `level`, `uiClick` → `ui_click`, `advertisement` (`type`, `placement`, `status`, `revenue?`), `economy` (`currency`, `action`, `delta`, `balance`), `purchase` (`offer_name`, `product_id?`, `revenue`, `currency`, `order_id`, `status`, `source`), `livesRefill` → `lives_refill`, `interaction(action, data)`; every helper takes game-specific extras in `data`. The purchase shape is what `PurchaseRuntime` reports through `src/composition/purchaseAnalytics.ts`; the ads/economy shapes are what a future `AdsRuntime` will report through the same composition-level wiring. Proof without a game: `npm run showcase:analytics` (fake transport, system Chrome). See `docs/superpowers/specs/2026-09-17-analytics-runtime-v0.5-design.md`.
+
+## Purchase Runtime
+
+```
+BUY tap ─▶ PurchaseRuntime.purchase(productId, source) ─▶ PaymentsAdapter.purchase   (injected: Yandex / CleverApps / Samsung / fake)
+boot, waves ─▶ PurchaseRuntime.restore() ──────────────▶ PaymentsAdapter.restore
+                     │ platform ok
+                     ▼
+        has(token)? ─▶ resolveGrant ─▶ grant ─▶ add(token)      one synchronous block — GrantedPurchaseStore injected
+                     │
+                     ├─▶ `granted` event ─▶ composition: analytics.purchase(…) · offers.onPurchased(id) · profile save
+                     ▼
+        PaymentsAdapter.consume (a failure is only reported; the next restore() finishes it without a grant)
+```
+
+`PurchaseRuntime` (`src/purchases/`) is Trail Arrow 0.1.22's real-money pipeline — `DataUpdateSystem.onShopPurchase` / `onCheckConsummations` plus the `shop.purchase` / `check.consummations` handlers of its Yandex and CleverApps platforms — with the platform, the granted-token registry and the rewards injected. Two rules hold on every path: **nothing is granted before the platform confirmed the payment**, and **one payment is granted once** — after a reload, a retry, a repeated platform answer, a concurrent `restore()`. The runtime knows no SDK, no storage, no DOM, no clock and schedules nothing.
+
+```ts
+const purchases = new PurchaseRuntime<Reward[]>({
+  payments: yandexPaymentsAdapter,                                   // host: purchase / restore / consume over the SDK, with ITS timeouts
+  granted: createGrantedPurchaseStore({ initial: load(), onChange: save }),   // or the host's own { has, add } over localStorage
+  resolveGrant: (productId) => offers.offerByProduct(productId)?.rewards ?? shopRewards[productId],
+  grant: (productId, rewards) => profile.add(rewards),               // synchronous, in memory
+  isPayer: () => profile.payCount > 0,
+  onEvent: createPurchaseAnalyticsHandler(analytics, priceOf, (event) => {   // priceOf: the REAL catalog → { revenue, currency }
+    if (event.type !== 'granted') return;
+    offers.onPurchased(event.productId);                             // PurchaseRuntime never imports OfferRuntime
+    profile.recordPayment(priceOf(event.productId)); profile.save();
+  })
+});
+const result = await purchases.purchase('gold_1', 'shop');           // never rejects: ok | cancelled | error | duplicate | busy | disposed
+if (result.restoreAdvised) scheduleRestoreWaves();                   // host: 3 s / 15 s / 45 s, like the donor
+await purchases.restore();                                           // host: at boot
+```
+
+**Grant ordering.** Platform ok → `has(token)`? → `resolveGrant` → `grant` → `add(token)` → `granted` event (the host saves) → `consume`. Check-grant-mark is one synchronous block, so nothing can interleave between the check and the mark, and the token is in the registry **before** the consume is attempted — the donor's safety property (a failed consume must not pay the receipt out again at the next launch). The donor grants after the consume; the port grants before it because the runtime has no timers: a consume that hangs or a tab closed mid-consume can no longer cost the player a paid purchase, and a throwing `grant` leaves the purchase unmarked and unconsumed, so `restore()` retries it. The grant follows the product the **platform** reports (`requestedProductId` travels along); a paid product without a reward mapping is an `error: no_grant`, left on the platform until the catalog knows it. A purchase without a token is granted but cannot be deduplicated (donor: a rare double grant in the player's favour beats an unpaid purchase). A known token on a direct purchase is `duplicate` — consumed, not granted (the donor has no such check on this path).
+
+**Restore.** One `restore()` = one pass over what the platform still holds; every purchase goes through the same grant-once block, a known token is only consumed; a second call while one runs is `busy` (donor review 15.09 №11: two parallel restores paid one receipt twice). `PaymentsAdapter.restoreGrant` keeps both production policies: `after-consume` (Yandex, default) grants only what was consumed — a failed consume keeps the purchase for the next pass, so nothing over-grants even when the registry cannot persist and the payment service is down; `before-consume` (CleverApps) grants and marks first and ignores a consume failure. Boot restore, the three waves after a purchase that did not answer ok, and the retries of a failed `restore()` are host orchestration.
+
+**Registry.** `GrantedPurchaseStore` is `{ has, add }`; `createGrantedPurchaseStore` is the donor's list in memory (insertion order, last 50 tokens, `onChange` for persistence). A store that throws (private mode) degrades to "no registry", like the donor. **Payer / profile.** `isPayer()` = the host's knowledge OR a payment confirmed in this session; payment sums (`pay_*`), the profile schema and cloud save stay in the game, driven by the `granted` event. **Analytics.** `src/composition/purchaseAnalytics.ts` (types only on both sides) logs `purchase_started` / `purchase_ok` / `purchase_restored` / `purchase_cancelled` / `purchase_error` (+ `purchase_duplicate`, `purchase_consume_failed`) and, on every grant — direct or restored — the Hazar `purchase` event (`offer_name`, `revenue`, `currency`, `order_id`, `source`); revenue comes from the host's price resolver, never from the runtime. `dispose()` refuses new calls and does not act on a platform answer that arrives later (the purchase stays on the platform) — except that a purchase already consumed by a restore pass is still granted. Proof without a game: `npm run showcase:purchase` (fake adapter, system Chrome). See `docs/superpowers/specs/2026-09-17-purchase-runtime-v0.6-design.md`.
 
 ## Pixi Ready UI
 
