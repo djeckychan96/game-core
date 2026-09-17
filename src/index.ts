@@ -102,3 +102,46 @@ export type {
   OfferRuntimeOptions,
   OfferRuntimeStats
 } from './offers';
+export { AnalyticsRuntime, AnalyticsTransportError, createHazarAnalyticsTransport, HAZAR_INGEST_ENDPOINTS, ANALYTICS_EVENTS } from './analytics';
+export type {
+  HazarAnalyticsTransportOptions,
+  HazarFetchFn,
+  HazarFetchInit,
+  HazarFetchResponse,
+  AnalyticsDevice,
+  AnalyticsPlatform,
+  AnalyticsValue,
+  AnalyticsEventData,
+  AnalyticsEnvelopeData,
+  AnalyticsEnvelope,
+  AnalyticsContext,
+  AnalyticsContextProvider,
+  AnalyticsTransport,
+  AnalyticsQueueStore,
+  AnalyticsErrorPhase,
+  AnalyticsErrorContext,
+  AnalyticsErrorHandler,
+  AnalyticsRuntimeOptions,
+  AnalyticsTrackOptions,
+  AnalyticsRuntimeStats,
+  AnalyticsEventName,
+  AnalyticsInstallEvent,
+  AnalyticsSessionEvent,
+  AnalyticsLoadingStatus,
+  AnalyticsLoadingEvent,
+  AnalyticsTutorialEvent,
+  AnalyticsLevelStatus,
+  AnalyticsLevelEvent,
+  AnalyticsUiClickEvent,
+  AnalyticsAdType,
+  AnalyticsAdStatus,
+  AnalyticsAdvertisementEvent,
+  AnalyticsEconomyAction,
+  AnalyticsEconomyEvent,
+  AnalyticsPurchaseStatus,
+  AnalyticsPurchaseEvent,
+  AnalyticsLivesRefillEvent
+} from './analytics';
+// composition-level wiring between runtimes (types only on both sides — no runtime coupling)
+export { createOfferAnalyticsHandler, offerEventToAnalytics } from './composition/offerAnalytics';
+export type { OfferAnalyticsSink, OfferAnalyticsRecord } from './composition/offerAnalytics';
