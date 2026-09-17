@@ -224,9 +224,11 @@ test('a flush splits the queue into batches of batchSize, in order', async () =>
 test('a full batch leaves at once without waiting for the cadence; default batch size is 20', async () => {
   const { analytics, transport } = make();
   for (let i = 0; i < 19; i++) analytics.track(`e${i}`);
+  await settleMicrotasks();
   expect(transport.batches).toHaveLength(0);
   analytics.track('e19');
-  expect(transport.batches).toHaveLength(1); // the send starts synchronously
+  await settleMicrotasks(); // no update(), no explicit flush
+  expect(transport.batches).toHaveLength(1);
   await analytics.flush();
   expect(transport.batches[0]).toHaveLength(20);
   expect(analytics.getStats().queued).toBe(0);
@@ -235,12 +237,30 @@ test('a full batch leaves at once without waiting for the cadence; default batch
 test('install / session / loading flush at once (a short first session must not wait for the cadence)', async () => {
   const { analytics, transport } = make();
   analytics.trackSessionStart({ sessionNumber: 1 });
+  await settleMicrotasks(); // no update(), no explicit flush
   expect(transport.batches).toHaveLength(1);
-  await analytics.flush();
   expect(transport.batches[0]![0]!.event).toMatchObject({ name: 'sessions', data: { session_number: 1 } });
   analytics.trackLoadingDone(812.4);
-  await analytics.flush();
+  await settleMicrotasks();
   expect(transport.batches[1]![0]!.event).toMatchObject({ name: 'loading', data: { status: 'done', load_ms: 812 } });
+});
+
+test('flushes asked for by track in the same tick coalesce: install + sessions + loading at boot are one request', async () => {
+  const { analytics, transport } = make();
+  analytics.install({ source: 'catalog' });
+  analytics.trackSessionStart({ sessionNumber: 1 });
+  analytics.loading({ status: 'data_ok', loadMs: 640 });
+  expect(transport.batches).toHaveLength(0); // end of the tick, not mid-tick
+  await settleMicrotasks();
+  expect(transport.names()).toEqual([['install', 'sessions', 'loading']]);
+  expect(analytics.getStats()).toMatchObject({ flushes: 1, batchesSent: 1, sent: 3 });
+});
+
+test('an explicit flush() starts its send synchronously (a visibilitychange handler must not lose the tick)', () => {
+  const { analytics, transport } = make();
+  analytics.track('a');
+  void analytics.flush();
+  expect(transport.batches).toHaveLength(1);
 });
 
 // ---- delivery ---------------------------------------------------------------------------------
@@ -289,6 +309,7 @@ test('a failed flush stops at the failed batch and pauses the batch-size trigger
   expect(analytics.getStats()).toMatchObject({ queued: 0, sent: 8 });
   analytics.track('x');
   analytics.track('y'); // the trigger is armed again
+  await settleMicrotasks();
   expect(transport.batches.at(-1)!.map((e) => e.event.name)).toEqual(['x', 'y']);
 });
 
@@ -367,6 +388,7 @@ test('a send that never settles is failed by frame time, the batch is re-queued 
   const { analytics, transport, errors } = make({ sendTimeoutMs: 5000, flushIntervalMs: 60_000 });
   transport.mode = 'manual';
   analytics.track('a', {}, { flush: true });
+  await settleMicrotasks();
   analytics.update(4999);
   await settleMicrotasks();
   expect(analytics.getStats()).toMatchObject({ inFlight: 1, batchesFailed: 0 });
@@ -395,10 +417,12 @@ test('the queue is capped: the oldest events are dropped, the newest kept', asyn
   expect(transport.names()).toEqual([['e3', 'e4', 'e5', 'e6', 'e7']]);
 });
 
-test('default cap is 500', () => {
+test('default cap is 500', async () => {
   const { analytics, transport } = make();
   transport.mode = 'manual'; // the first full batch stays in flight, the rest piles up
-  for (let i = 0; i < 20 + 510; i++) analytics.track('e');
+  for (let i = 0; i < 20; i++) analytics.track('e');
+  await settleMicrotasks();
+  for (let i = 0; i < 510; i++) analytics.track('e');
   expect(analytics.getStats()).toMatchObject({ inFlight: 20, queued: 500, dropped: 10 });
 });
 
@@ -554,6 +578,7 @@ test('dispose during a send: the delivered batch leaves the store, the rest stay
   analytics.track('a');
   analytics.track('b');
   analytics.track('c');
+  void analytics.flush();
   analytics.dispose();
   expect(store.saved.map((e) => e.event.name)).toEqual(['a', 'b', 'c']);
   transport.settle();

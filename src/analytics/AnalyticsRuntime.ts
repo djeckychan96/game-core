@@ -85,6 +85,7 @@ function assignDefined(target: AnalyticsEnvelopeData, source: AnalyticsEventData
  *   `profile_id` is on every event; an event without one is rejected, never sent anonymous.
  * - Events leave in batches: on the `update(frameMs)` cadence (`flushIntervalMs` of frame time),
  *   when a full batch is waiting, or on an explicit `flush()` (host: `visibilitychange`, unload).
+ *   A flush triggered by `track` is coalesced to the end of the tick; an explicit one starts at once.
  *   There is no timer in here — `update` is the only clock, like every other CoreRuntime module.
  * - One `send` at a time. A failed batch goes back to the head of the queue and the next flush
  *   retries it; after a failure the batch-size trigger pauses (no request per event while offline)
@@ -107,6 +108,7 @@ export class AnalyticsRuntime implements CoreRuntimeModule {
   private inFlight: AnalyticsEnvelope[] = [];
   private flushPromise: Promise<void> | null = null;
   private failInFlight: ((error: Error) => void) | null = null;
+  private flushScheduled = false;
   private accumulatorMs = 0;
   private inFlightMs = 0;
   private disposed = false;
@@ -164,7 +166,7 @@ export class AnalyticsRuntime implements CoreRuntimeModule {
     this.queue.push(envelope);
     this.enforceCap();
     this.persist();
-    if (options?.flush === true || (this.queue.length >= this.batchSize && !this.lastFlushFailed)) void this.flush();
+    if (options?.flush === true || (this.queue.length >= this.batchSize && !this.lastFlushFailed)) this.scheduleFlush();
     return true;
   }
 
@@ -346,6 +348,20 @@ export class AnalyticsRuntime implements CoreRuntimeModule {
   }
 
   // ---- internals -----------------------------------------------------------------------------
+
+  /**
+   * A flush asked for by `track` runs at the end of the current tick (a microtask — not a timer),
+   * so events tracked back to back (`install` + `sessions` + `loading` at boot) leave as one
+   * request instead of one each.
+   */
+  private scheduleFlush(): void {
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+    void Promise.resolve().then(() => {
+      this.flushScheduled = false;
+      void this.flush();
+    });
+  }
 
   private async drain(): Promise<void> {
     while (!this.disposed && this.queue.length > 0) {
