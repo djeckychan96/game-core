@@ -150,6 +150,7 @@ export type {
   PlatformPurchaseStatus,
   PlatformPurchaseResult,
   RestoreGrantPolicy,
+  PurchaseProductKind,
   PaymentsAdapter,
   GrantedPurchaseStore,
   PurchaseGrantContext,

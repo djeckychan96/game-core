@@ -49,7 +49,10 @@ type DeliverOutcome = 'granted' | 'no_grant' | 'grant_threw';
  *   grant) → mark → grant;
  * - restore, `before-consume` (CleverApps): known? → mark → consume (failure ignored) → grant;
  * - a restore pass consumes every purchase first and grants after the pass, like the donor's
- *   `check.consummations` answer.
+ *   `check.consummations` answer;
+ * - an `entitlement` (`options.productKinds`, SoliPix production `no_ads`) is the same pipeline
+ *   minus the consume, on both paths: direct = mark → grant; restore = known? → `owned`, else
+ *   mark → grant after the pass. Rule 2 holds unchanged — one token, one grant.
  *
  * No timers live here: SDK timeouts belong to the adapter, the donor's restore waves (3 s / 15 s /
  * 45 s after a failed purchase, a restore at boot) to the host — `PurchaseResult.restoreAdvised`
@@ -63,6 +66,7 @@ export class PurchaseRuntime<TGrant = unknown> {
   private readonly onEvent: PurchaseEventHandler<TGrant> | null;
   private readonly onPurchaseError: PurchaseCallbackErrorHandler;
   private readonly hostIsPayer: (() => boolean) | null;
+  private readonly entitlements: ReadonlySet<string>;
   private pending: PurchasePending | null = null;
   private restoring = false;
   private payer = false;
@@ -94,6 +98,15 @@ export class PurchaseRuntime<TGrant = unknown> {
     this.onEvent = options.onEvent ?? null;
     this.onPurchaseError = options.onPurchaseError ?? defaultOnPurchaseError;
     this.hostIsPayer = options.isPayer ?? null;
+    const entitlements = new Set<string>();
+    for (const [productId, kind] of Object.entries(options.productKinds ?? {})) {
+      // a typo must never read as "consumable": consuming a permanent purchase cannot be undone
+      if (kind !== 'consumable' && kind !== 'entitlement') {
+        throw new RangeError(`PurchaseRuntime: options.productKinds["${productId}"] must be 'consumable' or 'entitlement'`);
+      }
+      if (kind === 'entitlement') entitlements.add(productId);
+    }
+    this.entitlements = entitlements;
   }
 
   /**
@@ -144,7 +157,8 @@ export class PurchaseRuntime<TGrant = unknown> {
       // the ok answer → the game grants. From the claim on, the purchase is carried through even if
       // dispose() arrives during the consume: it is marked, nothing would ever grant it again.
       const claimed = this.claim(context);
-      await this.consume(answer, context);
+      // an entitlement keeps its receipt (SoliPix production: `no_ads` is bought and never consumed)
+      if (!this.entitlements.has(paidProductId)) await this.consume(answer, context);
       if (!claimed) return this.result('duplicate', paidProductId, token);
       const outcome = this.deliver(context);
       if (outcome === 'granted') return this.result('ok', paidProductId, token);
@@ -180,6 +194,7 @@ export class PurchaseRuntime<TGrant = unknown> {
       const purchases = Array.isArray(listed) ? (listed as readonly PlatformPurchase[]).filter((it) => !!it) : [];
       const consumeFirst = this.payments.restoreGrant !== 'before-consume' && typeof this.payments.consume === 'function';
       const claimedNow: PurchaseGrantContext[] = [];
+      const owned: RestoredPurchase[] = [];
 
       for (const purchase of purchases) {
         if (this.disposed) break;
@@ -193,6 +208,14 @@ export class PurchaseRuntime<TGrant = unknown> {
         }
         const context: PurchaseGrantContext = { productId, token, restored: true, source: undefined, requestedProductId: undefined };
 
+        if (this.entitlements.has(productId)) {
+          // a permanent right is never consumed, so the platform lists it on every pass: a known token is
+          // the steady state (reported as `owned`, not as a `duplicate`), an unknown one is claimed and
+          // granted once — the check and the mark stay one synchronous block
+          if (token !== undefined && this.isGranted(token)) owned.push({ productId, token });
+          else if (this.claim(context)) claimedNow.push(context);
+          continue;
+        }
         if (consumeFirst && !(token !== undefined && this.isGranted(token))) {
           // Yandex: known? → consume → mark → grant. A failed consume keeps the purchase for the next
           // pass — not marked, not granted. The claim re-checks the registry after the await.
@@ -211,7 +234,10 @@ export class PurchaseRuntime<TGrant = unknown> {
       for (const context of claimedNow) {
         if (this.deliver(context) === 'granted') grantedNow.push({ productId: context.productId, token: context.token });
       }
-      return { status: this.disposed ? 'disposed' : 'ok', found: purchases.length, granted: grantedNow };
+      const status = this.disposed ? 'disposed' : 'ok';
+      return owned.length > 0
+        ? { status, found: purchases.length, granted: grantedNow, owned }
+        : { status, found: purchases.length, granted: grantedNow };
     } finally {
       this.restoring = false;
     }
@@ -303,7 +329,9 @@ export class PurchaseRuntime<TGrant = unknown> {
     }
     this.granted++;
     if (restored) this.restored++;
-    this.emit({ type: 'granted', productId, token, rewards, restored, source, requestedProductId });
+    const event: PurchaseEvent<TGrant> = { type: 'granted', productId, token, rewards, restored, source, requestedProductId };
+    if (this.entitlements.has(productId)) event.kind = 'entitlement';
+    this.emit(event);
     return 'granted';
   }
 

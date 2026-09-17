@@ -39,6 +39,18 @@ export interface PlatformPurchaseResult extends PlatformPurchase {
 export type RestoreGrantPolicy = 'after-consume' | 'before-consume';
 
 /**
+ * What a paid product IS, from the host's catalog / config (`PurchaseRuntimeOptions.productKinds`):
+ * - `consumable` (the default for every product not listed) — coins, packs: the v0.6 pipeline, the
+ *   receipt is consumed so the product can be bought again;
+ * - `entitlement` — a permanent right bought once (SoliPix production: `no_ads`). Its receipt is
+ *   NEVER consumed, neither after a direct purchase nor by `restore()`: the unconsumed receipt is
+ *   what lets the platform give the right back on another device. The consequence shapes the rest:
+ *   the platform lists that receipt on EVERY `restore()`, forever.
+ * Nothing else exists here on purpose — no subscriptions, no expiry, no server receipts.
+ */
+export type PurchaseProductKind = 'consumable' | 'entitlement';
+
+/**
  * The platform side, injected. The adapter owns everything SDK-specific: readiness, availability
  * ("payments are off" → `cancelled`), SDK timeouts (the runtime has no timers — a promise that
  * never settles keeps `purchase()` pending), and the mapping to `PlatformPurchase`.
@@ -109,6 +121,12 @@ export type PurchaseEvent<TGrant = unknown> =
       restored: boolean;
       source: string | undefined;
       requestedProductId: string | undefined;
+      /**
+       * Present only for an entitlement — a consumable's event is exactly the v0.6 object. A RESTORED
+       * entitlement is not new money: its receipt is listed forever, so a new device or a lost
+       * registry grants it again (`createPurchaseAnalyticsHandler` sends no revenue for it).
+       */
+      kind?: 'entitlement';
     }
   | { type: 'cancelled'; productId: string; source: string | undefined }
   | { type: 'duplicate'; productId: string; token: string; restored: boolean; source: string | undefined }
@@ -152,6 +170,13 @@ export interface PurchaseRuntimeOptions<TGrant = unknown> {
   onPurchaseError?: PurchaseCallbackErrorHandler;
   /** The host's own payer knowledge (profile payment count, a saved flag); OR-ed with this session's payments. */
   isPayer?(): boolean;
+  /**
+   * The consume policy, by product id — game config, read once at construction. A product that is
+   * not listed is a `consumable`, so a host without this option runs the v0.6 pipeline unchanged.
+   * An unknown kind throws at construction: a typo would otherwise CONSUME a permanent purchase,
+   * which cannot be undone. The kind follows the product the PLATFORM reports, like the grant.
+   */
+  productKinds?: Readonly<Record<string, PurchaseProductKind>>;
 }
 
 export type PurchaseStatus = 'ok' | 'cancelled' | 'error' | 'duplicate' | 'busy' | 'disposed';
@@ -183,6 +208,14 @@ export interface RestoreResult {
   found: number;
   /** Purchases granted by THIS call. */
   granted: RestoredPurchase[];
+  /**
+   * Entitlements the platform still lists whose token was granted before: nothing was consumed,
+   * granted or reported as a `duplicate` (it is the steady state of a permanent purchase, not an
+   * anomaly). The host re-asserts the right from this list — production sets the flag on every
+   * start, so a profile that lost it (cloud reset, conflict) heals. Present only when not empty:
+   * a pass without entitlements answers the v0.6 object.
+   */
+  owned?: RestoredPurchase[];
 }
 
 export interface PurchasePending {

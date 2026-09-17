@@ -43,7 +43,12 @@ export interface PurchaseAnalyticsRecord {
     | 'purchase_duplicate'
     | 'purchase_consume_failed';
   data: AnalyticsEventData;
-  /** The Hazar `purchase` (revenue) event — only for a grant, direct or restored. */
+  /**
+   * The Hazar `purchase` (revenue) event — only for a grant, direct or restored. Never for a RESTORED
+   * entitlement: its receipt is not consumed, the platform lists it forever, so that grant is the
+   * right coming back (a new device, a lost registry), not a new payment. SoliPix production sends
+   * nothing on a `no_ads` restore; the direct purchase is its one money point.
+   */
   purchase?: AnalyticsPurchaseEvent;
 }
 
@@ -82,17 +87,19 @@ export function purchaseEventToAnalytics(event: PurchaseEvent, price?: PurchaseP
       }
       if (event.token !== undefined) purchase.orderId = event.token;
       if (source !== undefined) purchase.source = source;
-      return {
+      const record: PurchaseAnalyticsRecord = {
         action: event.restored ? 'purchase_restored' : 'purchase_ok',
         data: {
           product: event.productId,
           order_id: event.token,
           source,
           requested: event.requestedProductId !== undefined && event.requestedProductId !== event.productId ? event.requestedProductId : undefined,
-          no_token: event.token === undefined ? 1 : undefined
-        },
-        purchase
+          no_token: event.token === undefined ? 1 : undefined,
+          kind: event.kind // (undefined for a consumable: the v0.6 record)
+        }
       };
+      if (!(event.restored && event.kind === 'entitlement')) record.purchase = purchase;
+      return record;
     }
   }
 }
