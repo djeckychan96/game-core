@@ -7,7 +7,7 @@
 // TOOLBAR (opens each window directly) and the OFFER strip (drives the OfferRuntime demo's fake
 // clock); both are deliberately styled unlike the game UI.
 import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, PurchaseRuntime, UiRuntime, createGrantedPurchaseStore, createOfferAnalyticsHandler, createPurchaseAnalyticsHandler, type OfferEvent, type OfferReward, type PurchaseEvent, type PurchaseResult, type RestoreResult } from 'game-core';
+import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, PurchaseRuntime, UiRuntime, createAdsAnalyticsHandler, createGrantedPurchaseStore, createOfferAnalyticsHandler, createPurchaseAdsHandler, createPurchaseAnalyticsHandler, type OfferEvent, type OfferReward, type PurchaseEvent, type PurchaseResult, type RestoreResult } from 'game-core';
 import {
   ClickRippleEffect,
   DEFAULT_CLICK_RIPPLE,
@@ -28,6 +28,7 @@ import {
   type ReadyUiTextures
 } from 'game-core/pixi';
 import { DEMO_MAX_LIVES, DEMO_REFILL_PRICE, DEMO_SHOP_ITEMS, createDemoState } from './demoData';
+import { createAdsDemo } from './adsDemo';
 import { DemoAnalyticsTransport, demoAnalyticsContext, eventLabel } from './analyticsDemo';
 import { DEMO_OFFER_CATALOG, DEMO_OFFER_CHAIN, REWARD_COINS, formatClock, offerLabel, offerToWindowParams } from './offerDemo';
 import { DemoPaymentsAdapter, demoPrice, type DemoSheetOutcome } from './purchaseDemo';
@@ -195,6 +196,11 @@ async function boot(): Promise<void> {
     now: () => Math.floor(clock.nowMs / 1000)
   });
   core.registerRuntime('analytics', analytics);
+  // --- AdsRuntime demo: the donor's ad rules for one scripted fake player (ADS pill). It only DECIDES —
+  // no ad SDK exists here; events reach analytics through the composition handler.
+  const adsDemo = createAdsDemo((next) => createAdsAnalyticsHandler(analytics, next));
+  core.registerRuntime('ads', adsDemo.ads);
+
   analytics.trackSessionStart({ sessionNumber: 1 });
   analytics.trackLoadingDone(performance.now()); // the host measures; Core has no clock
 
@@ -269,10 +275,12 @@ async function boot(): Promise<void> {
       }
       if (offers.offerByProduct(productId)?.tier === 0) state.starterPackOwned = true;
     },
-    onEvent: createPurchaseAnalyticsHandler(analytics, demoPrice, (event) => {
+    // analytics → ads.markPayer (composition bridge) → the page's own handler
+    onEvent: createPurchaseAnalyticsHandler(analytics, demoPrice, createPurchaseAdsHandler(adsDemo.ads, (event) => {
       purchaseEvents.push(event);
       if (event.type === 'granted') {
         profileSaves++;
+        adsDemo.recordPayment(demoPrice(event.productId)?.revenue ?? 0); // host-side pay_count / pay_sum / pay_max
         offers.onPurchased(event.productId); // a product outside the chain is a no-op there
         toast(`${event.restored ? 'RESTORED' : 'PURCHASE OK'} · ${event.productId} · granted once · ${event.token ?? 'no token'}`);
       } else if (event.type === 'cancelled') {
@@ -281,7 +289,7 @@ async function boot(): Promise<void> {
         toast(`PURCHASE ERROR · ${event.reason}`);
       }
       refreshPurchaseUi();
-    })
+    }))
   });
   const purchasing = () => purchases.getPending() !== null; // donor `purchasing`: the payment sheet is open
 
@@ -471,7 +479,7 @@ async function boot(): Promise<void> {
   const toolbarItems: Array<[string, () => void]> = [
     ['RESULT', () => openResult(map.selectedLevel)], ['SHOP', openShop], ['LIVES', openLives],
     ['SETTINGS', openSettings], ['NO ADS', openNoAds], ['OFFER', () => openOffer()],
-    ['RIPPLE', () => setRipplePreset(ripplePreset + 1)]
+    ['RIPPLE', () => setRipplePreset(ripplePreset + 1)], ['ADS', () => toggleAdsTimeline()]
   ];
   const pills = toolbarItems.map(([label, onTap], i) => {
     const pill = makePill(`showcase:toolbar:${i}`, label, onTap, 0x3a4160);
@@ -502,7 +510,34 @@ async function boot(): Promise<void> {
   const analyticsStatus = createLabel(theme, 'ANALYTICS', { fontSize: 8, stroke: false, fill: 0xa0e0ff });
   offerStrip.addChild(analyticsStatus);
 
-  screen.addChild(map, hud, starterIcon, offerIconTimer, noAdsIcon, playButton, offerStrip, toolbar);
+  // ADS timeline: the scripted fake player (L1 → L15 → L20 → rewarded → cooldown → payer → NO_ADS); a tap hides it
+  const adsPanel = new Container();
+  adsPanel.visible = false;
+  adsPanel.eventMode = 'static';
+  const adsPanelBg = new Graphics();
+  const adsTimelineText = new Text({ text: '', style: { fontFamily: 'Menlo, Consolas, monospace', fontSize: 9, lineHeight: 12, fill: 0xd8ffe0 } });
+  adsPanel.addChild(adsPanelBg, adsTimelineText);
+  adsPanel.on('pointertap', () => { adsPanel.visible = false; });
+  const layoutAdsPanel = () => {
+    const top = hud.barHeight + 44;
+    adsTimelineText.scale.set(1);
+    adsTimelineText.scale.set(Math.min(1, (app.screen.width - 28) / Math.max(1, adsTimelineText.width)));
+    adsTimelineText.position.set(14, top + 8);
+    adsPanelBg.clear().roundRect(6, top, app.screen.width - 12, adsTimelineText.height + 16, 8).fill({ color: 0x07140c, alpha: 0.92 });
+  };
+  const runAdsScenario = () => {
+    adsDemo.run();
+    adsTimelineText.text = [adsDemo.summary(adsDemo.ads.getStats()), ...adsDemo.lines()].join('\n');
+    adsPanel.visible = true;
+    layoutAdsPanel();
+    return adsDemo.timeline;
+  };
+  const toggleAdsTimeline = () => {
+    if (adsPanel.visible) adsPanel.visible = false;
+    else runAdsScenario();
+  };
+
+  screen.addChild(map, hud, starterIcon, offerIconTimer, noAdsIcon, playButton, offerStrip, toolbar, adsPanel);
 
   // --- toast (a MotionRuntime-driven label, no timers) ---
   let toastLabel: Text | null = null;
@@ -609,6 +644,7 @@ async function boot(): Promise<void> {
       win.resize(w, h, { insets: modalInsets, pixelRatio: resolution });
     }
     if (toastLabel) toastLabel.position.set(w / 2, hud.barHeight + 24);
+    if (adsPanel.visible) layoutAdsPanel();
   };
   app.renderer.on('resize', layout);
   layout();
@@ -658,6 +694,8 @@ async function boot(): Promise<void> {
     },
     analytics, analyticsTransport,
     analyticsDemo: { ad: analyticsDemoAd, flush: analyticsDemoFlush, status: analyticsStatus },
+    ads: adsDemo.ads,
+    adsDemo: { run: runAdsScenario, timeline: adsDemo.timeline, lines: adsDemo.lines, profile: adsDemo.profile, panel: adsPanel, text: adsTimelineText },
     layout,
     stats: () => core.getStats()
   };

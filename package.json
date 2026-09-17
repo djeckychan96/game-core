@@ -33,6 +33,7 @@
     "showcase:offers": "node scripts/offer-demo-check.mjs",
     "showcase:analytics": "node scripts/analytics-demo-check.mjs",
     "showcase:purchase": "node scripts/purchase-demo-check.mjs",
+    "showcase:ads": "node scripts/ads-demo-check.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
     "ocean:compare": "node scripts/ocean-compare.mjs"
   },
