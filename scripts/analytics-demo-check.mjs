@@ -5,8 +5,9 @@
 //   SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:analytics
 //
 // One bounded smoke: the session/loading events leave at boot; the welcome offer's `offer_activated`
-// arrives through the composition wiring; a real BUY tap produces the fake `purchase` event and the
-// chain's `offer_purchased`; the AD pill queues an `advertisement`; FLUSH delivers one batch to the
+// arrives through the composition wiring; a real BUY tap goes through PurchaseRuntime (fake payments
+// adapter): `purchase_started` / `purchase_ok`, the Hazar `purchase` event and the chain's
+// `offer_purchased`; the AD pill queues an `advertisement`; FLUSH delivers one batch to the
 // FAKE transport (nothing leaves the page — the script fails on any request outside the dev server).
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -70,7 +71,7 @@ async function run() {
   info = await read();
   if (info.stats.queued < 1) fail(`offer_activated was not queued: ${JSON.stringify(info.stats)}`);
 
-  // 3. a real BUY tap → the demo payment → fake purchase event + the chain's offer_purchased
+  // 3. a real BUY tap → PurchaseRuntime on the fake adapter → purchase funnel + purchase event + the chain's offer_purchased
   const buyAt = await page.evaluate(() => {
     const p = window.__showcase.starterWindow.buyButton.getGlobalPosition();
     return { x: p.x, y: p.y };
@@ -88,7 +89,7 @@ async function run() {
   info = await read();
 
   const all = info.batches.flat();
-  const expected = ['sessions', 'loading', 'offer_activated', 'purchase', 'offer_purchased', 'advertisement'];
+  const expected = ['sessions', 'loading', 'offer_activated', 'purchase_started', 'purchase_ok', 'purchase', 'offer_purchased', 'advertisement'];
   if (JSON.stringify(all) !== JSON.stringify(expected)) fail(`event order differs:\n got ${JSON.stringify(all)}\n want ${JSON.stringify(expected)}`);
   if (info.stats.sent !== expected.length || info.stats.sent <= sentBefore) fail(`sent counter: ${JSON.stringify(info.stats)}`);
   const lastBatch = info.batches[info.batches.length - 1];
@@ -103,7 +104,7 @@ async function run() {
     if (typeof event.created_at !== 'number') fail(`created_at missing on ${event.name}`);
   }
   const purchase = info.events.find((e) => e.event.name === 'purchase').event.data;
-  if (purchase.offer_name !== 'starter_pack' || purchase.revenue !== 0.99 || purchase.currency !== 'USD' || purchase.order_id !== 'demo-order-1' || purchase.status !== 'success') {
+  if (purchase.offer_name !== 'starter_pack' || purchase.revenue !== 0.99 || purchase.currency !== 'USD' || purchase.order_id !== 'demo-order-1' || purchase.status !== 'success' || purchase.source !== 'offer_window') {
     fail(`purchase event: ${JSON.stringify(purchase)}`);
   }
   const ad = info.events.find((e) => e.event.name === 'advertisement').event.data;
@@ -112,9 +113,9 @@ async function run() {
   if (moved.product !== 'starter_pack' || moved.moved !== 1) fail(`offer_purchased: ${JSON.stringify(moved)}`);
 
   // 5. the debug line shows the last batch and the counters
-  await page.waitForFunction(() => /sent 6 · batches 2/.test(window.__showcase.analyticsDemo.status.text), null, { timeout: WAIT_MS });
+  await page.waitForFunction(() => /sent 8 · batches 2/.test(window.__showcase.analyticsDemo.status.text), null, { timeout: WAIT_MS });
   info = await read();
-  if (!/last \[offer_activated, purchase, offer_purchased, advertisement\]/.test(info.status)) fail(`status line: ${info.status}`);
+  if (!/last \[offer_activated, purchase_started, purchase_ok, purchase, offer_purchased, advertisement\]/.test(info.status)) fail(`status line: ${info.status}`);
   await page.waitForTimeout(350);
   const file = resolve(outDir, 'analytics-01-debug-line.png');
   await page.screenshot({ path: file });

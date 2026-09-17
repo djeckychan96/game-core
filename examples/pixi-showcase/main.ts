@@ -7,7 +7,7 @@
 // TOOLBAR (opens each window directly) and the OFFER strip (drives the OfferRuntime demo's fake
 // clock); both are deliberately styled unlike the game UI.
 import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, Text, Texture } from 'pixi.js';
-import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, UiRuntime, createOfferAnalyticsHandler, type OfferDef, type OfferEvent } from 'game-core';
+import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, PurchaseRuntime, UiRuntime, createGrantedPurchaseStore, createOfferAnalyticsHandler, createPurchaseAnalyticsHandler, type OfferEvent, type OfferReward, type PurchaseEvent, type PurchaseResult, type RestoreResult } from 'game-core';
 import {
   ClickRippleEffect,
   DEFAULT_CLICK_RIPPLE,
@@ -30,6 +30,7 @@ import {
 import { DEMO_MAX_LIVES, DEMO_REFILL_PRICE, DEMO_SHOP_ITEMS, createDemoState } from './demoData';
 import { DemoAnalyticsTransport, demoAnalyticsContext, eventLabel } from './analyticsDemo';
 import { DEMO_OFFER_CATALOG, DEMO_OFFER_CHAIN, REWARD_COINS, formatClock, offerLabel, offerToWindowParams } from './offerDemo';
+import { DemoPaymentsAdapter, demoPrice, type DemoSheetOutcome } from './purchaseDemo';
 
 interface SafeInsets {
   top: number;
@@ -50,7 +51,7 @@ function readSafeInsets(): SafeInsets {
 const PLAY_SCALE = 1.424;
 const PLAY_BOTTOM_RATIO = 98 / 844;
 const TOOLBAR_H = 30;
-const OFFER_STRIP_H = 40; // pills + the OFFERS status line + the ANALYTICS status line
+const OFFER_STRIP_H = 50; // pills + the OFFERS, PURCHASE and ANALYTICS status lines
 /** The donor's pan threshold: a finger that travelled further panned/scrolled, it did not tap. */
 const EMPTY_TAP_THRESHOLD_PX = 12;
 /** The demo's fake server clock starts here (unix seconds). A game injects `serverNow()` instead. */
@@ -131,7 +132,7 @@ async function boot(): Promise<void> {
   });
   const shopWindow = new ShopWindowView({
     ui, motion, textures,
-    onBuy: (item) => { state.coins += item.amount; hud.setCoins(state.coins); }
+    onBuy: (item) => demoPurchase(item.id, 'shop') // real money → PurchaseRuntime, never a direct grant
   });
   const livesWindow = new LivesWindowView({
     ui, motion, textures,
@@ -162,7 +163,7 @@ async function boot(): Promise<void> {
         toast('STARTER PACK — purchase is the host\'s job');
         return;
       }
-      demoPurchase(productId);
+      demoPurchase(productId, 'offer_window');
     }
   });
   modals.addChild(resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow);
@@ -203,9 +204,7 @@ async function boot(): Promise<void> {
   const offerState = new MemoryOfferStateStore();
   const offerEvents: OfferEvent[] = [];
   let shownOfferId: string | null = null; // productId the starter window currently shows, null for the static demo
-  let purchasing = false;                  // the demo payment sheet is open (donor `purchasing`)
   let offerAutoShown = false;              // donor: the current offer pops once per session
-  let demoOrders = 0;
   const offers = new OfferRuntime({
     config: DEMO_OFFER_CHAIN,
     state: offerState,
@@ -242,45 +241,90 @@ async function boot(): Promise<void> {
     shownOfferId = active.productId;
     const shown = starterWindow.show(offerToWindowParams(active, DEMO_OFFER_CATALOG[active.productId] ?? '?'));
     starterWindow.setTimer(formatClock(offers.secondsLeft()));
-    starterWindow.setBuyEnabled(!purchasing);
+    starterWindow.setBuyEnabled(!purchasing());
     return shown;
   };
 
-  /** The demo purchase: the payment sheet is a MotionRuntime delay; success grants (host) and moves the chain. */
-  const demoPurchase = (productId: string) => {
-    purchasing = true;
+  // --- PurchaseRuntime demo: BUY → fake payments adapter → grant → AnalyticsRuntime → OfferRuntime ---
+  // The runtime imports neither of the other two: this composition is the only link. Rewards come
+  // from the host's catalogs (the offer chain's rewards, the shop table); the price of the purchase
+  // event from the demo catalog (`demoPrice`); the registry is the in-memory one (a game persists it).
+  const payments = new DemoPaymentsAdapter();
+  const grantedPurchases = createGrantedPurchaseStore();
+  const purchaseEvents: PurchaseEvent<OfferReward[]>[] = [];
+  let lastPurchase: PurchaseResult | null = null;
+  let lastRestore: RestoreResult | null = null;
+  let profileSaves = 0; // a game: profile.save() / markDirty() on every `granted`
+  const purchases = new PurchaseRuntime<OfferReward[]>({
+    payments,
+    granted: grantedPurchases,
+    resolveGrant: (productId) => {
+      const item = DEMO_SHOP_ITEMS.find((it) => it.id === productId);
+      return offers.offerByProduct(productId)?.rewards ?? (item ? [{ id: REWARD_COINS, amount: item.amount }] : undefined);
+    },
+    // Rewards are host-owned data: the demo credits coins to the HUD and just names the rest.
+    grant: (productId, rewards) => {
+      for (const reward of rewards) {
+        if (reward.id === REWARD_COINS) { state.coins += reward.amount; hud.setCoins(state.coins); }
+      }
+      if (offers.offerByProduct(productId)?.tier === 0) state.starterPackOwned = true;
+    },
+    onEvent: createPurchaseAnalyticsHandler(analytics, demoPrice, (event) => {
+      purchaseEvents.push(event);
+      if (event.type === 'granted') {
+        profileSaves++;
+        offers.onPurchased(event.productId); // a product outside the chain is a no-op there
+        toast(`${event.restored ? 'RESTORED' : 'PURCHASE OK'} · ${event.productId} · granted once · ${event.token ?? 'no token'}`);
+      } else if (event.type === 'cancelled') {
+        toast(`PURCHASE CANCELLED · ${event.productId}`);
+      } else if (event.type === 'error') {
+        toast(`PURCHASE ERROR · ${event.reason}`);
+      }
+      refreshPurchaseUi();
+    })
+  });
+  const purchasing = () => purchases.getPending() !== null; // donor `purchasing`: the payment sheet is open
+
+  /** The demo purchase: the fake platform's payment sheet stays open for a MotionRuntime delay (host ticker). */
+  const demoPurchase = (productId: string, source: string) => {
+    const opensSheet = !purchasing(); // a second BUY while paying is answered `busy` by the runtime
+    const running = purchases.purchase(productId, source);
+    if (opensSheet) {
+      toast(`PAYMENT SHEET… (demo, ${productId})`);
+      motion.delay({
+        scope: 'showcase:purchase',
+        durationMs: DEMO_PAYMENT_MS,
+        onComplete: () => payments.closeSheet(),
+        onCancel: () => payments.closeSheet('cancel')
+      });
+    }
     refreshOfferUi();
-    toast(`PAYMENT SHEET… (demo, ${productId})`);
-    motion.delay({
-      scope: 'showcase:purchase',
-      durationMs: DEMO_PAYMENT_MS,
-      onComplete: () => {
-        purchasing = false;
-        const def = offers.offerByProduct(productId);
-        if (def) grantRewards(def);
-        // the money event is the purchase flow's (a fake one here); the chain only adds offer_purchased
-        demoOrders++;
-        analytics.purchase({
-          offerName: productId,
-          revenue: Number((DEMO_OFFER_CATALOG[productId] ?? '$0').replace('$', '')),
-          currency: 'USD',
-          orderId: `demo-order-${demoOrders}`,
-          status: 'success',
-          source: 'offer_window'
-        });
-        offers.onPurchased(productId); // moved or not, the event above reports it
-        refreshOfferUi();
-      },
-      onCancel: () => { purchasing = false; refreshOfferUi(); }
+    refreshPurchaseUi();
+    return running.then((result) => {
+      lastPurchase = result;
+      if (result.status === 'busy') toast('PURCHASE BUSY · one payment at a time');
+      refreshOfferUi();
+      refreshPurchaseUi();
+      return result;
     });
   };
-
-  /** Rewards are host-owned data: the demo credits coins to the HUD and just names the rest. */
-  const grantRewards = (def: OfferDef) => {
-    for (const reward of def.rewards) {
-      if (reward.id === REWARD_COINS) { state.coins += reward.amount; hud.setCoins(state.coins); }
-    }
-    if (def.tier === 0) state.starterPackOwned = true;
+  /** One restore pass — a game runs it at boot and in waves after a purchase that did not answer ok. */
+  const demoRestore = () =>
+    purchases.restore().then((result) => {
+      lastRestore = result;
+      if (result.granted.length === 0) toast(`RESTORE · ${result.status} · nothing new (${result.found} held)`);
+      refreshOfferUi();
+      refreshPurchaseUi();
+      return result;
+    });
+  const refreshPurchaseUi = () => {
+    const stats = purchases.getStats();
+    const last = purchaseEvents[purchaseEvents.length - 1];
+    const lastText = !last ? '—' : last.type === 'error' ? `error:${last.reason}` : `${last.type} ${last.productId}`;
+    purchaseStatus.text = `PURCHASE · ${stats.pending ? `PAYING ${stats.pending}` : `last ${lastPurchase?.status ?? '—'}`} · ${lastText}`
+      + ` · granted ${stats.granted} (restored ${stats.restored}) · dup ${stats.duplicates} · held ${payments.held.length} · saves ${profileSaves}${stats.payer ? ' · PAYER' : ''}`;
+    purchaseStatus.scale.set(1);
+    purchaseStatus.scale.set(Math.min(1, (app.screen.width - 12) / Math.max(1, purchaseStatus.width)));
   };
 
   const cooldownText = (): string => {
@@ -300,8 +344,8 @@ async function boot(): Promise<void> {
     if (shownOfferId !== null && starterWindow.state !== 'hidden') {
       if (active && active.productId === shownOfferId) {
         starterWindow.setTimer(formatClock(left));
-        starterWindow.setBuyEnabled(!purchasing);
-      } else if (!purchasing && starterWindow.state !== 'leaving') {
+        starterWindow.setBuyEnabled(!purchasing());
+      } else if (!purchasing() && starterWindow.state !== 'leaving') {
         // donor: the offer expired while its window was open (and no purchase is in flight) → close it
         shownOfferId = null;
         starterWindow.close('programmatic');
@@ -309,8 +353,8 @@ async function boot(): Promise<void> {
     }
     const elapsedH = ((clock.nowMs / 1000 - DEMO_EPOCH_SEC) / 3600).toFixed(1);
     offerStatus.text = active
-      ? `OFFERS · ACTIVE ${offerLabel(active)} ${active.productId} · ${formatClock(left)} · clock +${elapsedH}h${purchasing ? ' · PAYING' : ''}`
-      : `OFFERS · ${cooldownText()} · clock +${elapsedH}h${purchasing ? ' · PAYING' : ''}`;
+      ? `OFFERS · ACTIVE ${offerLabel(active)} ${active.productId} · ${formatClock(left)} · clock +${elapsedH}h${purchasing() ? ' · PAYING' : ''}`
+      : `OFFERS · ${cooldownText()} · clock +${elapsedH}h${purchasing() ? ' · PAYING' : ''}`;
   };
 
   /** OFFER strip controls: move the fake clock, then one explicit tick (what a host does after a resume). */
@@ -332,8 +376,7 @@ async function boot(): Promise<void> {
     jumpClock(Math.max(0, wait), 'NEXT');
   };
   const offerReset = () => {
-    motion.cancelScope('showcase:purchase');
-    purchasing = false;
+    motion.cancelScope('showcase:purchase'); // closes the open payment sheet as cancelled
     offerAutoShown = false;
     shownOfferId = null;
     state.starterPackOwned = false;
@@ -454,6 +497,8 @@ async function boot(): Promise<void> {
   });
   const offerStatus = createLabel(theme, 'OFFERS', { fontSize: 8, stroke: false, fill: 0xffd9a0 });
   offerStrip.addChild(offerStatus);
+  const purchaseStatus = createLabel(theme, 'PURCHASE', { fontSize: 8, stroke: false, fill: 0xb8ffb0 });
+  offerStrip.addChild(purchaseStatus);
   const analyticsStatus = createLabel(theme, 'ANALYTICS', { fontSize: 8, stroke: false, fill: 0xa0e0ff });
   offerStrip.addChild(analyticsStatus);
 
@@ -536,7 +581,8 @@ async function boot(): Promise<void> {
     const offerTop = toolbarTop - 4 - OFFER_STRIP_H;
     offerStripBg.clear().rect(0, offerTop, w, OFFER_STRIP_H).fill({ color: 0x1a1008, alpha: 0.82 });
     placeRow(offerPills, offerTop + 11);
-    offerStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 16);
+    offerStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 26);
+    purchaseStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 16);
     analyticsStatus.position.set(w / 2, offerTop + OFFER_STRIP_H - 6);
 
     // PLAY: donor size and its 98/844 bottom margin, never under the strips
@@ -569,6 +615,7 @@ async function boot(): Promise<void> {
   // iOS reports safe-area/orientation a frame late
   window.addEventListener('orientationchange', () => setTimeout(layout, 60));
   refreshOfferUi();
+  refreshPurchaseUi();
 
   // --- demo timers driven by the host ticker (lives refill countdown, offer timers) ---
   let timerAcc = 0;
@@ -588,6 +635,7 @@ async function boot(): Promise<void> {
         livesWindow.setTimer(formatTimer(state.refillSeconds));
       }
       refreshOfferUi(); // once a second, like the donor's map icon and window timers
+      refreshPurchaseUi();
       refreshAnalyticsUi();
     }
   };
@@ -601,7 +649,13 @@ async function boot(): Promise<void> {
     openResult, openShop, openLives, openSettings, openNoAds, openStarter, openOffer,
     offers, offerState, offerEvents,
     offerClock: { now: () => Math.floor(clock.nowMs / 1000), jump: (seconds: number) => jumpClock(seconds, `+${seconds}s`), expire: offerExpire, next: offerNext, reset: offerReset },
-    offerDemo: { shownOfferId: () => shownOfferId, purchasing: () => purchasing, iconTimer: offerIconTimer, status: offerStatus },
+    offerDemo: { shownOfferId: () => shownOfferId, purchasing, iconTimer: offerIconTimer, status: offerStatus },
+    purchases, payments, grantedPurchases, purchaseEvents,
+    purchaseDemo: {
+      buy: demoPurchase, restore: demoRestore, status: purchaseStatus,
+      setOutcome: (outcome: DemoSheetOutcome) => { payments.nextOutcome = outcome; },
+      last: () => ({ purchase: lastPurchase, restore: lastRestore, saves: profileSaves })
+    },
     analytics, analyticsTransport,
     analyticsDemo: { ad: analyticsDemoAd, flush: analyticsDemoFlush, status: analyticsStatus },
     layout,
