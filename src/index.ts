@@ -168,8 +168,36 @@ export type {
   PurchasePending,
   PurchaseRuntimeStats
 } from './purchases';
+export { AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT } from './ads';
+export type {
+  AdsStateSnapshot,
+  AdPlacementType,
+  AdPayerClass,
+  AdSegment,
+  AdPlacementRule,
+  AdPlacement,
+  AdsConfig,
+  AdsDenyReason,
+  AdsDecision,
+  AdsStateKey,
+  AdsCount,
+  AdsStateStore,
+  AdsInput,
+  AdsEvent,
+  AdsEventType,
+  AdsEventHandler,
+  AdsErrorPhase,
+  AdsErrorContext,
+  AdsErrorHandler,
+  AdsRuntimeOptions,
+  AdsRuntimeStats
+} from './ads';
 // composition-level wiring between runtimes (types only on both sides — no runtime coupling)
 export { createOfferAnalyticsHandler, offerEventToAnalytics } from './composition/offerAnalytics';
 export type { OfferAnalyticsSink, OfferAnalyticsRecord } from './composition/offerAnalytics';
 export { createPurchaseAnalyticsHandler, purchaseEventToAnalytics } from './composition/purchaseAnalytics';
 export type { PurchaseAnalyticsSink, PurchaseAnalyticsRecord, PurchasePrice, PurchasePriceResolver } from './composition/purchaseAnalytics';
+export { createAdsAnalyticsHandler, adsEventToAnalytics } from './composition/adsAnalytics';
+export type { AdsAnalyticsSink, AdsAnalyticsRecord } from './composition/adsAnalytics';
+export { createPurchaseAdsHandler, isConfirmedPayment } from './composition/purchaseAds';
+export type { PurchaseAdsSink } from './composition/purchaseAds';
