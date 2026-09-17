@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Game Core · ReadyUiOverlay demo</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #10131c; font-family: system-ui, sans-serif; }
+      /* The "game": plain DOM gameplay. It knows nothing about Pixi; the overlay is appended as its last child. */
+      #game { position: relative; width: 100vw; height: 100dvh; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+      #board { position: absolute; inset: 0; background: linear-gradient(#1d6b3c, #0f3d23); }
+      #card { position: absolute; left: 60px; top: 300px; width: 90px; height: 126px; border-radius: 10px; background: #fafafa; color: #c0392b; font: 700 34px/126px system-ui; text-align: center; box-shadow: 0 6px 14px rgba(0, 0, 0, .45); cursor: grab; }
+      #dom-tap { position: absolute; left: 50%; bottom: 90px; transform: translateX(-50%); padding: 14px 26px; border: 0; border-radius: 12px; background: #f4c542; font: 700 18px system-ui; }
+      #status { position: absolute; left: 12px; right: 12px; bottom: 16px; color: #d6f5e0; font: 12px/1.4 ui-monospace, monospace; pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <div id="game">
+      <div id="board"></div>
+      <div id="card">A♥</div>
+      <button id="dom-tap">DOM TAP</button>
+      <div id="status"></div>
+    </div>
+    <script type="module" src="./overlayDemo.ts"></script>
+  </body>
+</html>

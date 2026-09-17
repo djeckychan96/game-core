@@ -39,6 +39,7 @@
     "showcase:analytics": "node scripts/analytics-demo-check.mjs",
     "showcase:purchase": "node scripts/purchase-demo-check.mjs",
     "showcase:ads": "node scripts/ads-demo-check.mjs",
+    "showcase:overlay": "node scripts/overlay-demo-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
