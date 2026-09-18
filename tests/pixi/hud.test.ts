@@ -106,4 +106,64 @@ describe('HudView', () => {
     expect(Number.isFinite(hud.barHeight)).toBe(true);
     hud.destroy();
   });
+
+  it('overlapping counter pulses never compound: the icon always settles back to its layout scale', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, coins: 0, onCoinsTap: () => {} });
+    const coins = (hud as unknown as { coins: { icon: { scale: { x: number } }; iconScale: number } }).coins;
+    const base = coins.icon.scale.x;
+    expect(base).toBeCloseTo(coins.iconScale, 8);
+    // the reward flight: one setCoins per coin, 60 ms apart, each inside the previous 260 ms pulse
+    for (let i = 1; i <= 12; i++) {
+      hud.setCoins(i);
+      advance(kit.core, 60);
+      expect(coins.icon.scale.x).toBeLessThanOrEqual(base * 1.22 + 1e-6); // never above ONE pop
+    }
+    expect(kit.motion.getStats().activeMotions).toBe(1); // one pulse per badge, never a stack
+    advance(kit.core, 1000);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    expect(coins.icon.scale.x).toBeCloseTo(base, 8);
+    expect(kit.motionErrors).toEqual([]);
+    hud.destroy();
+  });
+
+  it('a resize during a pulse lays out from the declared badge geometry, not the animated sprite', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, coins: 5, stars: 3, shadow: false, onCoinsTap: () => {}, onSettingsTap: () => {} });
+    type Row = { x: number; y: number; scale: { x: number }; getLocalBounds(): { x: number; y: number; width: number; height: number } };
+    const row = (hud as unknown as { row: Row }).row;
+    const coins = (hud as unknown as { coins: { icon: { scale: { x: number } }; iconScale: number } }).coins;
+    hud.resize(390, 844, { insets: { top: 47 }, pixelRatio: 2 });
+    const idle = { x: row.x, y: row.y, scale: row.scale.x, bar: hud.barHeight, bounds: { ...row.getLocalBounds() } };
+    hud.setCoins(500); // pulse in flight
+    advance(kit.core, 30);
+    expect(coins.icon.scale.x).toBeGreaterThan(coins.iconScale * 1.05);
+    hud.resize(390, 844, { insets: { top: 47 }, pixelRatio: 2 });
+    expect(row.getLocalBounds()).toEqual(idle.bounds); // the transient scale is invisible to the layout
+    expect(row.x).toBeCloseTo(idle.x, 6);
+    expect(row.y).toBeCloseTo(idle.y, 6);
+    expect(row.scale.x).toBeCloseTo(idle.scale, 8);
+    expect(hud.barHeight).toBeCloseTo(idle.bar, 6);
+    advance(kit.core, 400);
+    expect(coins.icon.scale.x).toBeCloseTo(coins.iconScale, 8);
+    // a press on the coin badge (0.94×) is transient too
+    badgeButton(hud, 'coins').emit('pointerdown', pointer(10, 10) as never);
+    advance(kit.core, 80);
+    hud.resize(390, 844, { insets: { top: 47 }, pixelRatio: 2 });
+    expect(row.getLocalBounds()).toEqual(idle.bounds);
+    expect(hud.barHeight).toBeCloseTo(idle.bar, 6);
+    hud.destroy();
+  });
+
+  it('barHeight is the bottom edge of the badge row plus the donor margin (what a map / board must reserve)', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, shadow: false, onCoinsTap: () => {}, onLivesTap: () => {} });
+    hud.resize(390, 844, { insets: { top: 47 } });
+    const s = Math.min(390 / 1080, 844 / 2344);
+    const row = (hud as unknown as { row: { getBounds(): { y: number; height: number } } }).row;
+    const rowBottom = row.getBounds().y + row.getBounds().height;
+    expect(hud.barHeight).toBeCloseTo(rowBottom + 12 * s, 3);
+    expect(hud.barHeight).toBeGreaterThan(rowBottom); // was: the badge CENTRES + 12 units (half a badge short)
+    hud.destroy();
+  });
 });

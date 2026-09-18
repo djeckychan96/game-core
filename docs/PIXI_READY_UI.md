@@ -159,8 +159,16 @@ Lives (heart with the count inside, timer / `MAX` on the capsule, "+"), coins (c
 its dark back, laid out with the donor's rule: row area = 1/20 of the viewport in portrait (1/50
 landscape), never wider than the screen minus the margins, heart icon 60 design units from the
 left and 83 from the top. `setCoins(n)`, `setLives(n, timerText)`, `setLivesTimer(text)`,
-`setMaxLives(n)`, `setStars(n)`, `barHeight` (px to reserve), `coinAnchor` / `starAnchor` (world
-positions for flight effects). Counter changes pulse through MotionRuntime.
+`setMaxLives(n)`, `setStars(n)`, `barHeight` (px to reserve: the bottom edge of the badge row plus the
+donor's 12-unit margin, measured from the top of the viewport including the top inset), `coinAnchor` /
+`starAnchor` (world positions for flight effects). Counter changes pulse through MotionRuntime.
+
+Layout geometry is never measured from animated sprites: every badge declares its design box as
+Pixi's `boundsArea`, so `resize()` (the row's area fit, `barHeight`, `getBounds()` read by hosts)
+sees the same numbers whether an icon is mid-pulse or a badge mid-press. A pulse tweens a factor
+over the badge's own layout scale and a badge runs one pulse at a time: a burst of `setCoins()` calls
+(reward coins flying in one by one) restarts the pop instead of stacking tweens whose captured
+bases would compound and leave the icon enlarged.
 
 ### UiButton
 

@@ -1,5 +1,5 @@
 import { Container, Rectangle, Sprite, type Text } from 'pixi.js';
-import type { MotionRuntime, UiRuntime } from '../index';
+import type { MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
@@ -65,16 +65,27 @@ const ROW_GAP = 40;
 const PORTRAIT_AREA_RATIO = 20;
 const LANDSCAPE_AREA_RATIO = 50;
 
+/** Design box of one badge: the icon square over the capsule's left edge up to the capsule's right edge. */
+const BADGE_BOUNDS = new Rectangle(-ICON_BOX / 2, -ICON_BOX / 2, CAPSULE_X + CAPSULE_W / 2 + ICON_BOX / 2, Math.max(ICON_BOX, PLUS_Y + PLUS_H / 2 + ICON_BOX / 2));
+
 /**
  * A resource badge: capsule + icon over its left edge + counter + optional "+" button.
  * The whole badge is one UiButton so the press feedback and the tap are a settled controller.
+ *
+ * Its bounds are DECLARED (`boundsArea` = the design box), never measured from the sprites: the icon pulses and the
+ * button press scale are transient animation state, and a layout that measured them would bake the animated size
+ * into the row's base geometry (a HUD that stays enlarged after a coin flight was exactly that).
  */
 class ResourceBadge extends Container {
   readonly button: UiButton | null;
   readonly icon: Sprite;
+  /** The icon's layout scale; a pulse is always `iconScale × factor` and settles back to it. */
+  readonly iconScale: number;
   readonly countText: Text;
   readonly capsuleText: Text;
   readonly plus: Sprite | null;
+  /** The one running pulse on this badge (a new pulse cancels it, so pulses never stack). */
+  pulse: MotionHandle | null = null;
 
   constructor(options: {
     ui: UiRuntime;
@@ -86,6 +97,7 @@ class ResourceBadge extends Container {
   }) {
     super();
     const { theme, textures } = options;
+    this.boundsArea = BADGE_BOUNDS;
 
     // Tappable badges are a UiButton whose (hidden) background spans capsule + icon; the visuals
     // are its children, so the settled press scales the whole badge from the icon center.
@@ -123,6 +135,7 @@ class ResourceBadge extends Container {
     // the star art has no transparent padding: 112 gives the same visible size as the 128 icons
     const box = options.icon === 'star' ? STAR_ICON : ICON_BOX;
     const k = box / Math.max(1, Math.max(iconTex.width, iconTex.height));
+    this.iconScale = k;
     this.icon.scale.set(k);
     host.addChild(this.icon);
 
@@ -303,7 +316,7 @@ export class HudView extends Container {
     const changed = next !== this.starsValue;
     this.starsValue = next;
     this.refreshStars();
-    if (changed && animate && this.stars) this.pulse(this.stars.icon);
+    if (changed && animate && this.stars) this.pulse(this.stars);
   }
 
   /** World position of the coin icon (px) — a target for "coins fly to the bank" effects. */
@@ -317,7 +330,7 @@ export class HudView extends Container {
     const changed = next !== this.coinsValue;
     this.coinsValue = next;
     this.refreshCoins();
-    if (changed && animate) this.pulse(this.coins.icon);
+    if (changed && animate) this.pulse(this.coins);
   }
 
   setLives(value: number, timerText = ''): void {
@@ -326,7 +339,7 @@ export class HudView extends Container {
     this.livesValue = next;
     this.timerText = timerText;
     this.refreshLives();
-    if (changed) this.pulse(this.lives.icon);
+    if (changed) this.pulse(this.lives);
   }
 
   setMaxLives(max: number): void {
@@ -374,7 +387,8 @@ export class HudView extends Container {
         top + (SETTINGS_TOP_MARGIN - gearBounds.y * rowScale) * s
       );
     }
-    this.heightPx = top + (TOP_MARGIN + (rowBounds.y + rowBounds.height) * rowScale + 12) * s;
+    // the row's top edge sits at TOP_MARGIN, so the bar ends at its bottom edge (+12 units), whatever rowBounds.y is
+    this.heightPx = top + (TOP_MARGIN + rowBounds.height * rowScale + 12) * s;
     if (this.shadow) {
       this.shadow.width = w * 1.05;
       this.shadow.height = this.heightPx * 2.1;
@@ -410,15 +424,24 @@ export class HudView extends Container {
     if (this.lives.plus) this.lives.plus.visible = !full;
   }
 
-  private pulse(target: Sprite): void {
-    const base = target.scale.x;
+  /**
+   * Counter feedback: the icon pops to 1.22× and settles. The base is the badge's OWN layout scale, never the sprite's
+   * current (possibly animated) scale, and a badge runs one pulse at a time — a burst of updates (coins flying in one by
+   * one) restarts the pop instead of stacking tweens whose captured bases would compound.
+   */
+  private pulse(badge: ResourceBadge): void {
+    badge.pulse?.cancel();
+    const icon = badge.icon;
+    const base = badge.iconScale;
     const k = { v: 1 };
-    this.motion.tween({
+    const handle = this.motion.tween({
       scope: this.fxScope,
-      bindings: [{ get: () => k.v, set: (v: number) => { k.v = v; target.scale.set(base * v); }, from: 1.22, to: 1 }],
+      bindings: [{ get: () => k.v, set: (v: number) => { k.v = v; icon.scale.set(base * v); }, from: 1.22, to: 1 }],
       durationMs: 260,
       ease: 'backOut',
-      onCancel: () => target.scale.set(base)
+      onComplete: () => { if (badge.pulse === handle) badge.pulse = null; icon.scale.set(base); },
+      onCancel: () => { if (badge.pulse === handle) badge.pulse = null; icon.scale.set(base); }
     });
+    badge.pulse = handle;
   }
 }
