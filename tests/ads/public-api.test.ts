@@ -136,7 +136,9 @@ test('a package consumer sees exactly the AdsRuntime public API and none of its 
       update: true, segmentId: true, decide: true, canShowInter: true, canShowRewarded: true, canShowBanner: true,
       registerShown: true, markPayer: true, getStats: true,
       // Ads Policy V1
-      evaluate: true, requestInterstitial: true, requestRewarded: true, requestBanner: true, startSession: true, getPolicy: true
+      evaluate: true, requestInterstitial: true, requestRewarded: true, requestBanner: true, startSession: true, getPolicy: true,
+      // Ads Policy V1.1: the NO_ADS offer trigger (raised by the cadence, taken by the host) and the platform-answer watchdog numbers
+      isNoAdsOfferDue: true, consumeNoAdsOffer: true, getRequestTimeouts: true
     };
     const decision: AdsDecision = ads.decide('level_win_inter');
     const typed: AdsDecision = ads.decide('level_win_inter', 'rewarded');

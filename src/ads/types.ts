@@ -181,7 +181,9 @@ export type AdsEvent =
       level: number;
       day: number;
       hour: number;
-    };
+    }
+  /** V1.1: the N-th confirmed interstitial raised the NO_ADS offer trigger (`noAds.offerAfterInterstitials`); the host takes it with `consumeNoAdsOffer()`. */
+  | { type: 'no_ads_offer'; placement: string; segmentId: string | null; level: number; interstitials: number };
 
 export type AdsEventType = AdsEvent['type'];
 export type AdsEventHandler = (event: AdsEvent) => void;
@@ -245,4 +247,6 @@ export interface AdsSessionStats {
   shown: Record<string, number>;
   /** Requests per placement since its last show — the cadence counters (only placements with a cadence). */
   cadence: Record<string, number>;
+  /** V1.1: the NO_ADS offer cadence — the trigger waiting for the host, triggers raised this session, confirmed interstitials counted since the last trigger. */
+  noAdsOffer: { due: boolean; raised: number; interstitialsSinceOffer: number };
 }

@@ -14,11 +14,13 @@ export type {
   AdsRewardedPolicy,
   AdsBannerPolicy,
   AdsNoAdsPolicy,
+  AdsNoAdsOfferPolicy,
+  AdsRequestTimeouts,
   AdsSessionPolicy,
   AdsPolicy,
   AdsPolicyOverrides
 } from './policy';
-export { TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_ADS_CONFIG_V1 } from './presets';
+export { TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_AD_POLICY_V2, TRAIL_ARROW_ADS_CONFIG_V1 } from './presets';
 export type {
   AdPlacementType,
   AdPayerClass,

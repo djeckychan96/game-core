@@ -1,6 +1,7 @@
 import type { CoreRuntimeModule } from '../core/CoreRuntime';
 import { ADS_BANNER_PLACEMENT, ADS_DEFAULT_SEGMENT_ID, validateAdsConfig } from './config';
-import { adsPolicyFromConfig, validateAdsPolicy } from './policy';
+import { ADS_POLICY_NEUTRAL, adsPolicyFromConfig, validateAdsPolicy } from './policy';
+import type { AdsRequestTimeouts } from './policy';
 import type {
   AdsBannerPlacementPolicy,
   AdsCadence,
@@ -105,6 +106,10 @@ export class AdsRuntime implements CoreRuntimeModule {
   private sessionInterstitials = 0;
   private sessionShown = new Map<string, number>();
   private cadenceCounts = new Map<string, number>();
+  // V1.1: the NO_ADS offer cadence (donor InterstitialAdsSystem: an in-memory counter, a pending flag the map consumes)
+  private interstitialsSinceOffer = 0;
+  private noAdsOfferDue = false;
+  private noAdsOffersRaised = 0;
 
   constructor(options: AdsRuntimeOptions) {
     if (options.config && options.policy) throw new RangeError('AdsRuntime: pass either options.config or options.policy, not both');
@@ -148,6 +153,39 @@ export class AdsRuntime implements CoreRuntimeModule {
     this.sessionInterstitials = 0;
     this.sessionShown = new Map();
     this.cadenceCounts = new Map();
+    this.interstitialsSinceOffer = 0;
+    this.noAdsOfferDue = false;
+    this.noAdsOffersRaised = 0;
+  }
+
+  /**
+   * V1.1: the platform-answer watchdogs the host should arm for this placement (`policy.timeouts`, or
+   * the neutral donor numbers when the policy has none; a rewarded placement's `answerTimeoutMs`
+   * overrides `rewardedAnswerMs`). Data only — the runtime never runs a timer.
+   */
+  getRequestTimeouts(placement?: string): AdsRequestTimeouts {
+    const base = this.policy.timeouts ?? ADS_POLICY_NEUTRAL.timeouts;
+    const own = placement !== undefined && Object.prototype.hasOwnProperty.call(this.policy.rewarded.placements, placement)
+      ? this.policy.rewarded.placements[placement]?.answerTimeoutMs
+      : undefined;
+    return { ...base, rewardedAnswerMs: own ?? base.rewardedAnswerMs };
+  }
+
+  /** V1.1: is the NO_ADS offer trigger waiting for the host? (a peek; `consumeNoAdsOffer()` takes it) */
+  isNoAdsOfferDue(): boolean {
+    return this.noAdsOfferDue;
+  }
+
+  /**
+   * V1.1: takes the NO_ADS offer trigger — true once per trigger, then false until the cadence raises
+   * the next one. Re-checks the entitlement at this moment (donor: the map drops a pending offer when
+   * the player bought NO_ADS meanwhile): with NO_ADS owned the trigger is dropped and false is answered.
+   * The runtime never opens a window: what to show, and when, is the host's.
+   */
+  consumeNoAdsOffer(): boolean {
+    if (!this.noAdsOfferDue) return false;
+    this.noAdsOfferDue = false;
+    return !this.input.hasNoAds();
   }
 
   /**
@@ -289,7 +327,30 @@ export class AdsRuntime implements CoreRuntimeModule {
     if (kind === 'inter') this.sessionInterstitials++;
     this.sessionShown.set(placement, (this.sessionShown.get(placement) ?? 0) + 1);
     if (this.cadenceCounts.has(placement)) this.cadenceCounts.set(placement, 0);
-    this.emit({ type: 'shown', placement, adType: kind ?? null, segmentId: this.segmentId(), level: this.input.level(), day: next.day, hour: next.hour });
+    const level = this.input.level();
+    const segmentId = this.segmentId();
+    this.emit({ type: 'shown', placement, adType: kind ?? null, segmentId, level, day: next.day, hour: next.hour });
+    if (kind === 'inter') this.countForNoAdsOffer(placement, segmentId, level);
+  }
+
+  /**
+   * V1.1 — donor `InterstitialAdsSystem.onAdsInterstitial` 1:1: only a CONFIRMED interstitial counts;
+   * nothing is counted (the counter stands still) while the player owns NO_ADS or is below the offer's
+   * level; the N-th count restarts the counter and raises the trigger (`first` for the first trigger
+   * of the session, `every` afterwards).
+   */
+  private countForNoAdsOffer(placement: string, segmentId: string | null, level: number): void {
+    const offer = this.policy.noAds.offerAfterInterstitials;
+    if (!offer || !offer.enabled) return;
+    if (this.input.hasNoAds() || level < offer.minLevel) return;
+    this.interstitialsSinceOffer++;
+    const threshold = this.noAdsOffersRaised === 0 ? offer.first ?? offer.every : offer.every;
+    if (this.interstitialsSinceOffer < threshold) return;
+    const interstitials = this.interstitialsSinceOffer;
+    this.interstitialsSinceOffer = 0;
+    this.noAdsOfferDue = true;
+    this.noAdsOffersRaised++;
+    this.emit({ type: 'no_ads_offer', placement, segmentId, level, interstitials });
   }
 
   /** The player made ANY purchase → the payer branch for good (donor: a sticky flag, never cleared). */
@@ -333,7 +394,8 @@ export class AdsRuntime implements CoreRuntimeModule {
         startedAt: this.sessionStartedAt,
         interstitials: this.sessionInterstitials,
         shown: recordOf(this.sessionShown),
-        cadence: recordOf(this.cadenceCounts)
+        cadence: recordOf(this.cadenceCounts),
+        noAdsOffer: { due: this.noAdsOfferDue, raised: this.noAdsOffersRaised, interstitialsSinceOffer: this.interstitialsSinceOffer }
       }
     };
   }

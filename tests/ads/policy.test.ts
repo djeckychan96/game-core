@@ -215,7 +215,9 @@ test('TRAIL_ARROW_AD_POLICY_V1 = the verbatim donor tables (segments.tsv + place
   expect(TRAIL_ARROW_AD_POLICY_V1).toEqual(adsPolicyFromConfig(fromTsv, { name: 'trail_arrow', version: 1 }));
   expect(TRAIL_ARROW_AD_POLICY_V1.segmentation).toBe(TRAIL_ARROW_ADS_CONFIG_V1);
   expect(TRAIL_ARROW_AD_POLICY_V1.interstitial).toMatchObject({ enabled: true, cooldownMs: 0, afterRewardedCooldownMs: 0, firstShowDelayMs: 0, minLevel: 0 });
-  expect(TRAIL_ARROW_AD_POLICY_V1.noAds).toEqual({ blocksInterstitial: true, blocksBanner: true, blocksRewarded: false });
+  // V1.1 extended the shape: V1 carries the neutral V1.1 knobs (no offer cadence, the donor watchdog numbers) — its decisions are unchanged
+  expect(TRAIL_ARROW_AD_POLICY_V1.noAds).toEqual({ blocksInterstitial: true, blocksBanner: true, blocksRewarded: false, offerAfterInterstitials: null });
+  expect(TRAIL_ARROW_AD_POLICY_V1.timeouts).toEqual(ADS_POLICY_NEUTRAL.timeouts);
   expect(TRAIL_ARROW_AD_POLICY_V1.session).toEqual({ maxInterstitials: null, blockWhileAdInFlight: false });
   expect(() => validateAdsPolicy(TRAIL_ARROW_AD_POLICY_V1 as AdsPolicy)).not.toThrow();
 });

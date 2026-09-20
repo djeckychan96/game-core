@@ -40,6 +40,8 @@ export interface AdsRewardedPlacementPolicy {
   minLevel?: number | null;
   dayLimit?: number | null;
   hourLimit?: number | null;
+  /** V1.1: this placement's answer watchdog, ms, instead of `timeouts.rewardedAnswerMs` (see `AdsRequestTimeouts`). */
+  answerTimeoutMs?: number | null;
 }
 
 export interface AdsBannerPlacementPolicy {
@@ -77,11 +79,53 @@ export interface AdsBannerPolicy {
   placements: Record<AdsPlacementId, AdsBannerPlacementPolicy>;
 }
 
+/**
+ * V1.1 — the NO_ADS offer cadence (donor `InterstitialAdsSystem`): every N-th CONFIRMED interstitial
+ * (`registerShown` of an interstitial placement — never a rewarded, never a failed / cancelled ad)
+ * raises the "offer NO_ADS now" trigger. The runtime only raises it: the host takes it with
+ * `consumeNoAdsOffer()` at a moment of its choice (the donor: the map is up, no window open) and
+ * shows whatever window it has. Confirmed interstitials are not counted while the player owns
+ * NO_ADS or is below `minLevel` (the donor: L17, "the counter is not accumulated before it"), the
+ * counter is session-local (in memory; `startSession()` restarts it) and restarts at 0 on a trigger.
+ */
+export interface AdsNoAdsOfferPolicy {
+  enabled: boolean;
+  /** 3 = the 3rd, 6th, 9th … confirmed interstitial since the last trigger. Integer ≥ 1. */
+  every: number;
+  /** The confirmed interstitial that raises the FIRST trigger of the session (integer ≥ 1); defaults to `every`. The donor starts at 1. */
+  first?: number | null;
+  /** Below this level a confirmed interstitial is not counted. */
+  minLevel: number;
+}
+
 /** What the NO_ADS entitlement (`input.hasNoAds()`) switches off. Rewarded stays on by default: it is opt-in value. */
 export interface AdsNoAdsPolicy {
   blocksInterstitial: boolean;
   blocksBanner: boolean;
   blocksRewarded: boolean;
+  /** V1.1: the offer cadence; null / omitted = no trigger. */
+  offerAfterInterstitials?: AdsNoAdsOfferPolicy | null;
+}
+
+/**
+ * V1.1 — the platform-answer watchdogs, per game (donor `AdsTimeouts.ts`): how long the game waits
+ * for the platform's answer to an ad request before it treats the silence as an error and unlocks
+ * its window. Data only: the runtime never runs a timer (it has no clock of its own) — the host
+ * reads the numbers through `getRequestTimeouts(placement)` and arms its own watchdog. The donor:
+ * a rewarded belt of 130 s (REVIEW 15.09 №14: longer than the platform's own 90 / 120 s show
+ * timeouts, so a late ok after the unlock cannot lose the reward); an interstitial start timeout of
+ * 12 s (REVIEW 15.09 №5: only while the show has NOT begun), a 150 s hard cap while a show is in
+ * progress, re-checked every 5 s.
+ */
+export interface AdsRequestTimeouts {
+  /** The host waits this long for the platform's rewarded answer; a rewarded placement may override it (`answerTimeoutMs`). */
+  rewardedAnswerMs: number;
+  /** The interstitial transition goes on by itself after this long if the show never began. */
+  interstitialStartMs: number;
+  /** … but a show that is in progress is waited for, up to this long. */
+  interstitialShowHardCapMs: number;
+  /** How often the "still showing?" question is asked while waiting. */
+  interstitialRecheckMs: number;
 }
 
 export interface AdsSessionPolicy {
@@ -101,6 +145,8 @@ export interface AdsPolicy {
   banner: AdsBannerPolicy;
   noAds: AdsNoAdsPolicy;
   session: AdsSessionPolicy;
+  /** V1.1: the platform-answer watchdogs; omitted = `ADS_POLICY_NEUTRAL.timeouts` (the donor's numbers). */
+  timeouts?: AdsRequestTimeouts;
   /**
    * The segment tables (`parseAdsTsv` / the donor's `AdsConfig`) — WHO sees an ad by level and
    * payments, per-segment start levels, day / hour limits and cooldowns. null = no segmentation:
@@ -119,8 +165,10 @@ export type AdsPolicyOverrides = DeepPartial<Omit<AdsPolicy, 'segmentation'>> & 
 /** The knobs a policy built from a bare `AdsConfig` gets: everything neutral — the tables decide, like AdsRuntime v0.7. */
 export const ADS_POLICY_NEUTRAL = Object.freeze({
   interstitial: Object.freeze({ cooldownMs: 0, afterRewardedCooldownMs: 0, firstShowDelayMs: 0, minLevel: 0 }),
-  noAds: Object.freeze({ blocksInterstitial: true, blocksBanner: true, blocksRewarded: false }),
-  session: Object.freeze({ maxInterstitials: null, blockWhileAdInFlight: false })
+  noAds: Object.freeze({ blocksInterstitial: true, blocksBanner: true, blocksRewarded: false, offerAfterInterstitials: null }),
+  session: Object.freeze({ maxInterstitials: null, blockWhileAdInFlight: false }),
+  /** The donor's platform-answer watchdogs (`AdsTimeouts.ts`): what a policy without `timeouts` gets. */
+  timeouts: Object.freeze({ rewardedAnswerMs: 130_000, interstitialStartMs: 12_000, interstitialShowHardCapMs: 150_000, interstitialRecheckMs: 5_000 })
 });
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
@@ -178,6 +226,7 @@ export function adsPolicyFromConfig(config: AdsConfig, meta: { name?: string; ve
     banner: { enabled: true, minLevel: 0, placements: banner },
     noAds: { ...ADS_POLICY_NEUTRAL.noAds },
     session: { ...ADS_POLICY_NEUTRAL.session },
+    timeouts: { ...ADS_POLICY_NEUTRAL.timeouts },
     segmentation: config
   };
 }
@@ -291,6 +340,7 @@ export function validateAdsPolicy(policy: AdsPolicy): void {
     optionalLevel(`rewarded.placements.${id}.minLevel`, p['minLevel']);
     optionalNonNegative(`rewarded.placements.${id}.dayLimit`, p['dayLimit']);
     optionalNonNegative(`rewarded.placements.${id}.hourLimit`, p['hourLimit']);
+    optionalNonNegative(`rewarded.placements.${id}.answerTimeoutMs`, p['answerTimeoutMs']);
   }
 
   const banner = section('banner', policy.banner);
@@ -305,6 +355,24 @@ export function validateAdsPolicy(policy: AdsPolicy): void {
 
   const noAds = section('noAds', policy.noAds);
   for (const key of ['blocksInterstitial', 'blocksBanner', 'blocksRewarded'] as const) bool(`noAds.${key}`, noAds[key]);
+  const offer = noAds['offerAfterInterstitials'];
+  if (offer !== undefined && offer !== null) {
+    const o = section('noAds.offerAfterInterstitials', offer);
+    bool('noAds.offerAfterInterstitials.enabled', o['enabled']);
+    if (!(isInteger(o['every']) && (o['every'] as number) >= 1)) fail('noAds.offerAfterInterstitials.every must be an integer ≥ 1');
+    const first = o['first'];
+    if (first !== undefined && first !== null && !(isInteger(first) && first >= 1)) fail('noAds.offerAfterInterstitials.first must be an integer ≥ 1');
+    level('noAds.offerAfterInterstitials.minLevel', o['minLevel']);
+  }
+
+  const timeouts = policy.timeouts;
+  if (timeouts !== undefined) {
+    const t = section('timeouts', timeouts);
+    for (const key of ['rewardedAnswerMs', 'interstitialStartMs', 'interstitialShowHardCapMs', 'interstitialRecheckMs'] as const) {
+      const value = t[key];
+      if (!(isNumber(value) && Number.isFinite(value) && value >= 0)) fail(`timeouts.${key} must be a finite number ≥ 0`);
+    }
+  }
 
   const session = section('session', policy.session);
   const max = session['maxInterstitials'];

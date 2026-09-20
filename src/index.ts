@@ -171,7 +171,7 @@ export type {
 } from './purchases';
 export {
   AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT,
-  resolveAdsPolicy, adsPolicyFromConfig, validateAdsPolicy, freezeAdsPolicy, ADS_POLICY_NEUTRAL, TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_ADS_CONFIG_V1
+  resolveAdsPolicy, adsPolicyFromConfig, validateAdsPolicy, freezeAdsPolicy, ADS_POLICY_NEUTRAL, TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_AD_POLICY_V2, TRAIL_ARROW_ADS_CONFIG_V1
 } from './ads';
 export type {
   AdsStateSnapshot,
@@ -184,6 +184,8 @@ export type {
   AdsRewardedPolicy,
   AdsBannerPolicy,
   AdsNoAdsPolicy,
+  AdsNoAdsOfferPolicy,
+  AdsRequestTimeouts,
   AdsSessionPolicy,
   AdsPolicy,
   AdsPolicyOverrides,

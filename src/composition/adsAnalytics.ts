@@ -16,7 +16,7 @@ export interface AdsAnalyticsSink {
 
 export type AdsAnalyticsRecord =
   | { kind: 'advertisement'; event: AnalyticsAdvertisementEvent }
-  | { kind: 'interaction'; action: 'ad_offered' | 'ad_denied'; data: AnalyticsEventData };
+  | { kind: 'interaction'; action: 'ad_offered' | 'ad_denied' | 'no_ads_offer'; data: AnalyticsEventData };
 
 // Hazar / the donor name an interstitial in full; an unknown placement has no type to report
 const analyticsAdType = (adType: AdPlacementType | null): string => (adType === 'inter' ? 'interstitial' : adType ?? 'unknown');
@@ -37,6 +37,10 @@ const analyticsAdType = (adType: AdPlacementType | null): string => (adType === 
 export function adsEventToAnalytics(event: AdsEvent): AdsAnalyticsRecord {
   if (event.type === 'shown') {
     return { kind: 'advertisement', event: { type: analyticsAdType(event.adType), placement: event.placement, status: 'complete' } };
+  }
+  // V1.1: the NO_ADS offer trigger — telemetry of the cadence (the host reports the window it shows, if any, itself)
+  if (event.type === 'no_ads_offer') {
+    return { kind: 'interaction', action: 'no_ads_offer', data: { placement: event.placement, segment: event.segmentId ?? undefined, level: event.level, interstitials: event.interstitials } };
   }
   const data: AnalyticsEventData = {
     placement: event.placement,

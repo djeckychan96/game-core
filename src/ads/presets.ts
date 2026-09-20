@@ -6,7 +6,7 @@
 // the knobs). It is NOT the default of anything yet: Oleg is still reading the results of this
 // scheme. When it is, `DEFAULT_AD_POLICY = TRAIL_ARROW_AD_POLICY_V1` — or a
 // `resolveAdsPolicy(TRAIL_ARROW_AD_POLICY_V1, { … })` with the changed numbers — is one line.
-import { freezeAdsPolicy } from './policy';
+import { ADS_POLICY_NEUTRAL, freezeAdsPolicy, resolveAdsPolicy } from './policy';
 import type { AdsPolicy } from './policy';
 import type { AdsConfig } from './types';
 
@@ -233,9 +233,28 @@ export const TRAIL_ARROW_AD_POLICY_V1: Readonly<AdsPolicy> = freezeAdsPolicy({
     minLevel: 0,
     placements: { banner: { enabled: true } }
   },
-  // NO_ADS: no interstitials, no banner; rewarded stays — donor 1:1
-  noAds: { blocksInterstitial: true, blocksBanner: true, blocksRewarded: false },
+  // NO_ADS: no interstitials, no banner; rewarded stays — donor 1:1. V1 predates the offer cadence: none here (see V2)
+  noAds: { blocksInterstitial: true, blocksBanner: true, blocksRewarded: false, offerAfterInterstitials: null },
   // the donor's AdsGate has no per-session cap and does not know about ads in flight (its windows guard that themselves)
   session: { maxInterstitials: null, blockWhileAdInFlight: false },
+  // V1.1 added `timeouts` to the policy shape; V1 carries the neutral (= donor) numbers so it still decides exactly like `{ config }`
+  timeouts: { ...ADS_POLICY_NEUTRAL.timeouts },
   segmentation: TRAIL_ARROW_ADS_CONFIG_V1 as AdsConfig
+});
+
+/**
+ * Trail Arrow 0.1.22 production scheme, version 2 = V1 + the two rules Ads Policy V1.1 lifted out of
+ * the donor's systems (V1 stays available; neither is `DEFAULT_AD_POLICY` — Oleg's monetization review is still open):
+ * - the NO_ADS offer cadence of `InterstitialAdsSystem`: `NO_ADS_OFFER_PERIOD = 3`, the counter starts at
+ *   `PERIOD − 1`, so the 1st confirmed interstitial raises the first offer and every 3rd after it
+ *   (`first: 1, every: 3`); not counted below L17 (`Balance.NO_ADS_MIN_LEVEL`) or with NO_ADS owned;
+ * - the platform-answer watchdogs of `AdsTimeouts.ts` (130 s rewarded belt, 12 s / 150 s / 5 s interstitial)
+ *   — with the one production drift kept verbatim: `OutOfSpaceWindowSystem` still arms a hardcoded 75 s belt for
+ *   `ad_extra_moves_rewarded` (audit B5 — a known bug; raising it to 130 s is a data decision for Oleg, not a port).
+ */
+export const TRAIL_ARROW_AD_POLICY_V2: Readonly<AdsPolicy> = resolveAdsPolicy(TRAIL_ARROW_AD_POLICY_V1, {
+  version: 2,
+  noAds: { offerAfterInterstitials: { enabled: true, every: 3, first: 1, minLevel: 17 } },
+  rewarded: { placements: { ad_extra_moves_rewarded: { answerTimeoutMs: 75_000 } } },
+  timeouts: { rewardedAnswerMs: 130_000, interstitialStartMs: 12_000, interstitialShowHardCapMs: 150_000, interstitialRecheckMs: 5_000 }
 });

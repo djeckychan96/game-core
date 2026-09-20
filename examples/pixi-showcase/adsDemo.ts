@@ -24,7 +24,7 @@ export interface AdsTimelineEntry {
   placement: string;
   segment: string | null;
   /** `offered` / `denied` for a decision, `shown` for a confirmed show, `payer` / `no_ads` for a profile change. */
-  kind: 'offered' | 'denied' | 'shown' | 'profile';
+  kind: 'offered' | 'denied' | 'shown' | 'no_ads_offer' | 'profile';
   reason: string | null;
   /** Day / hour counts of the placement after a show. */
   counts: string | null;
