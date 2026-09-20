@@ -94,9 +94,9 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.rewardAmount.y = 101;
     this.panel.addChild(caption, coin, this.rewardAmount);
 
-    this.nextButton = this.createButton('next', t.btnGreen, options.nextLabel ?? 'CONTINUE', () => this.finish('next'));
+    this.nextButton = this.createButton('next', 'positive', options.nextLabel ?? 'CONTINUE', () => this.finish('next'));
     this.nextButton.position.set(-230, 310);
-    this.retryButton = this.createButton('retry', t.btnYellow, options.retryLabel ?? 'RETRY', () => this.finish('retry'));
+    this.retryButton = this.createButton('retry', 'secondary', options.retryLabel ?? 'RETRY', () => this.finish('retry'));
     this.retryButton.position.set(230, 310);
     this.panel.addChild(this.nextButton, this.retryButton);
     this.placeClose();

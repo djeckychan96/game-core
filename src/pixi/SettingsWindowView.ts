@@ -75,7 +75,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     this.hapticVisible = options.haptic ?? false;
     const t = this.textures;
 
-    this.panel.addChildAt(this.sprite(t.settingsPanel, 968, 1102), 0);
+    this.panel.addChildAt(this.createPanel(968, 1102, { art: t.settingsPanel }), 0);
     this.title = createLabel(this.theme, options.title ?? 'SETTINGS', { fontSize: 122, stroke: 11 });
     this.title.y = -463;
     fitLabelWidth(this.title, 760);
@@ -106,8 +106,9 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       haptic: makeToggle('haptic', t.settingsHaptic, options.hapticLabel ?? 'HAPTIC')
     };
 
-    this.homeButton = this.createButton('home', t.settingsBtnHome, options.homeLabel ?? 'EXIT', () => this.finish('home'), 599, 207, 70, -12);
-    this.restartButton = this.createButton('restart', t.settingsBtnRestart, options.restartLabel ?? 'RESTART', () => this.finish('restart'), 599, 207, 70, -12);
+    // EXIT leaves the level (danger), RESTART is the alternative action (secondary); the toggles keep their art (the icon is baked in)
+    this.homeButton = this.createButton('home', 'danger', options.homeLabel ?? 'EXIT', () => this.finish('home'), 599, 207, 70, -12);
+    this.restartButton = this.createButton('restart', 'secondary', options.restartLabel ?? 'RESTART', () => this.finish('restart'), 599, 207, 70, -12);
     const restartIcon = this.sprite(t.settingsIconRestart, 170, 155);
     restartIcon.position.set(-170, -10);
     this.restartButton.addChild(restartIcon);

@@ -285,11 +285,70 @@ pixels at 17, 133 (second ring born), 317, 550 and 633 ms (gone); it also fires 
 (cap 8, oldest recycled, pool never grows) and checks pool reuse. Crops and a side-by-side montage
 land in `showcase-shots/ocean/`.
 
-### Theme
+### Theme (Theme System V1)
 
-`resolveTheme(overrides)` merges one level deep over `DEFAULT_READY_UI_THEME`: font family,
-text fill/stroke, backdrop color, level-map geometry (badge size, node scale, gap, focus boost,
-focus ratio) and the design box. It is deliberately small — the default looks right out of the box.
+One theme colours the whole standard Ready UI. The kit draws its standard surfaces with Pixi
+Graphics from theme tokens (`src/pixi/skin.ts`): window panels (body, header band, divider,
+border, depth lip), the semantic buttons, the × close control, badges (HUD capsule, ribbon, band),
+the shop card and the inner well. Complex art stays a texture and is never tinted: icons, coins,
+hearts, stars, gears, the lock, illustrations (the starter chest, the no-ads clapperboard panel),
+the shop awning, the victory ribbon, the level-map badges, the settings toggles (their icon is
+baked into the tile).
+
+```ts
+const theme = resolveTheme({
+  panel: { headerFill: { type: 'solid', color: 0x1f6fd8 }, fill: { type: 'solid', color: 0xcfe6ff } },
+  button: {
+    positive: { fill: { type: 'solid', color: 0x21b5a0 }, depth: { color: 0x0f7f70, height: 14 } },
+    reward: { fill: { type: 'linear-gradient', from: 0xffb347, to: 0xff7a1a, direction: 'horizontal' } }
+  },
+  close: { foreground: 0x10233f, outline: null, background: { fill: { type: 'solid', color: 0xe8f3ff }, radius: -1, border: { color: 0x10233f, width: 4 }, depth: null, shadow: null } }
+});
+const overlay = await createReadyUiOverlay({ container, core, ui, theme });   // overlay.theme = the resolved theme
+new SettingsWindowView({ ui, motion, textures, theme: overlay.theme, onToggle });
+```
+
+- `resolveTheme(overrides, base?)` merges **in depth** over `DEFAULT_READY_UI_THEME` (or the
+  given base), deterministically, without mutating either input; a nested override keeps every
+  sibling value; an explicit `null` removes a part (no border, no shadow, no header). The
+  defaults are frozen. A resolved theme handed on as overrides resolves to an equal theme, so
+  one object serves every view.
+- **Fills** are `{ type: 'solid', color }` or `{ type: 'linear-gradient', from, to, direction }`
+  (vertical / horizontal, a Pixi `FillGradient` in the shape's local space, cached per colour
+  pair). Header and body of a panel are styled independently; the promotional panel
+  (`promoPanel`, Starter Pack) is a gradient without a header.
+- **Semantic button roles** (`UI_BUTTON_ROLES`): `primary`, `secondary`, `positive`, `danger`,
+  `reward`, `neutral` (icon buttons: the HUD gear), `disabled` (the look every role takes while
+  disabled). Views ask for a role (`role: 'positive'`, `createButton(id, 'reward', …)`); the
+  theme decides the colour. Each role: `fill`, `radius`, `border`, `depth` (the lip along an
+  edge), `shadow`, `text`, `pressed` (drawn once when the press progress crosses one half).
+- **Close** is a role too: `theme.close` draws the × (foreground, outline under the arms,
+  optional backing surface such as a light disc, pressed variant). The default is a light mark
+  on the kit's dark label outline with no backing — the donor's red silhouette is available as
+  art (`closeTexture` or `skin: 'art'`), never the default.
+- **Badges**: `badge.neutral` (HUD capsule), `badge.accent` (the booster band), `badge.info` (the
+  shop's title ribbon, drawn as a notched ribbon); **card**: the shop pack (surface + inset well).
+- **Text**: `text.fill` / `strokeColor` / `strokeRatio` as before, plus `secondary`, `muted`,
+  `onButton`; `colors.*` (backdrops, map background, version text, accent) as before.
+- **Visual invariants**: a theme changes fills, borders, shadows and text colours only. Every
+  skin is drawn inside its declared box (inside-aligned border, shadow offset inside the box,
+  `boundsArea` = the box), so positions, sizes, hit areas, the fit scale of a window and every
+  behaviour are the same under any theme (`tests/pixi/theme.test.ts` proves it for five windows
+  under the default and the alternative theme). Header height is geometry: the theme gives a
+  default, a window passes its own (`createPanel(w, h, { headerHeight })`).
+- **Backward compatibility**: `skin: 'art'` in a theme keeps the v0.4 PNG skins everywhere; a
+  window's `panelTexture` / `closeTexture` and a button's `texture` keep game-specific art on
+  that component alone (a texture button is never recoloured). `ALT_READY_UI_THEME` is the demo
+  second theme (blue / cyan / teal / orange; `?theme=alt` in the showcase, `?theme=art` for the
+  PNG skins). `npm run showcase:theme` shoots every window under the three variants and fails if
+  the default and the alt theme differ in geometry.
+- **Performance**: a surface (`UiPanel`, `UiSurface`, a role `UiButton`) builds its geometry once
+  and again only when its size, style or state changes (`redrawCount`); nothing is rebuilt per
+  frame or per resize of the viewport (the panel is fitted by scaling its container).
+
+Not migrated in V1 (still textures): the level-map badges and the HARD pill, the settings
+toggle tiles, the no-ads panel, the shop awning, the victory ribbon, the HUD top shadow and
+the `+` plus, PLAY (a game passes its own art).
 
 ## Render quality (Retina)
 

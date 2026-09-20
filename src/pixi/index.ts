@@ -27,8 +27,10 @@ export type {
 } from './LevelMapView';
 export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
-export { UiButton } from './UiButton';
+export { UiButton, DEFAULT_BUTTON_WIDTH, DEFAULT_BUTTON_HEIGHT, DEFAULT_CLOSE_SIZE } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
+export { UiPanel, UiSurface, drawSurface, drawPanel, drawCard, drawCloseMark, toFillInput } from './skin';
+export type { UiPanelOptions, UiSurfaceShape } from './skin';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
 export { ResultWindowView } from './ResultWindowView';
@@ -51,8 +53,27 @@ export {
   READY_UI_FONT_FAMILY
 } from './assets';
 export type { ReadyUiTextures, ReadyUiTextureName, LoadReadyUiAssetsOptions } from './assets';
-export { DEFAULT_READY_UI_THEME, resolveTheme } from './theme';
-export type { ReadyUiTheme, ReadyUiThemeOverrides, ReadyUiTextTheme, ReadyUiColors, ReadyUiLevelMapTheme } from './theme';
+export { DEFAULT_READY_UI_THEME, ALT_READY_UI_THEME, UI_BUTTON_ROLES, resolveTheme, buttonStyleOf } from './theme';
+export type {
+  ReadyUiTheme,
+  ReadyUiThemeOverrides,
+  ReadyUiTextTheme,
+  ReadyUiColors,
+  ReadyUiLevelMapTheme,
+  ReadyUiSkin,
+  DeepPartial,
+  UiFill,
+  UiBorder,
+  UiDepth,
+  UiShadow,
+  UiSurfaceStyle,
+  UiPanelStyle,
+  UiCardStyle,
+  UiButtonStyle,
+  UiCloseStyle,
+  UiButtonRole,
+  UiBadgeVariant
+} from './theme';
 export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer, TEXT_SUPERSAMPLE } from './text';
 export type { LabelOptions } from './text';
 export { ClickRippleEffect, DEFAULT_CLICK_RIPPLE } from './fx';

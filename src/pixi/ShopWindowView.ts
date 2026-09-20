@@ -1,6 +1,6 @@
 import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { MotionHandle } from '../index';
-import { CLOSE_SIZE, ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 
@@ -88,7 +88,7 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     this.content.eventMode = 'static';
     this.gold = new Container();
     this.content.addChild(this.gold);
-    const ribbon = this.sprite(t.shopRibbon, 1000, 116);
+    const ribbon = this.createBadge(1000, 116, 'info', 'ribbon', t.shopRibbon);
     ribbon.x = 3;
     this.gold.addChild(ribbon);
     this.title = createLabel(this.theme, options.title ?? 'SPECIAL OFFER', { fontSize: 80, stroke: 11 });
@@ -97,16 +97,19 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
 
     const coinTextures: Texture[] = [t.shopCoins1, t.shopCoins2, t.shopCoins3, t.shopCoins4, t.shopCoins5, t.shopCoins6];
     ITEM_SLOTS.forEach(([x, y], i) => {
+      // the card is the button: a themed card surface (or the donor art) as its first child, the press scales the whole card
+      const card = this.createCard(CARD_W, CARD_H, t.shopCard);
       const button = new UiButton({
         ui: this.ui,
         id: `${this.id}:item:${i}`,
         theme: this.theme,
-        texture: t.shopCard,
+        ...(card instanceof Sprite ? { texture: t.shopCard } : {}),
         width: CARD_W,
         height: CARD_H,
         pressScale: 0.9,
         onTap: () => this.buy(i)
       });
+      if (!(card instanceof Sprite)) button.addChildAt(card, 0);
       button.position.set(x, y);
       const icon = new Sprite(coinTextures[i] ?? t.coinBig);
       icon.anchor.set(0.5);
@@ -132,19 +135,8 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     this.header.eventMode = 'none';
     this.panel.addChild(this.header);
 
-    const close = new UiButton({
-      ui: this.ui,
-      id: `${this.id}:close`,
-      theme: this.theme,
-      texture: t.btnClose,
-      width: SHOP_CLOSE,
-      height: SHOP_CLOSE,
-      minHitSize: 160,
-      pressScale: 0.86,
-      onTap: () => this.close('button')
-    });
+    const close = this.createClose('close', SHOP_CLOSE, 160, options.closeTexture);
     this.panel.addChild(close);
-    this.addButton(close);
     this.shopClose = close;
 
     this.content.on('pointerdown', this.onPointerDown, this);
@@ -324,4 +316,3 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
   }
 }
 
-void CLOSE_SIZE;

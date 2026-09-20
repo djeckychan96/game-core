@@ -65,7 +65,7 @@ for (const name of ['OfferRuntime', 'OfferChainConfig', 'OfferStateStore', 'Offe
 const mod = await import(pathToFileURL(pixiBundle).href);
 const expected = [
   'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
-  'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'DEFAULT_READY_UI_THEME', 'resolveTheme',
+  'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'DEFAULT_READY_UI_THEME', 'ALT_READY_UI_THEME', 'resolveTheme', 'UiPanel', 'UiSurface', 'drawCloseMark',
   'createLabel', 'formatAmount', 'formatTimer', 'backOut', 'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE',
   'createReadyUiOverlay', 'ReadyUiOverlay'
 ];
@@ -74,7 +74,7 @@ for (const name of expected) {
 }
 
 const types = readFileSync(pixiTypes, 'utf-8');
-for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect', 'createReadyUiOverlay', 'ReadyUiOverlayOptions']) {
+for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect', 'createReadyUiOverlay', 'ReadyUiOverlayOptions', 'UiButtonRole', 'UiPanelStyle', 'UiFill']) {
   if (!types.includes(name)) fail(`${pixiExport.types} lacks ${name}`);
 }
 // the kit's declarations import the foundation types relatively; they must ship next to them
