@@ -29,7 +29,7 @@ export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
 export { UiButton, DEFAULT_BUTTON_WIDTH, DEFAULT_BUTTON_HEIGHT, DEFAULT_CLOSE_SIZE } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
-export { UiPanel, UiSurface, drawSurface, drawPanel, drawCard, drawCloseMark, toFillInput } from './skin';
+export { UiPanel, UiSurface, drawSurface, drawPanel, drawCard, drawCloseMark, drawAwning, toFillInput } from './skin';
 export type { UiPanelOptions, UiSurfaceShape } from './skin';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
@@ -53,7 +53,7 @@ export {
   READY_UI_FONT_FAMILY
 } from './assets';
 export type { ReadyUiTextures, ReadyUiTextureName, LoadReadyUiAssetsOptions } from './assets';
-export { DEFAULT_READY_UI_THEME, ALT_READY_UI_THEME, UI_BUTTON_ROLES, resolveTheme, buttonStyleOf } from './theme';
+export { DEFAULT_READY_UI_THEME, ALT_READY_UI_THEME, BUBBLE_READY_UI_THEME, UI_BUTTON_ROLES, resolveTheme, buttonStyleOf } from './theme';
 export type {
   ReadyUiTheme,
   ReadyUiThemeOverrides,
@@ -66,6 +66,10 @@ export type {
   UiBorder,
   UiDepth,
   UiShadow,
+  UiBand,
+  UiTabStyle,
+  UiAwningStyle,
+  UiLevelNodeVariant,
   UiSurfaceStyle,
   UiPanelStyle,
   UiCardStyle,

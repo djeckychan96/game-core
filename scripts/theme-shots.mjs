@@ -1,6 +1,7 @@
 // Theme System V1 visual check of the showcase (Playwright on the installed Chrome, like showcase:shots): the same six
-// windows at 390 × 844 @2x under the default theme, `?theme=alt` (the demo ocean theme) and `?theme=art` (the v0.4 PNG
-// skins); fails if the default and the alt theme differ in geometry (panel bounds / fit scale / button bounds).
+// windows at 390 × 844 @2x under the default theme, `?theme=alt` (the demo ocean theme), `?theme=bubble` (the glossy
+// Bubble theme, V1.1) and `?theme=art` (the v0.4 PNG skins); fails if the default, the alt and the bubble theme differ
+// in geometry (panel bounds / fit scale / button bounds).
 //
 //   npm run showcase:theme            # starts its own Vite server on 5195+, writes showcase-shots/theme-v1/*.png
 import { mkdirSync } from 'node:fs';
@@ -21,7 +22,7 @@ const errors = [];
 const IGNORED = [/favicon/i, /SwiftShader/i, /GPU stall/i, /WebGL/i];
 const geometry = {};
 try {
-  for (const variant of ['default', 'alt', 'art']) {
+  for (const variant of ['default', 'alt', 'bubble', 'art']) {
     const context = await browser.newContext({ ...devices['iPhone 13'], viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 });
     const page = await context.newPage();
     page.on('console', (msg) => { if (msg.type() === 'error' && !IGNORED.some((re) => re.test(msg.text()))) errors.push(`[${variant}] ${msg.text()}`); });
@@ -37,8 +38,15 @@ try {
     for (const [name, opener] of [['settings', 'openSettings'], ['shop', 'openShop'], ['lives', 'openLives'], ['result', 'openResult'], ['starter', 'openStarter'], ['noads', 'openNoAds']]) {
       await page.evaluate((fn) => window.__showcase[fn](window.__showcase.map.currentLevel), opener);
       await page.waitForFunction(() => window.__showcase.ui.activeWindow?.state === 'shown', null, { timeout: WAIT_MS });
-      // the result window pops its stars in after the entrance: measure once every tween settled, never mid-animation
-      await page.waitForFunction(() => window.__showcase.motion.getStats().activeMotions === 0, null, { timeout: WAIT_MS });
+      // the result window pops its stars in after the entrance: measure once the WINDOW's own tweens settled (its `<id>:fx`
+      // scope), never mid-animation — the map behind it keeps its idle shine / pulse tweens running, those never settle
+      await page.waitForFunction(() => {
+        const w = window.__showcase.ui.activeWindow;
+        const view = [window.__showcase.settingsWindow, window.__showcase.shopWindow, window.__showcase.livesWindow, window.__showcase.resultWindow, window.__showcase.starterWindow, window.__showcase.noAdsWindow].find((v) => v && v.controller === w);
+        if (!view) return false;
+        const prefix = `${view.id}:`;
+        return [...window.__showcase.motion.operations.values()].every((op) => !String(op.scope).startsWith(prefix));
+      }, null, { timeout: WAIT_MS });
       await page.waitForTimeout(400);
       geometry[variant][name] = await page.evaluate(() => {
         const w = window.__showcase.ui.activeWindow;
@@ -60,8 +68,9 @@ try {
   await browser.close();
   await server.close();
 }
-const same = JSON.stringify(geometry.default) === JSON.stringify(geometry.alt);
-console.log('geometry default == alt:', same);
-if (!same) { console.log(JSON.stringify(geometry.default)); console.log(JSON.stringify(geometry.alt)); }
+const same = JSON.stringify(geometry.default) === JSON.stringify(geometry.alt) && JSON.stringify(geometry.default) === JSON.stringify(geometry.bubble);
+console.log('geometry default == alt == bubble:', same);
+if (!same) { console.log(JSON.stringify(geometry.default)); console.log(JSON.stringify(geometry.alt)); console.log(JSON.stringify(geometry.bubble)); }
 if (errors.length) { console.error('console errors:\n' + errors.join('\n')); process.exit(1); }
+if (!same) { console.error('geometry differs between themes'); process.exit(1); }
 console.log('showcase theme shots OK →', outDir);

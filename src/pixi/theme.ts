@@ -80,6 +80,12 @@ export interface UiDepth {
   height: number;
   /** Default 'bottom'. */
   edge?: 'bottom' | 'top';
+  /**
+   * 'plate' (default): the body is a smaller rounded rect resting on the lip — the donor's stacked look, the boundary
+   * follows the body's corners. 'strip': the lip is the strip of the surface's own outline, a straight boundary (the
+   * Bubble skin: a glossy body over a flat darker edge).
+   */
+  style?: 'plate' | 'strip';
 }
 
 /** A hard drop shadow (a second silhouette under the body), inside the surface's box. */
@@ -87,9 +93,19 @@ export interface UiShadow {
   color: number;
   alpha: number;
   offsetY: number;
+  /** Soft edge: the shadow is stacked from this many silhouettes at growing offsets, each at `alpha / layers`. Default 1 (hard). */
+  layers?: number;
 }
 
-/** Any rounded surface: window body, button, badge, card, well. */
+/** A gloss band along the top edge of a surface (the casual "glass" highlight), drawn over the body and under the border. */
+export interface UiBand {
+  color: number;
+  /** Band height in the surface's units, cut by the surface's own corners. */
+  height: number;
+  alpha?: number;
+}
+
+/** Any rounded surface: window body, button, badge, card, well, tab. */
 export interface UiSurfaceStyle {
   fill: UiFill;
   /** Corner radius in the surface's units; a negative value = capsule (half the height). */
@@ -97,6 +113,8 @@ export interface UiSurfaceStyle {
   border: UiBorder | null;
   depth: UiDepth | null;
   shadow: UiShadow | null;
+  /** Top gloss band. Omitted or null = none (Theme System V1 surfaces). */
+  highlight?: UiBand | null;
 }
 
 /** A standard window surface: body + optional header band with its own fill and divider. */
@@ -120,7 +138,32 @@ export interface UiButtonStyle extends UiSurfaceStyle {
   /** Label colour. */
   text: number;
   /** Look at full press; `null` = only the press scale. Omitted fields keep the idle value. */
-  pressed: { fill?: UiFill; depth?: UiDepth | null; border?: UiBorder | null } | null;
+  pressed: { fill?: UiFill; depth?: UiDepth | null; border?: UiBorder | null; highlight?: UiBand | null } | null;
+}
+
+/**
+ * A striped awning with a scalloped bottom edge (the shop's header): alternating stripes, each ending in a half-disc.
+ * Stripe width = `stripeRatio × height`; the scallops are that wide and half as tall.
+ */
+export interface UiAwningStyle {
+  stripeA: number;
+  stripeB: number;
+  stripeRatio: number;
+  shadow: UiShadow | null;
+}
+
+/**
+ * A tab bar: the bar surface, an idle tab (usually transparent) and the active tab, drawn with the `'tab'` shape
+ * (rounded top corners, a flat bottom edge sitting on the bar).
+ */
+export interface UiTabStyle {
+  bar: UiSurfaceStyle;
+  item: UiSurfaceStyle;
+  active: UiSurfaceStyle;
+  /** Label colour of an idle tab. */
+  text: number;
+  /** Label colour of the active tab. */
+  activeText: number;
 }
 
 /** The close control: an × mark drawn programmatically, with an optional backing surface. */
@@ -173,7 +216,19 @@ export interface ReadyUiTheme {
   badge: Record<UiBadgeVariant, UiSurfaceStyle>;
   button: Record<UiButtonRole, UiButtonStyle>;
   close: UiCloseStyle;
+  /** Tab bar shells (a bottom navigation, a shop category row). */
+  tab: UiTabStyle;
+  /** The shop's striped awning drawn from tokens; null = the awning stays the v0.4 art (the default). */
+  awning: UiAwningStyle | null;
+  /**
+   * Level-map node shells drawn from tokens (a disc per state: the ring is the border, the gloss / lip as everywhere);
+   * null = the nodes stay the v0.4 badge art (the default). Stars, the lock, the number and the HARD pill stay art / text.
+   */
+  levelNode: Record<UiLevelNodeVariant, UiSurfaceStyle> | null;
 }
+
+/** The three looks of a level-map node (the same states `LevelMapView` reports). */
+export type UiLevelNodeVariant = 'completed' | 'current' | 'locked';
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Default theme — the donor (Trail Arrow) palette measured from the v0.4 PNG skins, drawn as geometry.
@@ -285,7 +340,17 @@ export const DEFAULT_READY_UI_THEME: ReadyUiTheme = deepFreeze({
     strokeRatio: 0.2,
     background: null,
     pressed: { foreground: 0xd9d6ff }
-  }
+  },
+  tab: {
+    // the donor family has no tab bar: the HUD capsule colours as a bar, the header purple as the active tab
+    bar: { fill: solid(0x3e375e), radius: 40, border: null, depth: { color: 0x534791, height: 6, edge: 'top' }, shadow: null },
+    item: { fill: solid(0xffffff, 0), radius: 36, border: null, depth: null, shadow: null },
+    active: { fill: solid(0x7354d7), radius: 36, border: { color: 0x261a34, width: 6 }, depth: null, shadow: null },
+    text: 0xc9c4f0,
+    activeText: 0xffffff
+  },
+  awning: null,
+  levelNode: null
 });
 
 /** Demo theme B ("ocean"): blue header / light-blue body, cyan primary, teal positive, orange reward, dark × on a light disc. */
@@ -344,6 +409,121 @@ export const ALT_READY_UI_THEME: ReadyUiTheme = deepFreeze({
     strokeRatio: 0.16,
     background: { fill: solid(0xe8f3ff), radius: -1, border: { color: 0x10233f, width: 4 }, depth: null, shadow: null },
     pressed: { foreground: 0x10233f, background: { fill: solid(0xbfd9f7), radius: -1, border: { color: 0x10233f, width: 4 }, depth: null, shadow: null } }
+  },
+  tab: {
+    bar: { fill: solid(0x17385c), radius: 40, border: null, depth: { color: 0x2b5a8a, height: 6, edge: 'top' }, shadow: null },
+    item: { fill: solid(0xffffff, 0), radius: 36, border: null, depth: null, shadow: null },
+    active: { fill: solid(0x1f6fd8), radius: 36, border: { color: 0x10233f, width: 6 }, depth: null, shadow: null },
+    text: 0xb8d8fb,
+    activeText: 0xffffff
+  },
+  awning: null,
+  levelNode: null
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Bubble theme — the casual "glossy" language: every surface is a soft vertical gradient with a bright gloss band over
+// its top, a flat darker lip under it, a soft outline and a soft shadow; windows are mid-blue with a lighter header zone
+// and a much lighter inner card (a clear second layer); the CTAs are green / orange / gold with lime / yellow gloss.
+// Measured from a reference casual game's UI (visual principles only — no art is copied), generic enough for any game.
+// ---------------------------------------------------------------------------------------------------------------------
+
+/** Bubble button: a gradient body, a gloss band over its top quarter, a flat darker lip, a soft outline and shadow. */
+function bubbleButton(top: number, bottom: number, gloss: number, lip: number, outline: number, text = 0xfff6e2): UiButtonStyle {
+  return {
+    fill: gradient(top, bottom),
+    radius: 34,
+    border: { color: outline, width: 5, alpha: 0.85 },
+    depth: { color: lip, height: 26, style: 'strip' },
+    shadow: { color: 0x000000, alpha: 0.22, offsetY: 8, layers: 2 },
+    highlight: { color: gloss, height: 48, alpha: 0.9 },
+    text,
+    pressed: { fill: solid(bottom), depth: null, highlight: null }
+  };
+}
+
+const BUBBLE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 14, layers: 3 };
+
+export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
+  ...DEFAULT_READY_UI_THEME,
+  text: { ...DEFAULT_READY_UI_THEME.text, fill: 0xfff6e2, strokeColor: 0x1e2c4f, strokeRatio: 0.09, secondary: 0xdbe6fb, muted: 0x8fa5d8, onButton: 0xfff6e2 },
+  colors: { ...DEFAULT_READY_UI_THEME.colors, mapBackground: 0x263048, backdrop: 0x0b1224, backdropAlpha: 0.62, resultBackdrop: 0x1e2740, resultBackdropAlpha: 0.94, versionText: 0x8fa5d8, accent: 0xff6b57, textMuted: 0xdbe6fb },
+  panel: {
+    // mid-blue window: lighter at the top, a thin light edge, a flat darker lip, a dark-blue outline, a soft shadow
+    fill: gradient(0x6486ca, 0x4c62a9),
+    radius: 52,
+    border: { color: 0x33478a, width: 6, alpha: 0.9 },
+    depth: { color: 0x43569c, height: 18, style: 'strip' },
+    shadow: BUBBLE_SHADOW,
+    highlight: { color: 0xa2bdf2, height: 8, alpha: 0.55 },
+    // the header zone: a translucent lighter band with a soft line under it (a separation, not a second slab)
+    headerFill: solid(0xffffff, 0.09),
+    headerHeight: 160,
+    headerDivider: { color: 0x2c3f78, width: 4, alpha: 0.35 },
+    // the inner card: much lighter than the window, an inset darker bottom edge — the second layer
+    well: { fill: gradient(0xc8ddfc, 0xa6bce6), radius: 36, border: { color: 0x7d95c6, width: 4, alpha: 0.9 }, depth: { color: 0x94aad8, height: 12, style: 'strip' }, shadow: null, highlight: { color: 0xe6f0ff, height: 8, alpha: 0.7 } }
+  },
+  promoPanel: {
+    fill: gradient(0xffc94a, 0xff7b3e),
+    radius: 52,
+    border: { color: 0xa8481c, width: 8, alpha: 0.9 },
+    depth: { color: 0xe5642c, height: 18, style: 'strip' },
+    shadow: BUBBLE_SHADOW,
+    highlight: { color: 0xffe9a0, height: 10, alpha: 0.6 },
+    headerFill: null,
+    headerHeight: 0,
+    headerDivider: null,
+    well: { fill: solid(0xfff1d6, 0.55), radius: 36, border: null, depth: null, shadow: null, highlight: { color: 0xffffff, height: 8, alpha: 0.4 } }
+  },
+  card: {
+    // cream card with a green price band along the bottom (the band is the flat lip), no darker icon inset
+    fill: gradient(0xfff3dc, 0xf7e3c4),
+    radius: 30,
+    border: { color: 0xd8bf95, width: 4, alpha: 0.9 },
+    depth: { color: 0x33b41f, height: 98, style: 'strip' },
+    shadow: { color: 0x000000, alpha: 0.22, offsetY: 10, layers: 2 },
+    highlight: { color: 0xffffff, height: 10, alpha: 0.5 },
+    inset: null
+  },
+  badge: {
+    // HUD capsule: a slate pill a little lighter than the map, gloss on top, a flat darker lip, a soft shadow
+    neutral: { fill: gradient(0x6d7dae, 0x4f587f), radius: -1, border: { color: 0x2b3454, width: 3, alpha: 0.7 }, depth: { color: 0x424a6c, height: 8, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.28, offsetY: 7, layers: 2 }, highlight: { color: 0x8c9ac4, height: 9, alpha: 0.7 } },
+    accent: { fill: gradient(0xff7b5c, 0xe2452e), radius: 50, border: { color: 0x8f2416, width: 5, alpha: 0.8 }, depth: { color: 0xbb3320, height: 14, style: 'strip' }, shadow: null, highlight: { color: 0xffa892, height: 20, alpha: 0.6 } },
+    info: { fill: gradient(0x6a78ab, 0x4d5788), radius: 16, border: { color: 0x2b3454, width: 5, alpha: 0.8 }, depth: { color: 0x3f4870, height: 14, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.25, offsetY: 8, layers: 2 }, highlight: { color: 0x8f9cc6, height: 16, alpha: 0.6 } }
+  },
+  button: {
+    primary: bubbleButton(0x5a8cf0, 0x2f62d0, 0x8fb4ff, 0x1d49b0, 0x163a8a),
+    secondary: bubbleButton(0xffb322, 0xf98f06, 0xffd257, 0xd97404, 0xb5640a),
+    positive: bubbleButton(0x4fd02c, 0x31ad1d, 0x84f846, 0x229417, 0x196e10),
+    danger: bubbleButton(0xff6b57, 0xe23d2b, 0xff9d8a, 0xba2818, 0x8f1d10),
+    reward: bubbleButton(0xffe04a, 0xffb01e, 0xfff59a, 0xe8920e, 0xb5640a),
+    // icon-button shell (gear, tools): a slate square with the same gloss / lip language
+    neutral: { fill: gradient(0x8593b5, 0x5f6a8c), radius: 30, border: { color: 0x2f3854, width: 4, alpha: 0.8 }, depth: { color: 0x4a5474, height: 16, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.25, offsetY: 8, layers: 2 }, highlight: { color: 0xa9b7d6, height: 30, alpha: 0.75 }, text: 0xffffff, pressed: { fill: solid(0x525c7c), depth: null, highlight: null } },
+    disabled: { ...bubbleButton(0x9aa4b8, 0x7d869a, 0xb7c0d2, 0x687089, 0x4c536a, 0xe6eaf2), highlight: { color: 0xb7c0d2, height: 48, alpha: 0.5 }, border: { color: 0x4c536a, width: 5, alpha: 0.7 } }
+  },
+  close: {
+    // a bold light-blue × with round caps on a soft dark outline (it must read on the light awning stripes too), no backing
+    foreground: 0xd2e5fb,
+    outline: { color: 0x22345f, width: 4, alpha: 0.75 },
+    armRatio: 0.32,
+    strokeRatio: 0.24,
+    background: null,
+    pressed: { foreground: 0xa6c2ea }
+  },
+  tab: {
+    bar: { fill: gradient(0x445684, 0x35446c), radius: 40, border: { color: 0x243055, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: { color: 0x5d6f9e, height: 8, alpha: 0.6 } },
+    item: { fill: solid(0xffffff, 0), radius: 36, border: null, depth: null, shadow: null },
+    active: { fill: gradient(0x6b8ad0, 0x4f6fbd), radius: 36, border: { color: 0x2c3f78, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: { color: 0x9ab6ee, height: 10, alpha: 0.6 } },
+    text: 0xc7d3ea,
+    activeText: 0xfff3d0
+  },
+  // the shop awning in the same blue family: light / mid-blue stripes with scalloped ends and a soft shadow
+  awning: { stripeA: 0xbfd6f6, stripeB: 0x5f88ce, stripeRatio: 0.7, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } },
+  // level nodes: green discs in a gold ring (the current one brighter), a grey disc in a slate ring when locked
+  levelNode: {
+    completed: { fill: gradient(0x8ae651, 0x4db82b), radius: -1, border: { color: 0xd9a93c, width: 16 }, depth: { color: 0x3e9a22, height: 40, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xc3ff8a, height: 56, alpha: 0.55 } },
+    current: { fill: gradient(0x9bf05c, 0x5bc733), radius: -1, border: { color: 0xf2c14e, width: 18 }, depth: { color: 0x45a626, height: 44, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xd6ff9e, height: 60, alpha: 0.65 } },
+    locked: { fill: gradient(0xbdbcc8, 0x8e8f9e), radius: -1, border: { color: 0x6d7386, width: 14 }, depth: { color: 0x7a7d8f, height: 40, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xe2e3ea, height: 56, alpha: 0.45 } }
   }
 });
 

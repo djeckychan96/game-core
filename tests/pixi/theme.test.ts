@@ -3,6 +3,7 @@ import { advance, createKit, pointer } from './setup';
 import { Container, Graphics, Sprite, Texture, type Text } from 'pixi.js';
 import {
   ALT_READY_UI_THEME,
+  BUBBLE_READY_UI_THEME,
   DEFAULT_READY_UI_THEME,
   UI_BUTTON_ROLES,
   buttonStyleOf,
@@ -11,7 +12,7 @@ import {
   type UiButtonRole,
   type UiFill
 } from '../../src/pixi/theme';
-import { UiPanel, UiSurface, drawCloseMark, drawPanel, drawSurface, toFillInput } from '../../src/pixi/skin';
+import { UiPanel, UiSurface, drawAwning, drawCloseMark, drawPanel, drawSurface, toFillInput } from '../../src/pixi/skin';
 import { UiButton } from '../../src/pixi/UiButton';
 import { ModalWindow, type ModalWindowOptions } from '../../src/pixi/ModalWindow';
 import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
@@ -20,6 +21,7 @@ import { ShopWindowView } from '../../src/pixi/ShopWindowView';
 import { ResultWindowView } from '../../src/pixi/ResultWindowView';
 import { StarterPackWindowView } from '../../src/pixi/StarterPackWindowView';
 import { HudView } from '../../src/pixi/HudView';
+import { LevelMapView } from '../../src/pixi/LevelMapView';
 
 function field<T>(view: object, name: string): T {
   const value = (view as Record<string, unknown>)[name];
@@ -55,6 +57,52 @@ class ProbeWindow extends ModalWindow<void> {
     this.placeClose();
   }
   protected applyParams(): void {}
+}
+
+/** Five standard windows under a theme: their panel / button geometry and every colour drawn (the geometry invariant). */
+function windowGeometry(theme: ReadyUiTheme): { out: Record<string, unknown>; colors: number[]; errors: unknown[] } {
+  const kit = createKit();
+  const views = {
+    settings: new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onToggle: () => {}, onHome: () => {}, onRestart: () => {} }),
+    lives: new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onRefill: () => {}, onWatchAd: () => {} }),
+    shop: new ShopWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onBuy: () => {} }),
+    result: new ResultWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onNext: () => {}, onRetry: () => {} }),
+    starter: new StarterPackWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onBuy: () => {} })
+  };
+  views.settings.show({ sound: true, music: false, gameButtons: true, version: 'v1' });
+  views.lives.show({ lives: 2, maxLives: 5, timerText: '01:00', refillPrice: 900 });
+  views.shop.show({ items: [{ id: 'a', amount: 100, price: '$1' }, { id: 'b', amount: 200, price: '$2' }] });
+  views.result.show({ level: 3, stars: 2, rewardCoins: 50 });
+  views.starter.show({ price: '$4.99', rewards: { coins: 3500, infiniteLives: '1h', boosters: 'x3' } });
+  advance(kit.core, 600);
+  const out: Record<string, unknown> = {};
+  const colors: number[] = [];
+  for (const [name, view] of Object.entries(views)) {
+    view.resize(390, 844, { insets: { top: 47, bottom: 34 }, pixelRatio: 2 });
+    const panel = field<Container>(view, 'panel');
+    const local = panel.getLocalBounds();
+    // the rect only: a Bounds also carries the matrix of the last child it visited, which is not geometry
+    const dump: Record<string, unknown> = { x: panel.x, y: panel.y, scale: +panel.scale.x.toFixed(5), bounds: { x: local.x, y: local.y, width: local.width, height: local.height } };
+    const buttons = field<UiButton[]>(view, 'buttons');
+    dump.buttons = buttons.map((b) => ({ x: b.x, y: b.y, w: b.boxWidth, h: b.boxHeight, hit: { ...(b.hitArea as unknown as { x: number; y: number; width: number; height: number }) }, scale: +b.scale.x.toFixed(5), role: b.role, enabled: b.enabled }));
+    const visit = (node: Container): void => {
+      if (node instanceof Graphics) colors.push(...colorsOf(node));
+      for (const child of node.children) visit(child);
+    };
+    visit(panel);
+    out[name] = dump;
+  }
+  for (const view of Object.values(views)) view.destroy();
+  return { out, colors, errors: kit.uiErrors };
+}
+
+/** The local bounds of the path an instruction filled / stroked. */
+function pathBounds(g: Graphics, index: number): { minX: number; minY: number; maxX: number; maxY: number } {
+  const instruction = g.context.instructions[index];
+  if (!instruction) throw new Error(`no instruction ${index}`);
+  const path = (instruction.data as { path: { bounds: { minX: number; minY: number; maxX: number; maxY: number } } }).path;
+  const b = path.bounds;
+  return { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY };
 }
 
 describe('resolveTheme', () => {
@@ -235,6 +283,219 @@ describe('skin primitives', () => {
   });
 });
 
+describe('Bubble skin primitives (V1.1)', () => {
+  const plain = { fill: { type: 'solid', color: 0x3cc026 } as UiFill, radius: 30, border: null, depth: null, shadow: null };
+
+  it('a strip lip and a gloss band are strips of the body outline; a soft shadow stacks layers; the plate lip is unchanged', () => {
+    const g = new Graphics();
+    drawSurface(g, 0, 0, 200, 100, { ...plain, border: { color: 0x111111, width: 4 }, depth: { color: 0x222222, height: 20, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 9, layers: 3 }, highlight: { color: 0xeeeeee, height: 24, alpha: 0.8 } });
+    const drawn = instructions(g);
+    // three shadow layers, the body, the lip strip, the gloss, the border
+    expect(drawn.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'fill', 'fill', 'fill', 'stroke']);
+    for (let i = 0; i < 3; i++) {
+      expect(drawn[i]).toMatchObject({ color: 0x000000 });
+      expect(drawn[i]?.alpha).toBeCloseTo(0.1, 6);
+      expect(pathBounds(g, i).minY).toBeCloseTo(3 * (i + 1), 6);
+    }
+    expect(drawn[3]).toMatchObject({ color: 0x3cc026 });
+    expect(drawn[4]).toMatchObject({ color: 0x222222 });
+    expect(drawn[5]).toMatchObject({ color: 0xeeeeee, alpha: 0.8 });
+    // the body is 91 tall (the shadow's 9 stay inside the box): the lip is its bottom 20, the gloss its top 24
+    expect(pathBounds(g, 3)).toMatchObject({ minY: 0, maxY: 91 });
+    expect(pathBounds(g, 4)).toMatchObject({ minY: 71, maxY: 91 });
+    expect(pathBounds(g, 5)).toMatchObject({ minY: 0, maxY: 24 });
+    // everything inside the box
+    const bounds = g.getLocalBounds();
+    expect(bounds.x).toBeGreaterThanOrEqual(-0.01);
+    expect(bounds.y).toBeGreaterThanOrEqual(-0.01);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(200.01);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(100.01);
+
+    // V1 plate lip: still depth first, then the smaller body; no gloss without a highlight
+    const v1 = new Graphics();
+    drawSurface(v1, 0, 0, 200, 100, { ...plain, depth: { color: 0x222222, height: 20 } });
+    expect(instructions(v1).map((i) => [i.action, i.color])).toEqual([['fill', 0x222222], ['fill', 0x3cc026]]);
+    expect(pathBounds(v1, 1)).toMatchObject({ minY: 0, maxY: 80 });
+    // a top strip lip
+    const top = new Graphics();
+    drawSurface(top, 0, 0, 200, 100, { ...plain, depth: { color: 0x222222, height: 10, edge: 'top', style: 'strip' } });
+    expect(pathBounds(top, 1).minY).toBeCloseTo(0, 6);
+    expect(pathBounds(top, 1).maxY).toBeCloseTo(10, 6);
+  });
+
+  it('a strip shorter than the corner radius is cut by the corner arcs (it never pokes out of the rounded outline)', () => {
+    const g = new Graphics();
+    drawSurface(g, 0, 0, 200, 100, { ...plain, radius: 40, highlight: { color: 0xffffff, height: 10 } });
+    const gloss = pathBounds(g, 1);
+    // r = 40, h = 10: the strip starts where the arc is 10 below the top — 40 − 40·sin(acos(30/40)) ≈ 13.5 in from each side
+    expect(gloss.minY).toBeCloseTo(0, 3);
+    expect(gloss.maxY).toBeCloseTo(10, 3);
+    expect(gloss.minX).toBeGreaterThan(13);
+    expect(gloss.minX).toBeLessThan(14.5);
+    expect(gloss.maxX).toBeGreaterThan(185.5);
+    expect(gloss.maxX).toBeLessThan(187);
+    const lip = new Graphics();
+    drawSurface(lip, 0, 0, 200, 100, { ...plain, radius: 40, depth: { color: 0x222222, height: 10, style: 'strip' } });
+    const strip = pathBounds(lip, 1);
+    expect(strip.minY).toBeCloseTo(90, 3);
+    expect(strip.maxY).toBeCloseTo(100, 3);
+    expect(strip.minX).toBeGreaterThan(13);
+    expect(strip.maxX).toBeLessThan(187);
+    // a capsule's strips use its half-height corners; a strip as tall as the body is the body
+    const capsule = new Graphics();
+    drawSurface(capsule, 0, 0, 218, 72, { ...plain, radius: -1, highlight: { color: 0xffffff, height: 100 } }, 'capsule');
+    expect(pathBounds(capsule, 1)).toMatchObject({ minX: 0, minY: 0, maxX: 218, maxY: 72 });
+  });
+
+  it('the tab shape has rounded top corners over a flat bottom; the ribbon strips follow the notches', () => {
+    const tab = new Graphics();
+    drawSurface(tab, 0, 0, 200, 80, { ...plain, radius: 30, depth: { color: 0x222222, height: 10, style: 'strip' }, highlight: { color: 0xffffff, height: 10 } }, 'tab');
+    const drawn = instructions(tab);
+    expect(drawn.map((i) => i.action)).toEqual(['fill', 'fill', 'fill']);
+    expect(pathBounds(tab, 0)).toMatchObject({ minX: 0, minY: 0, maxX: 200, maxY: 80 });
+    // the bottom strip of a tab is the full width (flat edge), the top strip is cut by the corners
+    expect(pathBounds(tab, 1)).toMatchObject({ minX: 0, minY: 70, maxX: 200, maxY: 80 });
+    expect(pathBounds(tab, 2).minX).toBeGreaterThan(5);
+    const ribbon = new Graphics();
+    drawSurface(ribbon, 0, 0, 1000, 116, { ...plain, radius: 16, depth: { color: 0x222222, height: 14, style: 'strip' }, highlight: { color: 0xffffff, height: 16 } }, 'ribbon');
+    const notch = Math.min(116 * 0.35, 1000 * 0.08);
+    const lip = pathBounds(ribbon, 1);
+    expect(lip).toMatchObject({ minX: 0, maxX: 1000, maxY: 116 });
+    expect(lip.minY).toBeCloseTo(102, 3);
+    const gloss = pathBounds(ribbon, 2);
+    expect(gloss).toMatchObject({ minX: 0, minY: 0, maxX: 1000 });
+    expect(gloss.maxY).toBeCloseTo(16, 3);
+    expect(notch).toBeGreaterThan(0);
+    // a UiSurface takes the tab shape and the theme's tab tokens
+    const active = new UiSurface({ style: BUBBLE_READY_UI_THEME.tab.active, width: 300, height: 120, shape: 'tab' });
+    expect(active.getLocalBounds()).toMatchObject({ x: -150, y: -60, width: 300, height: 120 });
+    expect(colorsOf(active.graphics)).toContain(0x9ab6ee);
+    expect(resolveTheme({ tab: { activeText: 0x123456 } }).tab).toEqual({ ...DEFAULT_READY_UI_THEME.tab, activeText: 0x123456 });
+    expect(resolveTheme({ tab: { active: { highlight: null } } }, BUBBLE_READY_UI_THEME).tab.active.highlight).toBeNull();
+  });
+
+  it('the awning is stripes ending in scallops, a whole number across the width, inside the box; the Shop draws it instead of the tiles', () => {
+    const g = new Graphics();
+    drawAwning(g, -195, 0, 390, 119, { stripeA: 0xbfd6f6, stripeB: 0x5f88ce, stripeRatio: 0.7, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } });
+    const drawn = instructions(g);
+    // 2 shadow layers (one fill each), then round(390 / 83.3) = 5 stripes
+    expect(drawn.map((i) => i.action)).toEqual(Array(7).fill('fill'));
+    expect(drawn[0]?.alpha).toBeCloseTo(0.15, 6);
+    expect(drawn.slice(2).map((i) => i.color)).toEqual([0xbfd6f6, 0x5f88ce, 0xbfd6f6, 0x5f88ce, 0xbfd6f6]);
+    const first = pathBounds(g, 2);
+    expect(first.minX).toBeCloseTo(-195, 6);
+    expect(first.maxX).toBeCloseTo(-195 + 78, 6);
+    expect(first.maxY).toBeCloseTo(119 - 12, 6);
+    const last = pathBounds(g, 6);
+    expect(last.maxX).toBeCloseTo(195, 6);
+    const bounds = g.getLocalBounds();
+    expect(bounds.x).toBeGreaterThanOrEqual(-195.01);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(195.01);
+    expect(bounds.y).toBeGreaterThanOrEqual(-0.01);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(119.01);
+
+    const kit = createKit();
+    const bubble = new ShopWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: BUBBLE_READY_UI_THEME, onBuy: () => {} });
+    bubble.resize(390, 844, { insets: { top: 47, bottom: 34 } });
+    const awning = field<Graphics>(bubble, 'awning');
+    expect(awning).toBeInstanceOf(Graphics);
+    expect(field<Sprite[]>(bubble, 'headerTiles')).toHaveLength(0);
+    expect(colorsOf(awning)).toContain(0x5f88ce);
+    const redraws = awning.context.instructions.length;
+    bubble.resize(390, 844, { insets: { top: 47, bottom: 34 } });
+    expect(awning.context.instructions.length).toBe(redraws); // same size: not rebuilt
+    bubble.destroy();
+    const plain = new ShopWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onBuy: () => {} });
+    plain.resize(390, 844);
+    expect((plain as unknown as { awning: unknown }).awning).toBeNull();
+    expect(field<Sprite[]>(plain, 'headerTiles').length).toBeGreaterThan(0);
+    plain.destroy();
+    const art = new ShopWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: resolveTheme({ skin: 'art' }, BUBBLE_READY_UI_THEME), onBuy: () => {} });
+    expect((art as unknown as { awning: unknown }).awning).toBeNull();
+    art.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+
+  it('level-map nodes: `theme.levelNode` draws a themed disc per state (the ring is its border) with the badge geometry; the V1 themes keep the badge art', () => {
+    const build = (theme: ReadyUiTheme) => {
+      const kit = createKit();
+      const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, levels: [{ index: 1, stars: 3 }, { index: 2, stars: 2 }, { index: 3, stars: 0 }, { index: 4, stars: 0 }], currentLevel: 3, onSelectLevel: () => {} });
+      map.resize(390, 844, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
+      const nodes = field<Map<number, { state: string; root: Container; inner: Container }>>(map, 'nodes');
+      const facts = [...nodes.values()].map((n) => ({ state: n.state, y: +n.root.y.toFixed(3), hit: { ...(n.root.hitArea as unknown as { x: number; y: number; width: number; height: number }) }, badge: n.inner.children[0] as Container }));
+      return { kit, map, facts };
+    };
+    const bubble = build(BUBBLE_READY_UI_THEME);
+    const plain = build(DEFAULT_READY_UI_THEME);
+    expect(bubble.facts.length).toBe(4);
+    expect(bubble.facts.map((f) => f.state)).toEqual(plain.facts.map((f) => f.state));
+    expect(bubble.facts.map((f) => [f.y, f.hit])).toEqual(plain.facts.map((f) => [f.y, f.hit]));
+    const D = BUBBLE_READY_UI_THEME.levelMap.badgeSize;
+    for (const f of bubble.facts) {
+      expect(f.badge).toBeInstanceOf(UiSurface);
+      expect(f.badge.getLocalBounds()).toMatchObject({ x: -D / 2, y: -D / 2, width: D, height: D });
+      const ring = BUBBLE_READY_UI_THEME.levelNode?.[f.state as 'completed' | 'current' | 'locked'].border?.color;
+      expect(colorsOf((f.badge as UiSurface).graphics)).toContain(ring);
+    }
+    for (const f of plain.facts) expect(f.badge).toBeInstanceOf(Sprite);
+    expect((plain.facts[2]?.badge as Sprite).texture).toBe(plain.kit.textures.badgeCurrent);
+    bubble.map.destroy();
+    plain.map.destroy();
+    const art = build(resolveTheme({ skin: 'art' }, BUBBLE_READY_UI_THEME));
+    for (const f of art.facts) expect(f.badge).toBeInstanceOf(Sprite);
+    art.map.destroy();
+    expect(bubble.kit.uiErrors).toEqual([]);
+  });
+
+  it('BUBBLE theme: every role is a gradient with a gloss band, a strip lip and a soft shadow; the pressed look drops the gloss and the lip', () => {
+    expect(Object.isFrozen(BUBBLE_READY_UI_THEME.button.positive)).toBe(true);
+    for (const role of UI_BUTTON_ROLES) {
+      const style = buttonStyleOf(BUBBLE_READY_UI_THEME, role);
+      expect(style.fill.type).toBe('linear-gradient');
+      expect(style.highlight).not.toBeNull();
+      expect(style.depth?.style).toBe('strip');
+      expect(style.shadow?.layers).toBeGreaterThan(1);
+      expect(style.radius).toBeGreaterThan(0);
+    }
+    expect(BUBBLE_READY_UI_THEME.panel.well.highlight).not.toBeNull();
+    expect(BUBBLE_READY_UI_THEME.panel.headerFill).toEqual({ type: 'solid', color: 0xffffff, alpha: 0.09 });
+    expect(BUBBLE_READY_UI_THEME.card.inset).toBeNull();
+    expect(BUBBLE_READY_UI_THEME.card.depth?.height).toBe(98);
+    expect(BUBBLE_READY_UI_THEME.close.background).toBeNull();
+    expect(BUBBLE_READY_UI_THEME.levelMap).toEqual(DEFAULT_READY_UI_THEME.levelMap);
+
+    const kit = createKit();
+    const button = new UiButton({ ui: kit.ui, id: 'b', theme: BUBBLE_READY_UI_THEME, role: 'positive', label: 'GO', onTap: () => {} });
+    // 2 shadow layers, body (gradient), lip, gloss, border
+    const idle = instructions(button.skin as Graphics);
+    expect(idle.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'fill', 'fill', 'stroke']);
+    expect(idle[2]?.texture).toBe(true);
+    expect(idle[3]).toMatchObject({ color: 0x229417 });
+    expect(idle[4]).toMatchObject({ color: 0x84f846 });
+    expect((button.labelText as Text).style.fill).toBe(0xfff6e2);
+    button.emit('pointerdown', pointer(1, 1) as never);
+    advance(kit.core, 80);
+    expect(button.isPressed).toBe(true);
+    // pressed: the flat bottom colour, no lip, no gloss — the shadow and the border stay
+    const pressed = instructions(button.skin as Graphics);
+    expect(pressed.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'stroke']);
+    expect(pressed[2]).toMatchObject({ color: 0x31ad1d });
+    button.emit('pointerup', pointer(1, 1) as never);
+    advance(kit.core, 300);
+    expect(instructions(button.skin as Graphics)).toHaveLength(6);
+    button.setEnabled(false);
+    expect(colorsOf(button.skin as Graphics)).toContain(0x687089);
+    button.destroy();
+    // a pressed override may keep the gloss (omitted) or replace it
+    const keep = new UiButton({ ui: kit.ui, id: 'k', theme: BUBBLE_READY_UI_THEME, role: 'positive', style: { ...BUBBLE_READY_UI_THEME.button.positive, shadow: null, pressed: { fill: { type: 'solid', color: 0x111111 } } }, onTap: () => {} });
+    keep.emit('pointerdown', pointer(1, 1) as never);
+    advance(kit.core, 80);
+    expect(colorsOf(keep.skin as Graphics)).toEqual([0x111111, 0x229417, 0x84f846, 0x196e10]);
+    keep.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+});
+
 describe('UiButton skin', () => {
   it('a role button draws the theme\'s style once, the pressed look past half press, and settles back', () => {
     const kit = createKit();
@@ -345,41 +606,8 @@ describe('ModalWindow skin', () => {
   });
 
   it('the same window under two themes has the same geometry (positions, sizes, hit areas, fit) and different colours', () => {
-    const geometry = (theme: ReadyUiTheme) => {
-      const kit = createKit();
-      const views = {
-        settings: new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onToggle: () => {}, onHome: () => {}, onRestart: () => {} }),
-        lives: new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onRefill: () => {}, onWatchAd: () => {} }),
-        shop: new ShopWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onBuy: () => {} }),
-        result: new ResultWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onNext: () => {}, onRetry: () => {} }),
-        starter: new StarterPackWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, onBuy: () => {} })
-      };
-      views.settings.show({ sound: true, music: false, gameButtons: true, version: 'v1' });
-      views.lives.show({ lives: 2, maxLives: 5, timerText: '01:00', refillPrice: 900 });
-      views.shop.show({ items: [{ id: 'a', amount: 100, price: '$1' }, { id: 'b', amount: 200, price: '$2' }] });
-      views.result.show({ level: 3, stars: 2, rewardCoins: 50 });
-      views.starter.show({ price: '$4.99', rewards: { coins: 3500, infiniteLives: '1h', boosters: 'x3' } });
-      advance(kit.core, 600);
-      const out: Record<string, unknown> = {};
-      const colors: number[] = [];
-      for (const [name, view] of Object.entries(views)) {
-        view.resize(390, 844, { insets: { top: 47, bottom: 34 }, pixelRatio: 2 });
-        const panel = field<Container>(view, 'panel');
-        const dump: Record<string, unknown> = { x: panel.x, y: panel.y, scale: +panel.scale.x.toFixed(5), bounds: { ...panel.getLocalBounds() } };
-        const buttons = field<UiButton[]>(view, 'buttons');
-        dump.buttons = buttons.map((b) => ({ x: b.x, y: b.y, w: b.boxWidth, h: b.boxHeight, hit: { ...(b.hitArea as unknown as { x: number; y: number; width: number; height: number }) }, scale: +b.scale.x.toFixed(5), role: b.role, enabled: b.enabled }));
-        const visit = (node: Container): void => {
-          if (node instanceof Graphics) colors.push(...colorsOf(node));
-          for (const child of node.children) visit(child);
-        };
-        visit(panel);
-        out[name] = dump;
-      }
-      for (const view of Object.values(views)) view.destroy();
-      return { out, colors, errors: kit.uiErrors };
-    };
-    const a = geometry(DEFAULT_READY_UI_THEME);
-    const b = geometry(ALT_READY_UI_THEME);
+    const a = windowGeometry(DEFAULT_READY_UI_THEME);
+    const b = windowGeometry(ALT_READY_UI_THEME);
     expect(a.errors).toEqual([]);
     expect(b.errors).toEqual([]);
     expect(a.out).toEqual(b.out);
@@ -388,6 +616,58 @@ describe('ModalWindow skin', () => {
     expect(a.colors).toContain(0x7354d7);
     expect(b.colors).toContain(0x1f6fd8);
     expect(b.colors).not.toContain(0x7354d7);
+  });
+
+  it('the Bubble theme keeps the same geometry too, with its own colours (gloss, strip lips, soft shadows are all inside the boxes)', () => {
+    const a = windowGeometry(DEFAULT_READY_UI_THEME);
+    const c = windowGeometry(BUBBLE_READY_UI_THEME);
+    expect(c.errors).toEqual([]);
+    expect(a.out).toEqual(c.out);
+    expect(c.colors).toContain(0x84f846); // positive gloss
+    expect(c.colors).toContain(0x229417); // positive lip
+    expect(c.colors).toContain(0x94aad8); // well lip
+    expect(c.colors).not.toContain(0x7354d7);
+    // the fits are the same even though every Bubble surface draws a soft shadow: the shadow is inside the declared box
+    expect(c.colors.filter((color) => color === 0x000000).length).toBeGreaterThan(a.colors.filter((color) => color === 0x000000).length);
+  });
+
+  it('Settings: `toggleWell` draws the themed inner card under the toggles (sized to the visible toggles), never under art', () => {
+    const kit = createKit();
+    const view = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: BUBBLE_READY_UI_THEME, toggleWell: true, onToggle: () => {}, onHome: () => {}, onRestart: () => {} });
+    const well = field<UiSurface>(view, 'toggleWell');
+    expect(well).toBeInstanceOf(UiSurface);
+    expect(colorsOf(well.graphics)).toContain(0x94aad8);
+    const panel = field<Container>(view, 'panel');
+    const row = field<Container>(view, 'toggleRow');
+    expect(panel.getChildIndex(well)).toBe(panel.getChildIndex(row) - 1);
+    view.show({ sound: true, music: true });
+    const main = { width: well.surfaceWidth, height: well.surfaceHeight, y: well.y };
+    // two toggles: the card spans the captions (185 above the tiles) and the 220-tall tiles
+    expect(main.width).toBe(300 + 224 + 52 * 2);
+    expect(main.height).toBe(185 + 110 + 58 + 44);
+    const t = field<Record<'sound', { button: Container; label: Container }>>(view, 'toggles');
+    const labelTop = row.y + t.sound.label.y - 40;
+    const tileBottom = row.y + t.sound.button.y + 110;
+    expect(main.y - main.height / 2).toBeLessThan(labelTop);
+    expect(main.y + main.height / 2).toBeGreaterThan(tileBottom);
+    expect(main.y + main.height / 2).toBeLessThan(panel.getLocalBounds().y + panel.getLocalBounds().height);
+    // in a level the row moves up: the card follows, the same size
+    view.controller.cancel();
+    view.show({ sound: true, music: true, gameButtons: true });
+    expect(well.surfaceWidth).toBe(main.width);
+    expect(well.surfaceHeight).toBe(main.height);
+    expect(well.y).toBeLessThan(main.y);
+    const home = field<UiButton>(view, 'homeButton');
+    expect(well.y + main.height / 2).toBeLessThanOrEqual(row.y + home.y - (207 * 0.72) / 2);
+    view.destroy();
+
+    const art = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: { skin: 'art' }, toggleWell: true, onToggle: () => {} });
+    expect((art as unknown as { toggleWell: unknown }).toggleWell).toBeNull();
+    art.destroy();
+    const plain = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onToggle: () => {} });
+    expect((plain as unknown as { toggleWell: unknown }).toggleWell).toBeNull();
+    plain.destroy();
+    expect(kit.uiErrors).toEqual([]);
   });
 
   it('Lives: the well and the role buttons are themed; Shop: card, ribbon and the big × are themed; a full-lives refill is the disabled role', () => {

@@ -2,7 +2,14 @@ import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, typ
 import type { ButtonCancelReason, ButtonController, EaseFn, EaseName, UiRuntime } from '../index';
 import { drawCloseMark, drawSurface } from './skin';
 import { createLabel, fitLabelWidth } from './text';
-import type { ReadyUiTheme, UiButtonRole, UiButtonStyle, UiCloseStyle } from './theme';
+import type { ReadyUiTheme, UiButtonRole, UiButtonStyle, UiCloseStyle, UiSurfaceStyle } from './theme';
+
+/** The look at full press: the idle style with the pressed overrides (an omitted field keeps the idle value, null removes a part). */
+function pressedStyle(base: UiButtonStyle, pressed: NonNullable<UiButtonStyle['pressed']>): UiSurfaceStyle {
+  const style: UiSurfaceStyle = { ...base, fill: pressed.fill ?? base.fill, depth: pressed.depth === undefined ? base.depth : pressed.depth, border: pressed.border === undefined ? base.border : pressed.border };
+  if (pressed.highlight !== undefined) style.highlight = pressed.highlight;
+  return style;
+}
 
 /** Donor standard button box (design units) — the default size of a role button. */
 export const DEFAULT_BUTTON_WIDTH = 439;
@@ -251,8 +258,7 @@ export class UiButton extends Container {
     } else if (this.style) {
       const base = this.controller.enabled ? this.style : this.theme.button.disabled;
       const pressed = this.pressed && this.controller.enabled ? base.pressed : null;
-      const style = pressed ? { ...base, fill: pressed.fill ?? base.fill, depth: pressed.depth === undefined ? base.depth : pressed.depth, border: pressed.border === undefined ? base.border : pressed.border } : base;
-      drawSurface(skin, -w / 2, -h / 2, w, h, style);
+      drawSurface(skin, -w / 2, -h / 2, w, h, pressed ? pressedStyle(base, pressed) : base);
     }
     skin.boundsArea = new Rectangle(-w / 2, -h / 2, w, h);
     this._didViewChangeTick++;

@@ -1,6 +1,7 @@
 import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { MotionHandle } from '../index';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { drawAwning } from './skin';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 
@@ -133,6 +134,14 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
 
     this.header = new Container();
     this.header.eventMode = 'none';
+    // the awning: drawn from `theme.awning` when the theme has one (and is not the art skin), else the v0.4 tiles
+    this.awning = null;
+    if (this.theme.awning && this.theme.skin !== 'art') {
+      const awning = new Graphics();
+      awning.eventMode = 'none';
+      this.header.addChild(awning);
+      this.awning = awning;
+    }
     this.panel.addChild(this.header);
 
     const close = this.createClose('close', SHOP_CLOSE, 160, options.closeTexture);
@@ -147,6 +156,10 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
   }
 
   private shopClose: UiButton | null = null;
+  /** The themed awning (null = the tiled art). Redrawn only when its size changes. */
+  private readonly awning: Graphics | null;
+  private awningWidth = 0;
+  private awningHeight = 0;
 
   protected applyParams(params: ShopWindowParams): void {
     if (params.title) {
@@ -186,21 +199,36 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     // awning: tiles across the width, height 36/255 of the screen
     const headerScale = (vh * HEADER_HEIGHT_RATIO) / HEADER_H;
     const tileW = HEADER_W * headerScale;
+    const tileH = HEADER_H * headerScale;
     const count = Math.max(1, Math.ceil(vw / tileW) + 2);
-    while (this.headerTiles.length < count) {
-      const tile = new Sprite(this.textures.shopHeader);
-      tile.anchor.set(0.5, 0);
-      tile.eventMode = 'none';
-      this.header.addChild(tile);
-      this.headerTiles.push(tile);
-    }
     const startX = -(count * tileW) / 2 + tileW / 2;
-    this.headerTiles.forEach((tile, i) => {
-      tile.visible = i < count;
-      tile.width = tileW;
-      tile.height = HEADER_H * headerScale;
-      tile.position.set(startX + i * tileW, 0);
-    });
+    if (this.awning) {
+      // one themed awning across the viewport; it declares the tiles' span as its bounds so the header keeps its geometry
+      const awningW = Math.round(vw);
+      const awningH = Math.round(tileH);
+      if (awningW !== this.awningWidth || awningH !== this.awningHeight) {
+        this.awningWidth = awningW;
+        this.awningHeight = awningH;
+        this.awning.clear();
+        drawAwning(this.awning, -awningW / 2, 0, awningW, awningH, this.theme.awning as NonNullable<typeof this.theme.awning>);
+        this.awning.boundsArea = new Rectangle(startX - tileW / 2, 0, count * tileW, tileH);
+        this.awning._didViewChangeTick++;
+      }
+    } else {
+      while (this.headerTiles.length < count) {
+        const tile = new Sprite(this.textures.shopHeader);
+        tile.anchor.set(0.5, 0);
+        tile.eventMode = 'none';
+        this.header.addChild(tile);
+        this.headerTiles.push(tile);
+      }
+      this.headerTiles.forEach((tile, i) => {
+        tile.visible = i < count;
+        tile.width = tileW;
+        tile.height = tileH;
+        tile.position.set(startX + i * tileW, 0);
+      });
+    }
     this.headerIdleY = -vh / 2 + top;
     this.header.y = this.headerIdleY;
     const headerBottom = this.headerIdleY + HEADER_H * headerScale;

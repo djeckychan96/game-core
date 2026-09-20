@@ -340,8 +340,44 @@ new SettingsWindowView({ ui, motion, textures, theme: overlay.theme, onToggle })
   window's `panelTexture` / `closeTexture` and a button's `texture` keep game-specific art on
   that component alone (a texture button is never recoloured). `ALT_READY_UI_THEME` is the demo
   second theme (blue / cyan / teal / orange; `?theme=alt` in the showcase, `?theme=art` for the
-  PNG skins). `npm run showcase:theme` shoots every window under the three variants and fails if
-  the default and the alt theme differ in geometry.
+  PNG skins). `npm run showcase:theme` shoots every window under the four variants (default, alt,
+  bubble, art) and fails if the default, the alt and the bubble theme differ in geometry.
+
+#### Bubble skin (Theme System V1.1)
+
+`BUBBLE_READY_UI_THEME` is the kit's glossy casual language, measured from a reference casual UI
+for its visual principles only (no art copied): every surface is a soft vertical gradient with a
+bright gloss band over its top, a flat darker lip under it, a soft outline and a soft shadow;
+windows are mid-blue with a lighter translucent header zone and a much lighter inner card (the
+second layer); the CTAs are green / orange / gold with lime / yellow gloss, the icon-button shell
+a slate square, the × a bold light-blue mark. It is expressed with three additions to the surface
+tokens — nothing else changed, every V1 theme resolves unchanged:
+
+- `highlight: { color, height, alpha? }` — the gloss band, a strip of the surface's own outline
+  along its top edge (cut by the corners, a straight inner boundary), drawn over the body and
+  under the border; `pressed.highlight: null` drops it at full press.
+- `depth.style: 'strip'` — a lip that is the strip of the outline along the bottom (or top) edge,
+  with a straight boundary; `'plate'` (the default) keeps the V1 stacked look (a smaller body
+  resting on the lip). The shop card of the Bubble theme uses a tall strip lip as its price band.
+- `shadow.layers` — a soft shadow: that many silhouettes at growing offsets, each at
+  `alpha / layers`, all inside the box (the body is still `height − offsetY` tall).
+- Shape `'tab'` (rounded top corners over a flat bottom) and `theme.tab` (`bar`, `item`,
+  `active`, `text`, `activeText`) are the tab-bar shells for a bottom navigation or a category
+  row — tokens and a `UiSurface` shape, no tab component.
+- `theme.awning` (`stripeA`, `stripeB`, `stripeRatio`, `shadow`; null in the V1 themes) draws the
+  shop's striped, scalloped awning from tokens (`drawAwning`) instead of the tiled art; the header
+  keeps the tiles' geometry.
+- `theme.levelNode` (`completed` / `current` / `locked` surfaces; null in the V1 themes) draws the
+  level-map node as a disc (`shape: 'capsule'` on a square: the ring is its border, gloss and lip as
+  everywhere) instead of the badge art; stars, the lock, the number and the HARD pill stay as they
+  are, the hit area and the layout come from `levelMap.badgeSize` as before.
+- `SettingsWindowView({ toggleWell: true })` draws the toggles and their captions on the theme's
+  inner card (`panel.well`), sized to the visible toggles; a skin, never a layout change (the
+  toggles and the in-level buttons keep their positions; nothing is drawn under `skin: 'art'`).
+
+Use it as a base: `resolveTheme(myOverrides, BUBBLE_READY_UI_THEME)` (`?theme=bubble` in the
+showcase). What stays art under it: icons and illustrations, the settings toggle tiles (icon
+baked in), the shop awning, the victory ribbon, the level-map badges, PLAY.
 - **Performance**: a surface (`UiPanel`, `UiSurface`, a role `UiButton`) builds its geometry once
   and again only when its size, style or state changes (`redrawCount`); nothing is rebuilt per
   frame or per resize of the viewport (the panel is fitted by scaling its container).

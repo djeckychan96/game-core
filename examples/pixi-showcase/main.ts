@@ -10,6 +10,7 @@ import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, T
 import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, PurchaseRuntime, UiRuntime, createAdsAnalyticsHandler, createGrantedPurchaseStore, createOfferAnalyticsHandler, createPurchaseAdsHandler, createPurchaseAnalyticsHandler, type OfferEvent, type OfferReward, type PurchaseEvent, type PurchaseResult, type RestoreResult } from 'game-core';
 import {
   ALT_READY_UI_THEME,
+  BUBBLE_READY_UI_THEME,
   ClickRippleEffect,
   DEFAULT_CLICK_RIPPLE,
   HudView,
@@ -73,9 +74,10 @@ const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> |
 ];
 
 async function boot(): Promise<void> {
-  // Theme System V1 proof: `?theme=alt` skins the same UI with the demo ocean theme; `?theme=art` keeps the v0.4 PNG skins
+  // Theme System V1 proof: `?theme=alt` skins the same UI with the demo ocean theme, `?theme=bubble` with the glossy
+  // Bubble theme (V1.1); `?theme=art` keeps the v0.4 PNG skins
   const themeParam = new URLSearchParams(location.search).get('theme');
-  const theme = resolveTheme(themeParam === 'art' ? { skin: 'art' } : undefined, themeParam === 'alt' ? ALT_READY_UI_THEME : undefined);
+  const theme = resolveTheme(themeParam === 'art' ? { skin: 'art' } : undefined, themeParam === 'alt' ? ALT_READY_UI_THEME : themeParam === 'bubble' ? BUBBLE_READY_UI_THEME : undefined);
   const app = new Application();
   const resolution = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
   await app.init({

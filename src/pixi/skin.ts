@@ -10,10 +10,13 @@
 // height, the box is the container's `boundsArea`), so a theme never moves a layout, never changes a hit area, never
 // changes the bounds a window is fitted from.
 import { Container, FillGradient, Graphics, Rectangle, type FillInput } from 'pixi.js';
-import type { UiCardStyle, UiCloseStyle, UiFill, UiPanelStyle, UiSurfaceStyle } from './theme';
+import type { UiAwningStyle, UiCardStyle, UiCloseStyle, UiFill, UiPanelStyle, UiSurfaceStyle } from './theme';
 
-/** `rounded`: a rounded rect (`radius` from the style). `capsule`: half-height corners. `ribbon`: notched ends (a title ribbon). */
-export type UiSurfaceShape = 'rounded' | 'capsule' | 'ribbon';
+/**
+ * `rounded`: a rounded rect (`radius` from the style). `capsule`: half-height corners. `ribbon`: notched ends (a title
+ * ribbon). `tab`: rounded top corners over a flat bottom edge (a tab rising from its bar).
+ */
+export type UiSurfaceShape = 'rounded' | 'capsule' | 'ribbon' | 'tab';
 
 const gradients = new Map<string, FillGradient>();
 
@@ -46,37 +49,84 @@ function cornerRadius(radius: number, width: number, height: number): number {
   return radius < 0 ? max : Math.min(Math.max(0, radius), max);
 }
 
+function ribbonNotch(width: number, height: number): number {
+  return Math.min(height * 0.35, width * 0.08);
+}
+
 function shapePath(g: Graphics, shape: UiSurfaceShape, x: number, y: number, width: number, height: number, radius: number): Graphics {
   if (shape === 'ribbon') {
-    const notch = Math.min(height * 0.35, width * 0.08);
+    const notch = ribbonNotch(width, height);
     return g.moveTo(x, y).lineTo(x + width, y).lineTo(x + width - notch, y + height / 2).lineTo(x + width, y + height).lineTo(x, y + height).lineTo(x + notch, y + height / 2).closePath();
   }
+  if (shape === 'tab') return topRoundedPath(g, x, y, width, height, radius);
   return g.roundRect(x, y, width, height, cornerRadius(shape === 'capsule' ? -1 : radius, width, height));
 }
 
-/** A rect with rounded top corners and a flat bottom edge (the header band of a panel). */
+/** A rect with rounded top corners and a flat bottom edge (the header band of a panel, a tab). */
 function topRoundedPath(g: Graphics, x: number, y: number, width: number, height: number, radius: number): Graphics {
   const r = cornerRadius(radius, width, height * 2);
   return g.moveTo(x, y + height).lineTo(x, y + r).arcTo(x, y, x + r, y, r).lineTo(x + width - r, y).arcTo(x + width, y, x + width, y + r, r).lineTo(x + width, y + height).closePath();
 }
 
+const HALF_PI = Math.PI / 2;
+
 /**
- * Draws one surface into `g` inside the box (x, y, width, height): shadow → depth lip → body → inside border.
- * The body is `height − shadow.offsetY` tall so the shadow stays inside the box.
+ * The strip of a shape along its top or bottom edge, `strip` tall, cut exactly by the shape's own corners (a straight
+ * inner boundary): the gloss band and the flat lip of the Bubble skin. A strip as tall as the shape is the shape.
+ */
+function stripPath(g: Graphics, shape: UiSurfaceShape, x: number, y: number, width: number, height: number, radius: number, strip: number, edge: 'top' | 'bottom'): Graphics {
+  const h = Math.min(strip, height);
+  if (h >= height) return shapePath(g, shape, x, y, width, height, radius);
+  if (shape === 'ribbon') {
+    // the notch edges run from the corners to the middle of the ends: the strip's inner corners follow them
+    const inset = ribbonNotch(width, height) * Math.min(1, (2 * h) / height);
+    if (edge === 'top') return g.moveTo(x, y).lineTo(x + width, y).lineTo(x + width - inset, y + h).lineTo(x + inset, y + h).closePath();
+    return g.moveTo(x + inset, y + height - h).lineTo(x + width - inset, y + height - h).lineTo(x + width, y + height).lineTo(x, y + height).closePath();
+  }
+  const r = shape === 'tab' ? cornerRadius(radius, width, height * 2) : cornerRadius(shape === 'capsule' ? -1 : radius, width, height);
+  if (edge === 'bottom' && shape === 'tab') return g.rect(x, y + height - h, width, h);
+  if (edge === 'top') {
+    if (h >= r) return g.moveTo(x, y + h).lineTo(x, y + r).arcTo(x, y, x + r, y, r).lineTo(x + width - r, y).arcTo(x + width, y, x + width, y + r, r).lineTo(x + width, y + h).closePath();
+    // the strip ends inside the corner arcs: from the left arc's point at y + h, over the top, down the right arc
+    const a = Math.acos((r - h) / r);
+    const dx = r - r * Math.sin(a);
+    return g.moveTo(x + dx, y + h).arc(x + r, y + r, r, 3 * HALF_PI - a, 3 * HALF_PI).lineTo(x + width - r, y).arc(x + width - r, y + r, r, 3 * HALF_PI, 3 * HALF_PI + a).lineTo(x + width - dx, y + h).closePath();
+  }
+  const bottom = y + height;
+  if (h >= r) return g.moveTo(x + width, bottom - h).lineTo(x + width, bottom - r).arcTo(x + width, bottom, x + width - r, bottom, r).lineTo(x + r, bottom).arcTo(x, bottom, x, bottom - r, r).lineTo(x, bottom - h).closePath();
+  const a = Math.acos((r - h) / r);
+  const dx = r - r * Math.sin(a);
+  return g.moveTo(x + width - dx, bottom - h).arc(x + width - r, bottom - r, r, HALF_PI - a, HALF_PI).lineTo(x + r, bottom).arc(x + r, bottom - r, r, HALF_PI, HALF_PI + a).lineTo(x + dx, bottom - h).closePath();
+}
+
+/**
+ * Draws one surface into `g` inside the box (x, y, width, height): shadow → depth lip → body → gloss band → inside
+ * border. The body is `height − shadow.offsetY` tall so the shadow stays inside the box. A `'plate'` lip is drawn
+ * under a smaller body (the donor's stacked look); a `'strip'` lip and the gloss band are strips of the body's own
+ * outline over it.
  */
 export function drawSurface(g: Graphics, x: number, y: number, width: number, height: number, style: UiSurfaceStyle, shape: UiSurfaceShape = 'rounded'): void {
   const shadow = style.shadow;
   const bodyHeight = Math.max(1, height - (shadow ? Math.max(0, shadow.offsetY) : 0));
   if (shadow && shadow.alpha > 0) {
-    shapePath(g, shape, x, y + shadow.offsetY, width, bodyHeight, style.radius).fill({ color: shadow.color, alpha: shadow.alpha });
+    const layers = Math.max(1, Math.floor(shadow.layers ?? 1));
+    for (let i = 1; i <= layers; i++) {
+      shapePath(g, shape, x, y + (shadow.offsetY * i) / layers, width, bodyHeight, style.radius).fill({ color: shadow.color, alpha: shadow.alpha / layers });
+    }
   }
   const depth = style.depth;
-  if (depth && depth.height > 0 && depth.height < bodyHeight) {
-    shapePath(g, shape, x, y, width, bodyHeight, style.radius).fill({ color: depth.color });
-    const top = depth.edge === 'top';
-    shapePath(g, shape, x, top ? y + depth.height : y, width, bodyHeight - depth.height, style.radius).fill(toFillInput(style.fill));
+  const lip = depth && depth.height > 0 && depth.height < bodyHeight ? depth : null;
+  if (lip && (lip.style ?? 'plate') === 'plate') {
+    shapePath(g, shape, x, y, width, bodyHeight, style.radius).fill({ color: lip.color });
+    const top = lip.edge === 'top';
+    shapePath(g, shape, x, top ? y + lip.height : y, width, bodyHeight - lip.height, style.radius).fill(toFillInput(style.fill));
   } else {
     shapePath(g, shape, x, y, width, bodyHeight, style.radius).fill(toFillInput(style.fill));
+    if (lip) stripPath(g, shape, x, y, width, bodyHeight, style.radius, lip.height, lip.edge ?? 'bottom').fill({ color: lip.color });
+  }
+  const highlight = style.highlight;
+  if (highlight && highlight.height > 0 && (highlight.alpha ?? 1) > 0) {
+    stripPath(g, shape, x, y, width, bodyHeight, style.radius, highlight.height, 'top').fill({ color: highlight.color, alpha: highlight.alpha ?? 1 });
   }
   const border = style.border;
   if (border && border.width > 0) {
@@ -111,6 +161,37 @@ export function drawCard(g: Graphics, x: number, y: number, width: number, heigh
   const h = height - inset.top - inset.bottom;
   if (w <= 0 || h <= 0) return;
   g.roundRect(x + inset.side, y + inset.top, w, h, cornerRadius(inset.radius, w, h)).fill(toFillInput(inset.fill));
+}
+
+/** One awning stripe: a rect ending in a half-disc scallop, `index` stripes from the left. */
+function awningPath(g: Graphics, x: number, y: number, height: number, stripe: number, index: number): Graphics {
+  const r = stripe / 2;
+  const sx = x + index * stripe;
+  const top = Math.max(0, height - r);
+  return g.moveTo(sx, y).lineTo(sx + stripe, y).lineTo(sx + stripe, y + top).arc(sx + r, y + top, r, 0, Math.PI).lineTo(sx, y).closePath();
+}
+
+/**
+ * The shop's striped awning inside the box (x, y, width, height): a soft shadow of the whole silhouette, then the
+ * stripes (alternating colours), each ending in a half-disc scallop. The stripes are about `stripeRatio × height`
+ * wide — a whole number of them spans the width exactly, so every scallop is whole and inside the box.
+ */
+export function drawAwning(g: Graphics, x: number, y: number, width: number, height: number, style: UiAwningStyle): void {
+  const count = Math.max(1, Math.round(width / Math.max(1, height * style.stripeRatio)));
+  const stripe = width / count;
+  const shadow = style.shadow;
+  const bodyHeight = Math.max(1, height - (shadow ? Math.max(0, shadow.offsetY) : 0));
+  if (shadow && shadow.alpha > 0) {
+    const layers = Math.max(1, Math.floor(shadow.layers ?? 1));
+    for (let i = 1; i <= layers; i++) {
+      const dy = (shadow.offsetY * i) / layers;
+      for (let s = 0; s < count; s++) awningPath(g, x, y + dy, bodyHeight, stripe, s);
+      g.fill({ color: shadow.color, alpha: shadow.alpha / layers });
+    }
+  }
+  for (let s = 0; s < count; s++) {
+    awningPath(g, x, y, bodyHeight, stripe, s).fill({ color: s % 2 === 0 ? style.stripeA : style.stripeB });
+  }
 }
 
 /** The close control's mark: an optional backing surface and the × (outline under the arms, then the arms), centred on (0, 0). */

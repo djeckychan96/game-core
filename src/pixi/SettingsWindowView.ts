@@ -1,5 +1,6 @@
 import { Container, Sprite, type Text } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { UiSurface } from './skin';
 import { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth } from './text';
 
@@ -26,6 +27,11 @@ export interface SettingsWindowViewOptions extends Omit<ModalWindowOptions, 'id'
   restartLabel?: string;
   /** Show the haptic toggle at all. Default false (donor hides it). */
   haptic?: boolean;
+  /**
+   * Draw the toggles (and their captions) on an inner card (`theme.panel.well`) — the second layer of the Bubble skin.
+   * Default false (the donor prefab puts the toggles straight on the panel). The card is a skin: it never moves a toggle.
+   */
+  toggleWell?: boolean;
   /** Toggles fire immediately while the window stays open (like the donor). */
   onToggle: (setting: 'sound' | 'music' | 'haptic', enabled: boolean) => void;
   /** Close continuations for the in-level buttons. */
@@ -47,6 +53,11 @@ const GAME_ITEM_Y = -150;
 const GAME_BUTTON_Y = 100;
 const GAME_BUTTON_GAP = 150;
 const GAME_BUTTON_SCALE = 0.72;
+/** The toggle card: around the captions (LABEL_OFFSET_Y above the 220-tall tiles) and the tiles, with this padding. */
+const WELL_PAD_X = 52;
+const WELL_PAD_TOP = 58;
+const WELL_PAD_BOTTOM = 44;
+const TOGGLE_H = 220;
 
 /**
  * Settings window with SOUND / MUSIC (optionally HAPTIC) toggles — a blue square button with the
@@ -58,6 +69,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
   private readonly title: Text;
   private readonly version: Text;
   private readonly toggleRow: Container;
+  private readonly toggleWell: UiSurface | null;
   private readonly toggles: Record<'sound' | 'music' | 'haptic', ToggleView>;
   private readonly homeButton: UiButton;
   private readonly restartButton: UiButton;
@@ -87,6 +99,12 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
 
     this.toggleRow = new Container();
     this.toggleRow.y = 45;
+    // the inner card sits under the row (a themed well; under `theme.skin: 'art'` the toggles stay straight on the panel art)
+    this.toggleWell = options.toggleWell && this.theme.skin !== 'art' ? new UiSurface({ style: this.theme.panel.well, width: 1, height: 1 }) : null;
+    if (this.toggleWell) {
+      this.toggleWell.eventMode = 'none';
+      this.panel.addChild(this.toggleWell);
+    }
     this.panel.addChild(this.toggleRow);
 
     const makeToggle = (key: 'sound' | 'music' | 'haptic', texture: typeof t.settingsSound, label: string): ToggleView => {
@@ -156,12 +174,20 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       it.view.label.visible = it.visible;
       it.view.button.setEnabled(it.visible);
     }
+    const rowY = gameButtons ? GAME_ITEM_Y : MAIN_ITEM_Y;
     visible.forEach((it, index) => {
       const x = startX + index * ITEM_GAP;
-      const y = gameButtons ? GAME_ITEM_Y : MAIN_ITEM_Y;
-      it.view.button.position.set(x, y);
-      it.view.label.position.set(x, y + LABEL_OFFSET_Y);
+      it.view.button.position.set(x, rowY);
+      it.view.label.position.set(x, rowY + LABEL_OFFSET_Y);
     });
+    if (this.toggleWell) {
+      // the card spans the captions and the tiles of the visible toggles (in panel units: the row sits at toggleRow.y)
+      const width = (visible.length - 1) * ITEM_GAP + 224 + WELL_PAD_X * 2;
+      const top = rowY + LABEL_OFFSET_Y - WELL_PAD_TOP;
+      const bottom = rowY + TOGGLE_H / 2 + WELL_PAD_BOTTOM;
+      this.toggleWell.resize(width, bottom - top);
+      this.toggleWell.position.set(0, this.toggleRow.y + (top + bottom) / 2);
+    }
     const showGame = gameButtons && (this.onHome !== null || this.onRestart !== null);
     this.homeButton.visible = showGame && this.onHome !== null;
     this.restartButton.visible = showGame && this.onRestart !== null;

@@ -9,6 +9,7 @@ import {
 } from 'pixi.js';
 import type { ButtonController, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
+import { UiSurface } from './skin';
 import { applyTextResolution, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
@@ -536,11 +537,19 @@ export class LevelMapView extends Container {
     const inner = new Container();
     root.addChild(inner);
 
-    const baseTex = state === 'current' ? this.textures.badgeCurrent : state === 'locked' ? this.textures.badgeLocked : this.textures.badgeBase;
-    const badge = new Sprite(baseTex);
-    badge.anchor.set(0.5);
-    badge.scale.set(D / Math.max(1, baseTex.width));
-    inner.addChild(badge);
+    // the badge: a themed disc (`theme.levelNode`, the ring is its border) or the v0.4 badge art
+    const nodeSkin = this.theme.skin === 'art' ? null : this.theme.levelNode;
+    if (nodeSkin) {
+      const disc = new UiSurface({ style: nodeSkin[state], width: D, height: D, shape: 'capsule' });
+      disc.eventMode = 'none';
+      inner.addChild(disc);
+    } else {
+      const baseTex = state === 'current' ? this.textures.badgeCurrent : state === 'locked' ? this.textures.badgeLocked : this.textures.badgeBase;
+      const badge = new Sprite(baseTex);
+      badge.anchor.set(0.5);
+      badge.scale.set(D / Math.max(1, baseTex.width));
+      inner.addChild(badge);
+    }
 
     // side stars are pre-tilted PNGs from Figma; only earned stars are drawn (the empty
     // slots are baked into the badge art itself)
