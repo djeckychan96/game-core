@@ -33,6 +33,8 @@ export interface Player {
   usd: boolean;
   /** JS getTimezoneOffset() minutes; undefined = the input has no calendar (UTC buckets). */
   tzOffsetMin: number | undefined;
+  /** The host has an ad request in flight (`input.isAdInFlight`). */
+  adInFlight: boolean;
 }
 
 export interface AdsHost {
@@ -53,7 +55,7 @@ export function makeAds(
   options: Partial<Omit<AdsRuntimeOptions, 'state'>> & { state?: AdsStateStore } = {}
 ): AdsHost {
   const p: Player = {
-    now: T0, level: 1, noAds: false, starterPack: false, payCount: 0, paySumCents: 0, payMaxCents: 0, usd: false, tzOffsetMin: undefined,
+    now: T0, level: 1, noAds: false, starterPack: false, payCount: 0, paySumCents: 0, payMaxCents: 0, usd: false, tzOffsetMin: undefined, adInFlight: false,
     ...player
   };
   const memory = new MemoryAdsStateStore();
@@ -67,13 +69,16 @@ export function makeAds(
     payMaxCents: () => p.payMaxCents,
     currencyScale: () => (p.usd ? 1 / RUB_PER_USD : 1),
     isPayer: () => p.starterPack,
-    timezoneOffsetMinutes: () => p.tzOffsetMin ?? 0
+    timezoneOffsetMinutes: () => p.tzOffsetMin ?? 0,
+    isAdInFlight: () => p.adInFlight
   };
+  // a `policy` in the options replaces the donor tables; a `config` in the options replaces them too (v0.7 style)
+  const { policy, config, ...rest } = options;
   const ads = new AdsRuntime({
-    config: donorConfig(),
+    ...(policy ? { policy } : { config: config ?? donorConfig() }),
     input,
     onEvent: (event) => events.push(event),
-    ...options,
+    ...rest,
     state: options.state ?? memory
   });
   return {

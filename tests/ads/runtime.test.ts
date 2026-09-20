@@ -489,6 +489,8 @@ test('getStats: decisions, deny counts by reason, the segment, timestamps and th
     events: 6, callbackErrors: 0, storeErrors: 0
   });
   expect(stats.denyByReason).toEqual({
+    // Ads Policy V1: the six policy-gate reasons are part of the exhaustive record (never hit by the bare tables)
+    disabled: 0, placement_disabled: 0, ad_in_flight: 0, first_show_delay: 0, session_limit: 0, cadence: 0,
     no_ads: 0, unknown_placement: 1, wrong_type: 0, no_segment: 0, segment_disabled: 0, no_rule: 0,
     below_start_level: 0, day_limit: 1, hour_limit: 0, inter_cooldown: 1, reward_cooldown: 0
   });

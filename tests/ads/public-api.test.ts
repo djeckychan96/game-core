@@ -12,7 +12,7 @@ const stripComments = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, ''
 
 test('src/ads never imports a renderer, the DOM, storage, Date, timers or an ad SDK — every external is injected', () => {
   const files = readdirSync(adsDir).filter((name) => name.endsWith('.ts'));
-  expect(files.sort()).toEqual(['AdsRuntime.ts', 'config.ts', 'index.ts', 'state.ts', 'types.ts']);
+  expect(files.sort()).toEqual(['AdsRuntime.ts', 'config.ts', 'index.ts', 'policy.ts', 'presets.ts', 'state.ts', 'types.ts']);
   const forbidden: Array<[string, RegExp]> = [
     ['Date', /\bDate\b/],
     ['performance.now', /\bperformance\b/],
@@ -97,12 +97,15 @@ test('a package consumer sees exactly the AdsRuntime public API and none of its 
   const consumer = `
     import {
       AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT,
+      resolveAdsPolicy, adsPolicyFromConfig, validateAdsPolicy, freezeAdsPolicy, ADS_POLICY_NEUTRAL, TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_ADS_CONFIG_V1,
       createAdsAnalyticsHandler, adsEventToAnalytics, createPurchaseAdsHandler, isConfirmedPayment, AnalyticsRuntime, PurchaseRuntime, CoreRuntime,
       type AdsStateSnapshot, type AdPlacementType, type AdPayerClass, type AdSegment, type AdPlacementRule, type AdPlacement,
-      type AdsConfig, type AdsDenyReason, type AdsDecision, type AdsStateKey, type AdsCount, type AdsStateStore, type AdsInput,
+      type AdsConfig, type AdsDenyReason, type AdsDecision, type AdsDecisionSource, type AdsPolicyDecision, type AdsStateKey, type AdsCount, type AdsStateStore, type AdsInput,
       type AdsEvent, type AdsEventType, type AdsEventHandler, type AdsErrorPhase, type AdsErrorContext, type AdsErrorHandler,
-      type AdsRuntimeOptions, type AdsRuntimeStats, type AdsAnalyticsSink, type AdsAnalyticsRecord, type PurchaseAdsSink,
-      type PurchaseEventHandler, type CoreRuntimeModule
+      type AdsRuntimeOptions, type AdsRuntimeStats, type AdsSessionStats, type AdsAnalyticsSink, type AdsAnalyticsRecord, type PurchaseAdsSink,
+      type PurchaseEventHandler, type CoreRuntimeModule,
+      type AdsPlacementId, type AdsCadence, type AdsInterstitialPlacementPolicy, type AdsRewardedPlacementPolicy, type AdsBannerPlacementPolicy,
+      type AdsInterstitialPolicy, type AdsRewardedPolicy, type AdsBannerPolicy, type AdsNoAdsPolicy, type AdsSessionPolicy, type AdsPolicy, type AdsPolicyOverrides
     } from '../../src/index';
 
     const payerClass: AdPayerClass = 'NON_PAYER';
@@ -131,7 +134,9 @@ test('a package consumer sees exactly the AdsRuntime public API and none of its 
 
     const publicMethods: Record<keyof AdsRuntime, true> = {
       update: true, segmentId: true, decide: true, canShowInter: true, canShowRewarded: true, canShowBanner: true,
-      registerShown: true, markPayer: true, getStats: true
+      registerShown: true, markPayer: true, getStats: true,
+      // Ads Policy V1
+      evaluate: true, requestInterstitial: true, requestRewarded: true, requestBanner: true, startSession: true, getPolicy: true
     };
     const decision: AdsDecision = ads.decide('level_win_inter');
     const typed: AdsDecision = ads.decide('level_win_inter', 'rewarded');
@@ -141,7 +146,40 @@ test('a package consumer sees exactly the AdsRuntime public API and none of its 
     ads.registerShown('level_win_inter');
     ads.markPayer();
     const stats: AdsRuntimeStats = ads.getStats();
-    const denied: number = stats.denyByReason.inter_cooldown;
+    const denied: number = stats.denyByReason.inter_cooldown + stats.denyByReason.cadence;
+    const session: AdsSessionStats = stats.session;
+
+    // Ads Policy V1: a per-game policy — a game's own placement ids, a preset, nested overrides, an explainable decision
+    type MyPlacement = 'level_complete' | 'level_fail' | 'hint_rewarded' | 'banner';
+    const id: AdsPlacementId = 'level_complete' satisfies MyPlacement;
+    const cadence: AdsCadence = { every: 3, first: 1 };
+    const interPlacement: AdsInterstitialPlacementPolicy = { enabled: true, cadence, minLevel: 3, dayLimit: 20, hourLimit: null };
+    const rewardedPlacement: AdsRewardedPlacementPolicy = { enabled: true };
+    const bannerPlacement: AdsBannerPlacementPolicy = { enabled: false, minLevel: 5 };
+    const interstitial: AdsInterstitialPolicy = { enabled: true, cooldownMs: 60_000, afterRewardedCooldownMs: 30_000, firstShowDelayMs: 90_000, minLevel: 1, placements: { [id]: interPlacement, level_fail: { enabled: true } } };
+    const rewarded: AdsRewardedPolicy = { enabled: true, minLevel: 0, placements: { hint_rewarded: rewardedPlacement } };
+    const banner: AdsBannerPolicy = { enabled: false, minLevel: 0, placements: { [ADS_BANNER_PLACEMENT]: bannerPlacement } };
+    const noAds: AdsNoAdsPolicy = { blocksInterstitial: true, blocksBanner: true, blocksRewarded: false };
+    const sessionPolicy: AdsSessionPolicy = { maxInterstitials: 4, blockWhileAdInFlight: true };
+    const game: AdsPolicy = { name: 'my_game', version: 1, interstitial, rewarded, banner, noAds, session: sessionPolicy, segmentation: null };
+    validateAdsPolicy(game);
+    const frozen: Readonly<AdsPolicy> = freezeAdsPolicy(game);
+    const overrides: AdsPolicyOverrides = { interstitial: { cooldownMs: 120_000, placements: { level_fail: { enabled: false } } }, session: { maxInterstitials: null }, segmentation: null };
+    const resolved: Readonly<AdsPolicy> = resolveAdsPolicy(TRAIL_ARROW_AD_POLICY_V1, overrides, undefined);
+    const tables: Readonly<AdsConfig> = TRAIL_ARROW_ADS_CONFIG_V1;
+    const legacy: AdsPolicy = adsPolicyFromConfig(config, { name: 'x', version: 2 });
+    const neutralCooldown: number = ADS_POLICY_NEUTRAL.interstitial.cooldownMs;
+    const withInFlight: AdsInput = { ...full, isAdInFlight: () => false };
+    const policyAds = new AdsRuntime({ policy: resolved, state, input: withInFlight });
+    const explained: AdsPolicyDecision = policyAds.requestInterstitial(id);
+    const rewardedDecision: AdsPolicyDecision = policyAds.requestRewarded('hint_rewarded');
+    const bannerDecision: AdsPolicyDecision = policyAds.requestBanner();
+    const evaluated: AdsPolicyDecision = policyAds.evaluate('level_complete', 'inter');
+    const source: AdsDecisionSource | null = explained.source;
+    const asDecision: AdsDecision = explained;
+    const policyMeta: { name: string; version: number } = policyAds.getPolicy() && explained.policy;
+    policyAds.startSession();
+    void [frozen, tables, legacy, neutralCooldown, rewardedDecision, bannerDecision, evaluated, source, asDecision, policyMeta, session];
 
     // composition: AnalyticsRuntime satisfies the sink; the purchase bridge is a PurchaseRuntime onEvent
     const sink: AdsAnalyticsSink = null as unknown as AnalyticsRuntime;
@@ -161,6 +199,12 @@ test('a package consumer sees exactly the AdsRuntime public API and none of its 
     ads.emit;
     // @ts-expect-error the runtime shows nothing — there is no SDK call on it
     ads.showInterstitial;
+    // @ts-expect-error the cadence counters are internal
+    ads.passesCadence;
+    // @ts-expect-error the placement allow-list check is internal
+    ads.placementGate;
+    // @ts-expect-error a resolved policy is read-only from the outside
+    resolved.version = 2;
   `;
   const host = ts.createCompilerHost(options);
   const getSourceFile = host.getSourceFile;

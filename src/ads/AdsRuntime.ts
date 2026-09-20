@@ -1,16 +1,26 @@
 import type { CoreRuntimeModule } from '../core/CoreRuntime';
 import { ADS_BANNER_PLACEMENT, ADS_DEFAULT_SEGMENT_ID, validateAdsConfig } from './config';
+import { adsPolicyFromConfig, validateAdsPolicy } from './policy';
 import type {
-  AdPlacement,
+  AdsBannerPlacementPolicy,
+  AdsCadence,
+  AdsInterstitialPlacementPolicy,
+  AdsPolicy,
+  AdsRewardedPlacementPolicy
+} from './policy';
+import type {
+  AdPlacementRule,
   AdPlacementType,
-  AdsConfig,
+  AdSegment,
   AdsCount,
   AdsDecision,
+  AdsDecisionSource,
   AdsDenyReason,
   AdsErrorHandler,
   AdsEvent,
   AdsEventHandler,
   AdsInput,
+  AdsPolicyDecision,
   AdsRuntimeOptions,
   AdsRuntimeStats,
   AdsStateKey,
@@ -22,8 +32,8 @@ const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 
 const DENY_REASONS: readonly AdsDenyReason[] = [
-  'no_ads', 'unknown_placement', 'wrong_type', 'no_segment', 'segment_disabled', 'no_rule',
-  'below_start_level', 'day_limit', 'hour_limit', 'inter_cooldown', 'reward_cooldown'
+  'disabled', 'no_ads', 'unknown_placement', 'wrong_type', 'placement_disabled', 'ad_in_flight', 'first_show_delay', 'session_limit', 'cadence',
+  'no_segment', 'segment_disabled', 'no_rule', 'below_start_level', 'day_limit', 'hour_limit', 'inter_cooldown', 'reward_cooldown'
 ];
 
 // Same shape as the other modules' default handlers — independently re-declared (module boundary rule).
@@ -39,15 +49,36 @@ function own<T>(record: Record<string, T>, key: string): T | undefined {
   return Object.prototype.hasOwnProperty.call(record, key) ? record[key] : undefined;
 }
 
+/** A refusal: the reason and the layer that produced it. null = allowed. */
+type Verdict = { reason: AdsDenyReason; source: AdsDecisionSource } | null;
+const policyDeny = (reason: AdsDenyReason): Verdict => ({ reason, source: 'policy' });
+const tablesDeny = (reason: AdsDenyReason): Verdict => ({ reason, source: 'segmentation' });
+
+const recordOf = (map: Map<string, number>): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const [key, value] of map) out[key] = value;
+  return out;
+};
+
 /**
- * The ad decision layer as a Game Core module: a 1:1 port of Trail Arrow's `AdsGate` over an
- * injected config, state store and input. It answers WHO may see an ad (segment: non-payers by
- * level, payers by average / largest payment), WHEN (start level, calendar day / hour limits, the
- * two global cooldowns), in WHICH placement, and WHY not (`AdsDenyReason`). It never shows an ad
- * and knows no SDK: the platform layer asks `canShow*`, shows the ad, and reports a confirmed
- * show through `registerShown`.
+ * The ad decision layer as a Game Core module. Gameplay reports a placement
+ * (`requestInterstitial('level_complete')`, `requestRewarded('hint_rewarded')`, `canShowBanner()`)
+ * and gets an explainable decision; it never holds an ad condition itself. Two layers decide, in
+ * this order:
  *
- * Donor semantics kept as they are in production (see the spec for the full list):
+ * 1. the per-game **policy** (`AdsPolicy`): is the kind on, is the placement listed and enabled,
+ *    what NO_ADS blocks, the in-flight guard, the policy start level, the first-show delay, the
+ *    session cap, the cadence — then, after the tables, the placement's own day / hour caps and the
+ *    cooldown floors;
+ * 2. the optional **segmentation** tables (`AdsConfig`, Trail Arrow's `AdsGate` 1:1): WHO (segment
+ *    by level or by average / largest payment), the per-segment start level, day / hour limits and
+ *    the two global cooldowns.
+ *
+ * Built from `{ config }` alone (AdsRuntime v0.7) the policy is `adsPolicyFromConfig(config)`,
+ * whose gates are all neutral — the tables decide exactly as before. It never shows an ad and knows
+ * no SDK: the host asks, the platform shows, the host reports a confirmed show through `registerShown`.
+ *
+ * Donor semantics kept as they are in production (see the specs for the full list):
  * - NO_ADS blocks interstitials and the banner, NOT rewarded; rewarded has no cooldowns; the
  *   banner has neither counters nor cooldowns;
  * - the fallback segment `default` has no placement rules = no ads at all;
@@ -56,7 +87,7 @@ function own<T>(record: Record<string, T>, key: string): T | undefined {
  * - only `registerShown` and `markPayer` write state; a decision never does.
  */
 export class AdsRuntime implements CoreRuntimeModule {
-  private readonly config: AdsConfig;
+  private readonly policy: AdsPolicy;
   private readonly state: AdsStateStore;
   private readonly input: AdsInput;
   private readonly onEvent: AdsEventHandler | null;
@@ -69,18 +100,32 @@ export class AdsRuntime implements CoreRuntimeModule {
   private callbackErrors = 0;
   private storeErrors = 0;
   private lastBannerReport: string | null = null;
+  // the session: in memory, from the runtime's birth (or `startSession()`) on
+  private sessionStartedAt: number;
+  private sessionInterstitials = 0;
+  private sessionShown = new Map<string, number>();
+  private cadenceCounts = new Map<string, number>();
 
   constructor(options: AdsRuntimeOptions) {
-    validateAdsConfig(options.config);
+    if (options.config && options.policy) throw new RangeError('AdsRuntime: pass either options.config or options.policy, not both');
+    if (options.policy) {
+      validateAdsPolicy(options.policy);
+      this.policy = options.policy;
+    } else if (options.config) {
+      validateAdsConfig(options.config);
+      this.policy = adsPolicyFromConfig(options.config);
+    } else {
+      throw new RangeError('AdsRuntime: options.config or options.policy is required');
+    }
     if (!options.state) throw new RangeError('AdsRuntime: options.state is required');
     if (!options.input) throw new RangeError('AdsRuntime: options.input is required');
-    this.config = options.config;
     this.state = options.state;
     this.input = options.input;
     this.onEvent = options.onEvent ?? null;
     this.onAdsError = options.onAdsError ?? defaultOnAdsError;
     this.denyByReason = {} as Record<AdsDenyReason, number>;
     for (const reason of DENY_REASONS) this.denyByReason[reason] = 0;
+    this.sessionStartedAt = finite(this.input.now());
   }
 
   /** Nothing is paced by frame time — the module only keeps the CoreRuntimeModule contract. */
@@ -88,47 +133,78 @@ export class AdsRuntime implements CoreRuntimeModule {
     return false;
   }
 
+  /** The policy in force (a preset is frozen; a bare `config` is wrapped by reference). */
+  getPolicy(): AdsPolicy {
+    return this.policy;
+  }
+
+  /**
+   * A new session starts now: the first-show delay counts from here, the session cap and the
+   * cadence counters restart at zero. The persisted counters and cooldowns are not touched. Call it
+   * where the game's own session begins (e.g. once the host's clock is anchored), if not at construction.
+   */
+  startSession(): void {
+    this.sessionStartedAt = finite(this.input.now());
+    this.sessionInterstitials = 0;
+    this.sessionShown = new Map();
+    this.cadenceCounts = new Map();
+  }
+
   /**
    * The player's segment (donor `currentSegmentId`): a payer — the sticky mark, NO_ADS,
    * `input.isPayer()`, or a recorded payment — goes by average and largest payment (thresholds ×
    * `currencyScale`), everybody else by level; the first match in config order wins; nothing
-   * matched → `default` when the config has it, else null.
+   * matched → `default` when the config has it, else null. Always null without segmentation tables.
    */
   segmentId(): string | null {
+    const tables = this.policy.segmentation;
+    if (!tables) return null;
     const level = this.input.level();
     if (this.isPayer()) {
       const count = this.input.payCount();
       const avg = count > 0 ? this.input.paySumCents() / count / 100 : 0;
       const max = this.input.payMaxCents() / 100;
       const k = this.input.currencyScale();
-      for (const [id, seg] of Object.entries(this.config.segments)) {
+      for (const [id, seg] of Object.entries(tables.segments)) {
         if (seg.payer !== 'PAYER') continue;
         if (avg >= seg.avgFrom * k && avg < seg.avgTo * k && max >= seg.maxFrom * k && max < seg.maxTo * k) return id;
       }
     } else {
-      for (const [id, seg] of Object.entries(this.config.segments)) {
+      for (const [id, seg] of Object.entries(tables.segments)) {
         if (seg.payer === 'NON_PAYER' && level >= seg.levelFrom && level < seg.levelTo) return id;
       }
     }
-    return own(this.config.segments, ADS_DEFAULT_SEGMENT_ID) ? ADS_DEFAULT_SEGMENT_ID : null;
+    return own(tables.segments, ADS_DEFAULT_SEGMENT_ID) ? ADS_DEFAULT_SEGMENT_ID : null;
   }
 
   /**
-   * May this placement be shown right now, and if not — why. The checks and their order are the
-   * donor's `canShowInter` / `canShowRewarded` / `canShowBanner`, picked by `expect`, or by the
-   * placement's own type when it is omitted. Reads state, never writes it. Emits `offered` /
-   * `denied` (a banner decision only when it changed — hosts poll it).
+   * May this placement be shown right now, and if not — why, by which layer, under which policy.
+   * The checks and their order are the policy gates first, then the donor's
+   * `canShowInter` / `canShowRewarded` / `canShowBanner`, picked by `expect`, or by the placement's
+   * own kind when it is omitted. Reads state, never writes it; a cadence counter (session memory)
+   * is the one thing a request moves. Emits `offered` / `denied` (a banner decision only when it
+   * changed — hosts poll it).
    */
-  decide(placement: string, expect?: AdPlacementType): AdsDecision {
-    const p = own(this.config.placements, placement);
+  evaluate(placement: string, expect?: AdPlacementType): AdsPolicyDecision {
+    const kind = expect ?? this.kindOf(placement);
     const segmentId = this.segmentId();
     const level = this.input.level();
-    const kind = expect ?? p?.type;
-    const reason =
-      kind === 'inter' ? this.denyInter(placement, p, segmentId, level)
-      : kind === 'rewarded' ? this.denyRewarded(placement, p, segmentId, level)
-      : kind === 'banner' ? this.denyBanner(p, segmentId, level)
-      : 'unknown_placement';
+    const verdict: Verdict =
+      kind === 'inter' ? this.denyInter(placement, segmentId, level)
+      : kind === 'rewarded' ? this.denyRewarded(placement, segmentId, level)
+      : kind === 'banner' ? this.denyBanner(placement, segmentId, level)
+      : policyDeny('unknown_placement');
+    const reason = verdict?.reason ?? null;
+    const decision: AdsPolicyDecision = {
+      allowed: verdict === null,
+      reason,
+      segmentId,
+      placement,
+      adType: kind ?? null,
+      level,
+      source: verdict?.source ?? null,
+      policy: { name: this.policy.name, version: this.policy.version }
+    };
 
     if (reason === null) this.offered++;
     else {
@@ -137,38 +213,60 @@ export class AdsRuntime implements CoreRuntimeModule {
     }
     if (kind === 'banner') {
       const report = `${placement}|${reason ?? 'ok'}|${segmentId ?? ''}`;
-      if (report === this.lastBannerReport) return { allowed: reason === null, reason, segmentId };
+      if (report === this.lastBannerReport) return decision;
       this.lastBannerReport = report;
     }
-    // an allowed decision always has its placement: every path denies an unknown one first
-    if (reason === null && p) this.emit({ type: 'offered', placement, adType: p.type, segmentId, level });
-    else if (reason !== null) this.emit({ type: 'denied', placement, adType: p ? p.type : null, reason, segmentId, level });
-    return { allowed: reason === null, reason, segmentId };
+    // an allowed decision always has its kind: every path refuses an unknown placement first
+    if (reason === null && kind) this.emit({ type: 'offered', placement, adType: kind, segmentId, level });
+    else if (reason !== null) this.emit({ type: 'denied', placement, adType: this.kindOf(placement) ?? null, reason, segmentId, level });
+    return decision;
+  }
+
+  /** `evaluate` reduced to the v0.7 shape `{ allowed, reason, segmentId }`. */
+  decide(placement: string, expect?: AdPlacementType): AdsDecision {
+    const { allowed, reason, segmentId } = this.evaluate(placement, expect);
+    return { allowed, reason, segmentId };
+  }
+
+  /** Gameplay reached a moment that may carry an interstitial (`level_complete`, `level_fail` …): may it? */
+  requestInterstitial(placement: string): AdsPolicyDecision {
+    return this.evaluate(placement, 'inter');
+  }
+
+  /** Gameplay wants to offer a rewarded (`hint_rewarded`, `continue_rewarded` …): may it? */
+  requestRewarded(placement: string): AdsPolicyDecision {
+    return this.evaluate(placement, 'rewarded');
+  }
+
+  /** May the banner (or another banner placement) be on screen right now? */
+  requestBanner(placement: string = ADS_BANNER_PLACEMENT): AdsPolicyDecision {
+    return this.evaluate(placement, 'banner');
   }
 
   /** Donor `canShowInter`: NO_ADS → placement / type → segment → rule / start level → day / hour limit → the two cooldowns. */
   canShowInter(placement: string): boolean {
-    return this.decide(placement, 'inter').allowed;
+    return this.evaluate(placement, 'inter').allowed;
   }
 
   /** Donor `canShowRewarded`: placement / type → segment → rule / start level → day / hour limit. No NO_ADS check, no cooldowns. */
   canShowRewarded(placement: string): boolean {
-    return this.decide(placement, 'rewarded').allowed;
+    return this.evaluate(placement, 'rewarded').allowed;
   }
 
-  /** Donor `canShowBanner`: NO_ADS → the `banner` placement, segment, rule → start level. No type check, no limits, no cooldowns. */
+  /** Donor `canShowBanner`: NO_ADS → the `banner` placement, segment, rule → start level. No limits, no cooldowns. */
   canShowBanner(): boolean {
-    return this.decide(ADS_BANNER_PLACEMENT, 'banner').allowed;
+    return this.evaluate(ADS_BANNER_PLACEMENT, 'banner').allowed;
   }
 
   /**
    * A CONFIRMED show (the platform answered ok): the placement's day and hour counts go up and the
    * global cooldown clock is armed — `lastInterAt` for an interstitial, `lastRewardAt` for
    * everything else, an unknown placement included (donor behavior). This is the only place the
-   * calendar reset is persisted. Emits `shown` with the counts after the increment.
+   * calendar reset is persisted. The session counters move too: the interstitial cap, the
+   * placement's shows, and its cadence count restarts. Emits `shown` with the counts after the increment.
    */
   registerShown(placement: string): void {
-    const p = own(this.config.placements, placement);
+    const kind = this.kindOf(placement);
     const now = this.input.now();
     const buckets = this.buckets(now);
     const fresh = this.freshCount(placement, buckets);
@@ -183,12 +281,15 @@ export class AdsRuntime implements CoreRuntimeModule {
         for (const key of this.state.listCounts()) this.state.setCount(key, { day: finite(this.state.getCount(key).day), hour: 0 });
       }
       this.state.setCount(placement, next);
-      this.state.set(p?.type === 'inter' ? 'lastInterAt' : 'lastRewardAt', now);
+      this.state.set(kind === 'inter' ? 'lastInterAt' : 'lastRewardAt', now);
     } catch {
       this.storeErrors++; // donor: a failed write is swallowed
     }
     this.shown++;
-    this.emit({ type: 'shown', placement, adType: p ? p.type : null, segmentId: this.segmentId(), level: this.input.level(), day: next.day, hour: next.hour });
+    if (kind === 'inter') this.sessionInterstitials++;
+    this.sessionShown.set(placement, (this.sessionShown.get(placement) ?? 0) + 1);
+    if (this.cadenceCounts.has(placement)) this.cadenceCounts.set(placement, 0);
+    this.emit({ type: 'shown', placement, adType: kind ?? null, segmentId: this.segmentId(), level: this.input.level(), day: next.day, hour: next.hour });
   }
 
   /** The player made ANY purchase → the payer branch for good (donor: a sticky flag, never cleared). */
@@ -226,49 +327,156 @@ export class AdsRuntime implements CoreRuntimeModule {
       counts,
       events: this.events,
       callbackErrors: this.callbackErrors,
-      storeErrors: this.storeErrors
+      storeErrors: this.storeErrors,
+      policy: { name: this.policy.name, version: this.policy.version },
+      session: {
+        startedAt: this.sessionStartedAt,
+        interstitials: this.sessionInterstitials,
+        shown: recordOf(this.sessionShown),
+        cadence: recordOf(this.cadenceCounts)
+      }
     };
   }
 
-  private denyInter(placement: string, p: AdPlacement | undefined, segmentId: string | null, level: number): AdsDenyReason | null {
-    if (this.input.hasNoAds()) return 'no_ads';
-    if (!p) return 'unknown_placement';
-    if (p.type !== 'inter') return 'wrong_type';
-    const seg = segmentId !== null ? own(this.config.segments, segmentId) : undefined;
-    if (!seg) return 'no_segment';
-    if (seg.disableInter) return 'segment_disabled';
-    const rule = own(p.bySegment, segmentId!);
-    if (!rule) return 'no_rule';
-    if (level < rule.startFromLevel) return 'below_start_level';
+  // ------------------------------------------------------------------ the three pipelines
+
+  /**
+   * Interstitial: `disabled` → `no_ads` → `unknown_placement` / `wrong_type` / `placement_disabled`
+   * → `ad_in_flight` → policy `below_start_level` → `first_show_delay` → `session_limit` → `cadence`
+   * → tables: `no_segment` → `segment_disabled` → `no_rule` → `below_start_level` → `day_limit` →
+   * `hour_limit` → `inter_cooldown` → `reward_cooldown`.
+   */
+  private denyInter(placement: string, segmentId: string | null, level: number): Verdict {
+    const pol = this.policy.interstitial;
+    if (!pol.enabled) return policyDeny('disabled');
+    if (this.policy.noAds.blocksInterstitial && this.input.hasNoAds()) return policyDeny('no_ads');
+    const gate = this.placementGate(pol.placements, placement, 'inter');
+    if (gate) return gate;
+    const entry = pol.placements[placement] as AdsInterstitialPlacementPolicy;
+    if (this.adInFlight()) return policyDeny('ad_in_flight');
+    if (level < Math.max(pol.minLevel, entry.minLevel ?? -Infinity)) return policyDeny('below_start_level');
     const now = this.input.now();
+    if (pol.firstShowDelayMs > 0 && now - this.sessionStartedAt < pol.firstShowDelayMs) return policyDeny('first_show_delay');
+    const cap = this.policy.session.maxInterstitials;
+    if (cap !== null && this.sessionInterstitials >= cap) return policyDeny('session_limit');
+    if (entry.cadence && !this.passesCadence(placement, entry.cadence)) return policyDeny('cadence');
+
+    let seg: AdSegment | undefined;
+    let rule: AdPlacementRule | undefined;
+    const tables = this.policy.segmentation;
+    if (tables) {
+      seg = segmentId !== null ? own(tables.segments, segmentId) : undefined;
+      if (!seg) return tablesDeny('no_segment');
+      if (seg.disableInter) return tablesDeny('segment_disabled');
+      const row = own(tables.placements, placement);
+      rule = row ? own(row.bySegment, segmentId!) : undefined;
+      if (!rule) return tablesDeny('no_rule');
+      if (level < rule.startFromLevel) return tablesDeny('below_start_level');
+    }
+    const limits = this.limitVerdict(placement, now, rule, entry.dayLimit, entry.hourLimit);
+    if (limits) return limits;
+
+    const sinceInter = now - this.read('lastInterAt');
+    const interMs = Math.max(pol.cooldownMs, (seg?.delayBetweenInters ?? 0) * 1000);
+    if (sinceInter < interMs) return sinceInter < pol.cooldownMs ? policyDeny('inter_cooldown') : tablesDeny('inter_cooldown');
+    const sinceReward = now - this.read('lastRewardAt');
+    const rewardMs = Math.max(pol.afterRewardedCooldownMs, (seg?.delayAfterReward ?? 0) * 1000);
+    if (sinceReward < rewardMs) return sinceReward < pol.afterRewardedCooldownMs ? policyDeny('reward_cooldown') : tablesDeny('reward_cooldown');
+    return null;
+  }
+
+  /**
+   * Rewarded: `disabled` → `no_ads` (only when the policy says NO_ADS blocks rewarded — it does not
+   * by default) → placement gates → `ad_in_flight` → policy `below_start_level` → tables:
+   * `no_segment` → `no_rule` → `below_start_level` → `day_limit` → `hour_limit`. No cooldowns.
+   */
+  private denyRewarded(placement: string, segmentId: string | null, level: number): Verdict {
+    const pol = this.policy.rewarded;
+    if (!pol.enabled) return policyDeny('disabled');
+    if (this.policy.noAds.blocksRewarded && this.input.hasNoAds()) return policyDeny('no_ads');
+    const gate = this.placementGate(pol.placements, placement, 'rewarded');
+    if (gate) return gate;
+    const entry = pol.placements[placement] as AdsRewardedPlacementPolicy;
+    if (this.adInFlight()) return policyDeny('ad_in_flight');
+    if (level < Math.max(pol.minLevel, entry.minLevel ?? -Infinity)) return policyDeny('below_start_level');
+
+    let rule: AdPlacementRule | undefined;
+    const tables = this.policy.segmentation;
+    if (tables) {
+      if (segmentId === null) return tablesDeny('no_segment');
+      const row = own(tables.placements, placement);
+      rule = row ? own(row.bySegment, segmentId) : undefined;
+      if (!rule) return tablesDeny('no_rule');
+      if (level < rule.startFromLevel) return tablesDeny('below_start_level');
+    }
+    return this.limitVerdict(placement, this.input.now(), rule, entry.dayLimit, entry.hourLimit);
+  }
+
+  /**
+   * Banner: `disabled` → `no_ads` → placement gates → policy `below_start_level` → tables:
+   * `no_segment` → `no_rule` → `below_start_level`. No counters, no cooldowns (donor B8).
+   */
+  private denyBanner(placement: string, segmentId: string | null, level: number): Verdict {
+    const pol = this.policy.banner;
+    if (!pol.enabled) return policyDeny('disabled');
+    if (this.policy.noAds.blocksBanner && this.input.hasNoAds()) return policyDeny('no_ads');
+    const gate = this.placementGate(pol.placements, placement, 'banner');
+    if (gate) return gate;
+    const entry = pol.placements[placement] as AdsBannerPlacementPolicy;
+    if (level < Math.max(pol.minLevel, entry.minLevel ?? -Infinity)) return policyDeny('below_start_level');
+    const tables = this.policy.segmentation;
+    if (tables) {
+      if (segmentId === null) return tablesDeny('no_segment');
+      const row = own(tables.placements, placement);
+      const rule = row ? own(row.bySegment, segmentId) : undefined;
+      if (!rule) return tablesDeny('no_rule');
+      if (level < rule.startFromLevel) return tablesDeny('below_start_level');
+    }
+    return null;
+  }
+
+  // ------------------------------------------------------------------ policy helpers
+
+  /** The allow-list of one kind: listed and enabled → pass; listed off → `placement_disabled`; known as another kind → `wrong_type`; known nowhere → `unknown_placement`. */
+  private placementGate(list: Record<string, { enabled: boolean }>, placement: string, kind: AdPlacementType): Verdict {
+    const entry = own(list, placement);
+    if (entry) return entry.enabled ? null : policyDeny('placement_disabled');
+    const known = this.kindOf(placement);
+    if (known === undefined) return policyDeny('unknown_placement');
+    if (known !== kind) return policyDeny('wrong_type');
+    return policyDeny('placement_disabled'); // in the tables as this kind, but the policy does not list it
+  }
+
+  /** The kind of a placement: the policy's lists first, then the segmentation tables; undefined = unknown everywhere. */
+  private kindOf(placement: string): AdPlacementType | undefined {
+    if (own(this.policy.interstitial.placements, placement)) return 'inter';
+    if (own(this.policy.rewarded.placements, placement)) return 'rewarded';
+    if (own(this.policy.banner.placements, placement)) return 'banner';
+    const tables = this.policy.segmentation;
+    return tables ? own(tables.placements, placement)?.type : undefined;
+  }
+
+  private adInFlight(): boolean {
+    return this.policy.session.blockWhileAdInFlight && this.input.isAdInFlight?.() === true;
+  }
+
+  /** Counts this request; passes when the count reached `first` (before the placement's first show this session) or `every`. */
+  private passesCadence(placement: string, cadence: AdsCadence): boolean {
+    const count = (this.cadenceCounts.get(placement) ?? 0) + 1;
+    this.cadenceCounts.set(placement, count);
+    const threshold = (this.sessionShown.get(placement) ?? 0) > 0 ? cadence.every : (cadence.first ?? cadence.every);
+    return count >= threshold;
+  }
+
+  /** The tighter of the table rule's and the policy's day / hour caps; the day before the hour (donor order). */
+  private limitVerdict(placement: string, now: number, rule: AdPlacementRule | undefined, dayCap: number | null | undefined, hourCap: number | null | undefined): Verdict {
+    if (!rule && dayCap == null && hourCap == null) return null;
     const count = this.freshCount(placement, this.buckets(now));
-    if (count.day >= rule.dayLimit) return 'day_limit';
-    if (count.hour >= rule.hourLimit) return 'hour_limit';
-    if (now - this.read('lastInterAt') < seg.delayBetweenInters * 1000) return 'inter_cooldown';
-    if (now - this.read('lastRewardAt') < seg.delayAfterReward * 1000) return 'reward_cooldown';
+    const ruleDay = rule ? rule.dayLimit : Infinity;
+    const ruleHour = rule ? rule.hourLimit : Infinity;
+    if (count.day >= Math.min(ruleDay, dayCap ?? Infinity)) return count.day >= ruleDay ? tablesDeny('day_limit') : policyDeny('day_limit');
+    if (count.hour >= Math.min(ruleHour, hourCap ?? Infinity)) return count.hour >= ruleHour ? tablesDeny('hour_limit') : policyDeny('hour_limit');
     return null;
-  }
-
-  private denyRewarded(placement: string, p: AdPlacement | undefined, segmentId: string | null, level: number): AdsDenyReason | null {
-    if (!p) return 'unknown_placement';
-    if (p.type !== 'rewarded') return 'wrong_type';
-    if (segmentId === null) return 'no_segment';
-    const rule = own(p.bySegment, segmentId);
-    if (!rule) return 'no_rule';
-    if (level < rule.startFromLevel) return 'below_start_level';
-    const count = this.freshCount(placement, this.buckets(this.input.now()));
-    if (count.day >= rule.dayLimit) return 'day_limit';
-    if (count.hour >= rule.hourLimit) return 'hour_limit';
-    return null;
-  }
-
-  private denyBanner(p: AdPlacement | undefined, segmentId: string | null, level: number): AdsDenyReason | null {
-    if (this.input.hasNoAds()) return 'no_ads';
-    if (!p) return 'unknown_placement';
-    if (segmentId === null) return 'no_segment';
-    const rule = own(p.bySegment, segmentId);
-    if (!rule) return 'no_rule';
-    return level >= rule.startFromLevel ? null : 'below_start_level';
   }
 
   // donor `isPayer`: the sticky mark, NO_ADS / the starter pack (host facts), or any recorded payment

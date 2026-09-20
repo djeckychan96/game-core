@@ -169,9 +169,24 @@ export type {
   PurchasePending,
   PurchaseRuntimeStats
 } from './purchases';
-export { AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT } from './ads';
+export {
+  AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT,
+  resolveAdsPolicy, adsPolicyFromConfig, validateAdsPolicy, freezeAdsPolicy, ADS_POLICY_NEUTRAL, TRAIL_ARROW_AD_POLICY_V1, TRAIL_ARROW_ADS_CONFIG_V1
+} from './ads';
 export type {
   AdsStateSnapshot,
+  AdsPlacementId,
+  AdsCadence,
+  AdsInterstitialPlacementPolicy,
+  AdsRewardedPlacementPolicy,
+  AdsBannerPlacementPolicy,
+  AdsInterstitialPolicy,
+  AdsRewardedPolicy,
+  AdsBannerPolicy,
+  AdsNoAdsPolicy,
+  AdsSessionPolicy,
+  AdsPolicy,
+  AdsPolicyOverrides,
   AdPlacementType,
   AdPayerClass,
   AdSegment,
@@ -180,6 +195,8 @@ export type {
   AdsConfig,
   AdsDenyReason,
   AdsDecision,
+  AdsDecisionSource,
+  AdsPolicyDecision,
   AdsStateKey,
   AdsCount,
   AdsStateStore,
@@ -191,7 +208,8 @@ export type {
   AdsErrorContext,
   AdsErrorHandler,
   AdsRuntimeOptions,
-  AdsRuntimeStats
+  AdsRuntimeStats,
+  AdsSessionStats
 } from './ads';
 export { PlatformRuntime, PlatformCatalog, normalizePlatformProducts, validateGamePlatformConfig, createDevPlatform, PLATFORM_CODES, PLATFORM_PROVIDERS } from './platform';
 export type {

@@ -1,3 +1,5 @@
+import type { AdsPolicy } from './policy';
+
 // AdsRuntime v0.7 — types. The ad decision layer of Trail Arrow 0.1.22 (`src/app/AdsGate.ts` +
 // `ads_config/*.tsv`) without the game model, storage, the wall clock or any advertising SDK:
 // WHO may see an ad, WHEN, in WHICH placement, and WHY not. Showing the ad is the platform's job.
@@ -43,13 +45,28 @@ export interface AdsConfig {
 }
 
 /**
- * Why a placement was refused, in the donor's check order. The donor returns a bare `false`; the
- * reasons only name the branch that returned it — eligibility is unchanged.
+ * Why a placement was refused, in check order: first the per-game policy gates (`disabled` … `cadence`),
+ * then the segmentation tables (`no_segment` … `reward_cooldown`, the donor's branches, which
+ * return a bare `false` there — the reasons only name the branch, eligibility is unchanged).
+ * `no_ads`, `below_start_level`, `day_limit`, `hour_limit` and the two cooldowns can come from
+ * either layer; `AdsPolicyDecision.source` tells which.
  */
 export type AdsDenyReason =
+  /** The kind of ad is switched off in the policy (`interstitial.enabled: false` …). */
+  | 'disabled'
   | 'no_ads'
   | 'unknown_placement'
   | 'wrong_type'
+  /** The placement is not in the policy's list for this kind, or is listed with `enabled: false`. */
+  | 'placement_disabled'
+  /** The host reports an ad in flight and the policy blocks a second one. */
+  | 'ad_in_flight'
+  /** The session is younger than `interstitial.firstShowDelayMs`. */
+  | 'first_show_delay'
+  /** `session.maxInterstitials` confirmed interstitials were already shown this session. */
+  | 'session_limit'
+  /** The placement's cadence says this request is not the N-th. */
+  | 'cadence'
   | 'no_segment'
   | 'segment_disabled'
   | 'no_rule'
@@ -64,6 +81,21 @@ export interface AdsDecision {
   /** null when allowed. */
   reason: AdsDenyReason | null;
   segmentId: string | null;
+}
+
+/** Which layer refused: the per-game policy gates or the segmentation tables. */
+export type AdsDecisionSource = 'policy' | 'segmentation';
+
+/** `AdsDecision` with everything analytics wants to know about a refusal — what `evaluate` / `request*` answer. */
+export interface AdsPolicyDecision extends AdsDecision {
+  placement: string;
+  /** The kind the decision was made for; null when the placement is unknown and no kind was asked. */
+  adType: AdPlacementType | null;
+  level: number;
+  /** null when allowed. */
+  source: AdsDecisionSource | null;
+  /** The policy that decided (`name@version`), so cohorts of different presets can be split. */
+  policy: { name: string; version: number };
 }
 
 export type AdsStateKey = 'dayStamp' | 'hourStamp' | 'payer' | 'lastInterAt' | 'lastRewardAt';
@@ -119,6 +151,11 @@ export interface AdsInput {
    * `() => new Date().getTimezoneOffset()`. Omitted = UTC days and hours.
    */
   timezoneOffsetMinutes?(): number;
+  /**
+   * An ad is in flight right now (the host asked the platform to show one and has no answer yet).
+   * Read only when the policy's `session.blockWhileAdInFlight` is on. Omitted = never in flight.
+   */
+  isAdInFlight?(): boolean;
 }
 
 /**
@@ -159,7 +196,10 @@ export interface AdsErrorContext {
 export type AdsErrorHandler = (error: unknown, context: AdsErrorContext) => void;
 
 export interface AdsRuntimeOptions {
-  config: AdsConfig;
+  /** The tables alone (AdsRuntime v0.7): the same as `policy: adsPolicyFromConfig(config)`. Exactly one of `config` / `policy`. */
+  config?: AdsConfig;
+  /** The per-game policy (a preset, or `resolveAdsPolicy(preset, overrides)`). */
+  policy?: AdsPolicy;
   state: AdsStateStore;
   input: AdsInput;
   onEvent?: AdsEventHandler;
@@ -190,4 +230,19 @@ export interface AdsRuntimeStats {
   callbackErrors: number;
   /** Reads / writes of the state store that threw. */
   storeErrors: number;
+  /** The policy in force. */
+  policy: { name: string; version: number };
+  /** Session-local counters (in memory; a new runtime or `startSession()` starts at zero). */
+  session: AdsSessionStats;
+}
+
+export interface AdsSessionStats {
+  /** `input.now()` when the session started. */
+  startedAt: number;
+  /** Confirmed interstitials this session (what `session.maxInterstitials` caps). */
+  interstitials: number;
+  /** Confirmed shows per placement this session. */
+  shown: Record<string, number>;
+  /** Requests per placement since its last show — the cadence counters (only placements with a cadence). */
+  cadence: Record<string, number>;
 }
