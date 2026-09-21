@@ -430,35 +430,135 @@ describe('Bubble skin primitives (V1.1)', () => {
     expect(kit.uiErrors).toEqual([]);
   });
 
-  it('level-map nodes: `theme.levelNode` draws a themed disc per state (the ring is its border) with the badge geometry; the V1 themes keep the badge art', () => {
+  it('level-map nodes: `theme.levelNode` builds a layered node (ring + side base, a cap with the number, a themed rail, no glow) with the badge geometry; the V1 themes keep the badge art', () => {
+    type NodeProbe = { state: 'completed' | 'current' | 'locked'; root: Container; inner: Container; label: Container; stars: Container[]; lock: Container | null; base: Graphics | null; cap: Container | null; capSize: number };
     const build = (theme: ReadyUiTheme) => {
       const kit = createKit();
       const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, levels: [{ index: 1, stars: 3 }, { index: 2, stars: 2 }, { index: 3, stars: 0 }, { index: 4, stars: 0 }], currentLevel: 3, onSelectLevel: () => {} });
       map.resize(390, 844, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
-      const nodes = field<Map<number, { state: string; root: Container; inner: Container }>>(map, 'nodes');
-      const facts = [...nodes.values()].map((n) => ({ state: n.state, y: +n.root.y.toFixed(3), hit: { ...(n.root.hitArea as unknown as { x: number; y: number; width: number; height: number }) }, badge: n.inner.children[0] as Container }));
-      return { kit, map, facts };
+      const nodes = field<Map<number, NodeProbe>>(map, 'nodes');
+      const facts = [...nodes.values()].map((n) => ({ node: n, state: n.state, y: +n.root.y.toFixed(3), hit: { ...(n.root.hitArea as unknown as { x: number; y: number; width: number; height: number }) }, first: n.inner.children[0] as Container }));
+      return { kit, map, facts, rail: field<Container>(map, 'railLayer').children, shine: field<Sprite>(map, 'shine') };
     };
     const bubble = build(BUBBLE_READY_UI_THEME);
     const plain = build(DEFAULT_READY_UI_THEME);
     expect(bubble.facts.length).toBe(4);
     expect(bubble.facts.map((f) => f.state)).toEqual(plain.facts.map((f) => f.state));
     expect(bubble.facts.map((f) => [f.y, f.hit])).toEqual(plain.facts.map((f) => [f.y, f.hit]));
+    const skin = BUBBLE_READY_UI_THEME.levelNode as NonNullable<typeof BUBBLE_READY_UI_THEME.levelNode>;
     const D = BUBBLE_READY_UI_THEME.levelMap.badgeSize;
+    const capSize = D - 2 * D * skin.ringRatio;
     for (const f of bubble.facts) {
-      expect(f.badge).toBeInstanceOf(UiSurface);
-      expect(f.badge.getLocalBounds()).toMatchObject({ x: -D / 2, y: -D / 2, width: D, height: D });
-      const ring = BUBBLE_READY_UI_THEME.levelNode?.[f.state as 'completed' | 'current' | 'locked'].border?.color;
-      expect(colorsOf((f.badge as UiSurface).graphics)).toContain(ring);
+      const n = f.node;
+      expect(n.base).toBeInstanceOf(Graphics);
+      expect(f.first).toBe(n.base);
+      expect(n.cap).toBeInstanceOf(Container);
+      expect(n.capSize).toBe(capSize);
+      const disc = (n.cap as Container).children[0] as UiSurface;
+      expect(disc).toBeInstanceOf(UiSurface);
+      expect(disc.getLocalBounds()).toMatchObject({ x: -capSize / 2, y: -capSize / 2, width: capSize, height: capSize });
+      // the number (and the stars) sit on the cap; the base carries 2 shadow layers, the ring and the side
+      expect((n.cap as Container).children).toContain(n.label);
+      for (const star of n.stars) expect((n.cap as Container).children).toContain(star);
+      const drawn = instructions(n.base as Graphics);
+      expect(drawn.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'fill']);
+      const ringFill = ((n.base as Graphics).context.instructions[2]?.data as { style: { fill: unknown } }).style.fill;
+      const expectedRing = n.state === 'current' ? skin.selectedRing : skin[n.state].ring; // level 3 is the focused one
+      expect(ringFill).toBe((toFillInput(expectedRing) as { fill: unknown }).fill);
+      expect(drawn[3]).toMatchObject({ color: (skin[n.state].side as { color: number }).color });
+      expect(n.lock).toBeNull(); // Bubble: no lock icon
     }
-    for (const f of plain.facts) expect(f.badge).toBeInstanceOf(Sprite);
-    expect((plain.facts[2]?.badge as Sprite).texture).toBe(plain.kit.textures.badgeCurrent);
+    expect(bubble.facts[0]?.node.stars).toHaveLength(3);
+    // the themed rail: one bar per gap, bright up to the current level (3), dark ahead
+    expect(bubble.rail).toHaveLength(3);
+    expect(bubble.rail.every((seg) => seg instanceof Graphics)).toBe(true);
+    expect(bubble.rail.map((seg) => colorsOf(seg as Graphics)[0])).toEqual([0x3fa9ff, 0x3fa9ff, 0x232c48]);
+    expect(bubble.shine.visible).toBe(false);
+    // the default theme: the badge art, the lock, the rail art, the glow
+    for (const f of plain.facts) {
+      expect(f.first).toBeInstanceOf(Sprite);
+      expect(f.node.cap).toBeNull();
+      expect(f.node.base).toBeNull();
+    }
+    expect((plain.facts[2]?.first as Sprite).texture).toBe(plain.kit.textures.badgeCurrent);
+    expect(plain.facts[3]?.node.lock).not.toBeNull();
+    expect(plain.rail.every((seg) => seg instanceof Sprite)).toBe(true);
+    expect(plain.shine.visible).toBe(true);
     bubble.map.destroy();
     plain.map.destroy();
     const art = build(resolveTheme({ skin: 'art' }, BUBBLE_READY_UI_THEME));
-    for (const f of art.facts) expect(f.badge).toBeInstanceOf(Sprite);
+    for (const f of art.facts) expect(f.first).toBeInstanceOf(Sprite);
     art.map.destroy();
     expect(bubble.kit.uiErrors).toEqual([]);
+  });
+
+  it('level-map selection lift: the cap rises by a quarter of its diameter once the map settles, returns, runs once per real change, cancels on a quick re-selection, never leaves an offset', () => {
+    type NodeProbe = { root: Container; cap: Container | null; capSize: number };
+    const kit = createKit();
+    const levels = Array.from({ length: 6 }, (_, i) => ({ index: i + 1, stars: i < 3 ? 3 : 0 }));
+    const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: BUBBLE_READY_UI_THEME, levels, currentLevel: 4, onSelectLevel: () => {} });
+    map.resize(390, 844, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
+    const nodes = () => field<Map<number, NodeProbe>>(map, 'nodes');
+    const capOf = (level: number) => nodes().get(level)?.cap as Container;
+    const skin = BUBBLE_READY_UI_THEME.levelNode as NonNullable<typeof BUBBLE_READY_UI_THEME.levelNode>;
+    const rise = (nodes().get(4) as NodeProbe).capSize * skin.lift; // 264 × 0.25 = 66 node units
+    expect(rise).toBe(66);
+    // the initial focus is not a selection change: nothing lifts
+    advance(kit.core, 600);
+    expect(capOf(4).y).toBe(0);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // an instant scroll to another level: the map is in place, the cap lifts at once — fast up, softer down
+    map.scrollToLevel(2, false);
+    const root2y = (nodes().get(2) as NodeProbe).root.y;
+    advance(kit.core, 100);
+    expect(capOf(2).y).toBeLessThan(-30);
+    advance(kit.core, 70);
+    expect(capOf(2).y).toBeCloseTo(-rise, 3);
+    advance(kit.core, 150);
+    expect(capOf(2).y).toBeGreaterThan(-rise);
+    expect(capOf(2).y).toBeLessThan(0);
+    advance(kit.core, 150);
+    expect(capOf(2).y).toBe(0);
+    expect((nodes().get(2) as NodeProbe).root.y).toBe(root2y); // only the cap moved
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // idle: no repeat
+    advance(kit.core, 3000);
+    expect(capOf(2).y).toBe(0);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // the same level again: not a change, no lift
+    map.scrollToLevel(2, false);
+    advance(kit.core, 100);
+    expect(capOf(2).y).toBe(0);
+    // a quick re-selection cancels the running lift and puts the cap back at once
+    map.scrollToLevel(3, false);
+    advance(kit.core, 60);
+    expect(capOf(3).y).toBeLessThan(0);
+    map.scrollToLevel(5, false);
+    expect(capOf(3).y).toBe(0);
+    advance(kit.core, 60);
+    expect(capOf(5).y).toBeLessThan(0);
+    // a resize mid-lift rebuilds the nodes: no offset survives and nothing lifts by itself
+    map.resize(400, 900, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
+    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    advance(kit.core, 1000);
+    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    // an animated scroll lifts only once the map has settled
+    map.scrollToLevel(1, true);
+    advance(kit.core, 100);
+    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    advance(kit.core, 700); // the scroll (≤ 650 ms) is over, the lift is on its way up
+    expect(capOf(1).y).toBeLessThan(0);
+    advance(kit.core, 600);
+    expect(capOf(1).y).toBe(0);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // cancelAll mid-lift: the cap is back at once
+    map.scrollToLevel(4, false);
+    advance(kit.core, 80);
+    expect(capOf(4).y).toBeLessThan(0);
+    kit.core.cancelAll();
+    expect(capOf(4).y).toBe(0);
+    map.destroy();
+    expect(kit.uiErrors).toEqual([]);
   });
 
   it('BUBBLE theme: every role is a gradient with a gloss band, a strip lip and a soft shadow; the pressed look drops the gloss and the lip', () => {
@@ -467,7 +567,9 @@ describe('Bubble skin primitives (V1.1)', () => {
       const style = buttonStyleOf(BUBBLE_READY_UI_THEME, role);
       expect(style.fill.type).toBe('linear-gradient');
       expect(style.highlight).not.toBeNull();
-      expect(style.depth?.style).toBe('strip');
+      // every role has a flat strip lip except the screen CTA (primary: one body in a gold outline, no lip)
+      if (role === 'primary') expect(style.depth).toBeNull();
+      else expect(style.depth?.style).toBe('strip');
       expect(style.shadow?.layers).toBeGreaterThan(1);
       expect(style.radius).toBeGreaterThan(0);
     }
@@ -483,7 +585,8 @@ describe('Bubble skin primitives (V1.1)', () => {
     expect(positive.fill.type === 'linear-gradient' && positive.fill.stops?.length).toBe(3);
     expect(positive.highlight?.soft).toBeGreaterThan(0);
     expect(positive.depth?.style).toBe('strip');
-    expect(BUBBLE_READY_UI_THEME.levelNode?.current.fill.type).toBe('radial-gradient');
+    expect(BUBBLE_READY_UI_THEME.levelNode?.current.cap.fill.type).toBe('radial-gradient');
+    expect(BUBBLE_READY_UI_THEME.button.primary.depth).toBeNull(); // PLAY: one smooth body in a gold outline, no lip
     expect(BUBBLE_READY_UI_THEME.text.numberFill?.type).toBe('linear-gradient');
 
     const kit = createKit();

@@ -379,10 +379,16 @@ changed, every V1 theme resolves unchanged:
   shop's striped, scalloped awning from tokens (`drawAwning`) instead of the tiled art: `segments`
   stripes across the viewport width (seven in the Bubble theme), each filled in its own box so a
   gradient runs down every stripe, a soft gloss across the top; the header keeps the tiles' geometry.
-- `theme.levelNode` (`completed` / `current` / `locked` surfaces; null in the V1 themes) draws the
-  level-map node as a disc (`shape: 'capsule'` on a square: the ring is its border, gloss and lip as
-  everywhere) instead of the badge art; stars, the lock, the number and the HARD pill stay as they
-  are, the hit area and the layout come from `levelMap.badgeSize` as before.
+- `theme.levelNode` (null in the V1 themes) draws the level-map node as a layered 3D button instead
+  of the badge art: a base (`ring` fill, `ringRatio` of the badge size wide, the node's `shadow`)
+  with the `side` fill inside it, and a `cap` surface on top that carries the number and the stars.
+  `selectedRing` replaces the ring of the focused node; `lock: false` drops the lock icon; `rail`
+  draws the rail from tokens (`done` behind the reachable levels, `future` ahead of the current one)
+  and the focus glow is hidden. The selection lift is generic `LevelMapView` behaviour: once the map
+  has settled on a REAL selection change (an instant `scrollToLevel`, the end of a snap or an
+  animated scroll — never on a resize, a rebuild or an idle frame), the cap rises by `lift` × its
+  diameter in 170 ms (ease out) and returns in 300 ms (ease in-out); the root, the ring and the hit
+  area never move; a re-selection or `cancelAll` cancels the lift and puts the cap back at once.
 - `SettingsWindowView({ toggleWell: true })` draws the toggles and their captions on the theme's
   inner card (`panel.well`), sized to the visible toggles; a skin, never a layout change (the
   toggles and the in-level buttons keep their positions; nothing is drawn under `skin: 'art'`).

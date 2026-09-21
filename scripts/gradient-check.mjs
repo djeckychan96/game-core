@@ -62,11 +62,13 @@ try {
   check('D2: the lip is still a mechanical edge under the body', d2lip.maxDelta >= 6, JSON.stringify(d2lip));
   const d = await profile('D ·');
   rows.push(`  info  D: the V1.1 button body — ${JSON.stringify(stats(d, edge, bodyPx - shadowPx - Math.round(26 * S * RES) - 3))}`);
-  const ringPx = Math.round(18 * 0.5 * RES), rimPx = Math.round(36 * 0.5 * RES), nodePx = 300 * 0.5 * RES, nodeShadow = Math.round(12 * 0.5 * RES);
-  const n = stats(await profile('N ·'), ringPx + 3, nodePx - nodeShadow - rimPx - 3);
-  check('N: the node sphere is smooth between its ring and its rim', n.maxDelta <= 3, JSON.stringify(n));
-  const n2 = stats(await profile('N2 ·'), Math.round(14 * 0.4 * RES) + 3, 300 * 0.4 * RES - Math.round(12 * 0.4 * RES) - Math.round(32 * 0.4 * RES) - 3);
-  check('N2: the locked node is smooth between its ring and its rim', n2.maxDelta <= 3, JSON.stringify(n2));
+  // the cap covers the node inside its ring (ringRatio 0.06 × 300 = 18 units): the profile runs down the cap
+  const ringN = Math.round(18 * 0.5 * RES), nodePx = 300 * 0.5 * RES;
+  const n = stats(await profile('N ·'), ringN + 3, nodePx - ringN - 3);
+  check('N: the node cap is one smooth sphere inside its ring', n.maxDelta <= 3, JSON.stringify(n));
+  const ringN2 = Math.round(18 * 0.4 * RES);
+  const n2 = stats(await profile('N2 ·'), ringN2 + 3, 300 * 0.4 * RES - ringN2 - 3);
+  check('N2: the locked node cap is one smooth sphere inside its ring', n2.maxDelta <= 3, JSON.stringify(n2));
   const stripe = 390 / 7;
   const aw = stats(await profile('awning', -195 + stripe / 2), 2, Math.round((60 - 12 - stripe / 2) * RES) - 2);
   check('awning: a stripe is smooth from its top through its gloss into its body', aw.maxDelta <= 4, JSON.stringify(aw));

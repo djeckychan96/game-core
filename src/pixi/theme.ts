@@ -248,14 +248,41 @@ export interface ReadyUiTheme {
   /** The shop's striped awning drawn from tokens; null = the awning stays the v0.4 art (the default). */
   awning: UiAwningStyle | null;
   /**
-   * Level-map node shells drawn from tokens (a disc per state: the ring is the border, the gloss / lip as everywhere);
-   * null = the nodes stay the v0.4 badge art (the default). Stars, the lock, the number and the HARD pill stay art / text.
+   * Level-map nodes drawn from tokens as a layered 3D button (a ring, a side, a cap that lifts when the level gets
+   * selected); null = the nodes stay the v0.4 badge art (the default). Stars, the number and the HARD pill stay art /
+   * text on top of the cap.
    */
-  levelNode: Record<UiLevelNodeVariant, UiSurfaceStyle> | null;
+  levelNode: UiLevelNodeSkin | null;
 }
 
 /** The three looks of a level-map node (the same states `LevelMapView` reports). */
 export type UiLevelNodeVariant = 'completed' | 'current' | 'locked';
+
+/** One state of a level-map node: the cap that lifts, the side under it, the ring around it. */
+export interface UiLevelNodeStyle {
+  /** The disc on top: the number sits on it and it lifts on selection. Its own `shadow` is not drawn (the base carries the node's shadow). */
+  cap: UiSurfaceStyle;
+  /** The side of the node, exposed under the cap while it is lifted. */
+  side: UiFill;
+  /** The ring (the base) around the cap. */
+  ring: UiFill;
+}
+
+/** The level-map node skin: one style per state plus the node-wide parameters (all in node units of `levelMap.badgeSize`). */
+export interface UiLevelNodeSkin extends Record<UiLevelNodeVariant, UiLevelNodeStyle> {
+  /** Ring width around the cap, as a fraction of the node's badge size. */
+  ringRatio: number;
+  /** The ring of the focused (selected) node, whatever its state. */
+  selectedRing: UiFill;
+  /** Soft shadow under the whole node (drawn with the base). */
+  shadow: UiShadow | null;
+  /** How far the cap lifts when the level gets selected, as a fraction of the cap's diameter (0 = no lift). */
+  lift: number;
+  /** Draw the lock icon on a locked node. */
+  lock: boolean;
+  /** The rail drawn from tokens: `done` behind the reachable levels, `future` ahead of the current one; null = the rail art. */
+  rail: { done: UiFill; future: UiFill; width: number } | null;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Default theme — the donor (Trail Arrow) palette measured from the v0.4 PNG skins, drawn as geometry.
@@ -488,6 +515,13 @@ function bubbleButton(top: number, mid: number, bottom: number, glossColor: numb
 
 const BUBBLE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 14, layers: 3 };
 const NODE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 };
+const GOLD_RING: UiFill = body(0xf7d75f, 0xe8b83c, 0xcf9a24);
+const SILVER_RING: UiFill = body(0xe3e9f3, 0xc6cedd, 0xa7b0c4);
+
+/** A node cap: a sphere-shaded disc with a faint gloss, no lip (the node's side is a layer of its own). */
+function nodeCap(light: number, mid: number, dark: number): UiSurfaceStyle {
+  return { fill: sphere(light, mid, dark), radius: -1, border: null, depth: null, shadow: null, highlight: gloss(0xffffff, 40, 0.18) };
+}
 
 export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
   ...DEFAULT_READY_UI_THEME,
@@ -554,7 +588,17 @@ export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
     info: { fill: body(0x7585b8, 0x5c6a99, 0x4a5586), radius: 16, border: { color: 0x2b3454, width: 3, alpha: 0.6 }, depth: { color: 0x3d4669, height: 10, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.2, offsetY: 8, layers: 2 }, highlight: gloss(0x9fadd2, 40, 0.35) }
   },
   button: {
-    primary: bubbleButton(0x6f9cf5, 0x4a7ae4, 0x2f5fd0, 0xa9c6ff, 0x1f48ad, 0x163a8a),
+    // the screen's main CTA (PLAY): one smooth green body in a gold outline with a soft shadow — no lip
+    primary: {
+      fill: body(0x8cec54, 0x4fcd2f, 0x35b023),
+      radius: 40,
+      border: { color: 0xe8b83c, width: 8 },
+      depth: null,
+      shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 3 },
+      highlight: gloss(0xc8ff96, 70, 0.4),
+      text: 0xfff6e2,
+      pressed: { fill: solid(0x35b023), highlight: null }
+    },
     secondary: bubbleButton(0xffcf3d, 0xffb020, 0xf5920a, 0xffe680, 0xd86f04, 0xb35d08),
     positive: bubbleButton(0x62dc3a, 0x3fc424, 0x2fa61a, 0xa8ff5a, 0x1f8f14, 0x1a6e10),
     danger: bubbleButton(0xff8a6c, 0xf25a44, 0xd83a2a, 0xffb8a4, 0xb02416, 0x8a1c10),
@@ -582,11 +626,19 @@ export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
   // the shop awning in the same blue family: seven light / mid-blue stripes (each a smooth gradient down to its scallop),
   // a soft gloss across the top, a soft shadow under the cloth
   awning: { fillA: body(0xd8e7fb, 0xbfd6f6, 0xa6c2ec), fillB: body(0x7ea3de, 0x5f88ce, 0x4a72bb), segments: 7, gloss: gloss(0xffffff, 34, 0.3), shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } },
-  // level nodes: radial spheres in a ring, a thin darker rim under the ring (green in gold; grey in slate when locked)
+  // level nodes: a layered 3D button — a ring (gold for the selected and the completed levels, silver otherwise), a dark
+  // side, a sphere-shaded cap that lifts by a quarter of its diameter when the level gets selected; no lock icon, a
+  // bright blue rail behind the reachable levels and a dark one ahead
   levelNode: {
-    completed: { fill: sphere(0x9ff062, 0x5cc432, 0x3b9a22), radius: -1, border: { color: 0xd9a93c, width: 16 }, depth: { color: 0x2f8a1e, height: 34, style: 'strip' }, shadow: NODE_SHADOW },
-    current: { fill: sphere(0xc6ff7c, 0x6fd63b, 0x43a827), radius: -1, border: { color: 0xf2c14e, width: 18 }, depth: { color: 0x3a9a25, height: 36, style: 'strip' }, shadow: NODE_SHADOW },
-    locked: { fill: sphere(0xd3d3dc, 0xa4a5b2, 0x767889), radius: -1, border: { color: 0x6d7386, width: 14 }, depth: { color: 0x5f6273, height: 32, style: 'strip' }, shadow: NODE_SHADOW }
+    completed: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), side: solid(0x2b7d1a), ring: GOLD_RING },
+    current: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), side: solid(0x2b7d1a), ring: SILVER_RING },
+    locked: { cap: nodeCap(0xc9cede, 0x9ea6bc, 0x737b93), side: solid(0x555c72), ring: SILVER_RING },
+    ringRatio: 0.06,
+    selectedRing: GOLD_RING,
+    shadow: NODE_SHADOW,
+    lift: 0.25,
+    lock: false,
+    rail: { done: solid(0x3fa9ff), future: solid(0x232c48), width: 22 }
   }
 });
 

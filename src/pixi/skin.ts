@@ -10,7 +10,7 @@
 // height, the box is the container's `boundsArea`), so a theme never moves a layout, never changes a hit area, never
 // changes the bounds a window is fitted from.
 import { Container, FillGradient, Graphics, Rectangle, type FillInput } from 'pixi.js';
-import type { UiAwningStyle, UiBand, UiCardStyle, UiCloseStyle, UiColorStop, UiFill, UiPanelStyle, UiSurfaceStyle } from './theme';
+import type { UiAwningStyle, UiBand, UiCardStyle, UiCloseStyle, UiColorStop, UiFill, UiPanelStyle, UiShadow, UiSurfaceStyle } from './theme';
 
 /**
  * `rounded`: a rounded rect (`radius` from the style). `capsule`: half-height corners. `ribbon`: notched ends (a title
@@ -225,6 +225,25 @@ export function drawAwning(g: Graphics, x: number, y: number, width: number, hei
     const h = Math.min(gloss.height, Math.max(1, bodyHeight - stripe / 2));
     g.rect(x, y, width, h).fill(bandFill(gloss));
   }
+}
+
+/**
+ * The base of a level-map node centred on (0, 0): the soft shadow under the whole node (circles, so the disc stays
+ * round), the ring disc of `size`, then the side disc inside the ring — the cap (a `UiSurface`) sits on top of it and
+ * lifts away from it. Everything lies inside the node's `size` box.
+ */
+export function drawLevelNodeBase(g: Graphics, size: number, ring: UiFill, side: UiFill, ringRatio: number, shadow: UiShadow | null): void {
+  const r = size / 2;
+  if (shadow && shadow.alpha > 0) {
+    const layers = Math.max(1, Math.floor(shadow.layers ?? 1));
+    const offset = Math.max(0, shadow.offsetY);
+    for (let i = 1; i <= layers; i++) {
+      // the shadow disc shrinks by its offset so it never leaves the box
+      g.circle(0, (offset * i) / layers, Math.max(1, r - offset)).fill({ color: shadow.color, alpha: shadow.alpha / layers });
+    }
+  }
+  g.circle(0, 0, r).fill(toFillInput(ring));
+  g.circle(0, 0, Math.max(1, r - size * Math.max(0, ringRatio))).fill(toFillInput(side));
 }
 
 /** The close control's mark: an optional backing surface and the × (outline under the arms, then the arms), centred on (0, 0). */
