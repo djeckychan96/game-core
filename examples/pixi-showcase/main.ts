@@ -9,8 +9,6 @@
 import { Application, Container, type FederatedPointerEvent, Graphics, Sprite, Text, Texture } from 'pixi.js';
 import { AnalyticsRuntime, BUILD_INFO, CoreRuntime, MemoryOfferStateStore, MotionRuntime, OfferRuntime, PurchaseRuntime, UiRuntime, createAdsAnalyticsHandler, createGrantedPurchaseStore, createOfferAnalyticsHandler, createPurchaseAdsHandler, createPurchaseAnalyticsHandler, type OfferEvent, type OfferReward, type PurchaseEvent, type PurchaseResult, type RestoreResult } from 'game-core';
 import {
-  ALT_READY_UI_THEME,
-  BUBBLE_READY_UI_THEME,
   ClickRippleEffect,
   DEFAULT_CLICK_RIPPLE,
   HudView,
@@ -74,10 +72,7 @@ const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> |
 ];
 
 async function boot(): Promise<void> {
-  // Theme System V1 proof: `?theme=alt` skins the same UI with the demo ocean theme, `?theme=bubble` with the glossy
-  // Bubble theme (V1.1); `?theme=art` keeps the v0.4 PNG skins
-  const themeParam = new URLSearchParams(location.search).get('theme');
-  const theme = resolveTheme(themeParam === 'art' ? { skin: 'art' } : undefined, themeParam === 'alt' ? ALT_READY_UI_THEME : themeParam === 'bubble' ? BUBBLE_READY_UI_THEME : undefined);
+  const theme = resolveTheme();
   const app = new Application();
   const resolution = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
   await app.init({
@@ -122,7 +117,7 @@ async function boot(): Promise<void> {
 
   // --- windows (created once, shown on demand) ---
   const resultWindow = new ResultWindowView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     onNext: (params) => {
       // demo progression: a win on the current level unlocks the next one
       const level = state.levels[params.level - 1];
@@ -137,11 +132,11 @@ async function boot(): Promise<void> {
     onRetry: (params) => openResult(params.level)
   });
   const shopWindow = new ShopWindowView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     onBuy: (item) => demoPurchase(item.id, 'shop') // real money → PurchaseRuntime, never a direct grant
   });
   const livesWindow = new LivesWindowView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     onRefill: (params) => {
       if (state.coins < params.refillPrice) return openShop();
       state.coins -= params.refillPrice;
@@ -152,14 +147,14 @@ async function boot(): Promise<void> {
     onWatchAd: () => { state.lives = Math.min(DEMO_MAX_LIVES, state.lives + 1); hud.setLives(state.lives, formatTimer(state.refillSeconds)); }
   });
   const settingsWindow = new SettingsWindowView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     onToggle: (setting, enabled) => { if (setting === 'sound' || setting === 'music') settings[setting] = enabled; }
   });
-  const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, theme, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
+  const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
   // The starter-pack window is data-only. When it shows a chain offer, BUY runs the demo purchase
   // below (`shownOfferId`); the static demo (`openStarter`) just adds the coins like before.
   const starterWindow = new StarterPackWindowView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     onBuy: (params) => {
       const productId = shownOfferId;
       shownOfferId = null;
@@ -404,7 +399,7 @@ async function boot(): Promise<void> {
 
   // --- HUD ---
   const hud = new HudView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     coins: state.coins,
     lives: state.lives,
     maxLives: DEMO_MAX_LIVES,
@@ -417,7 +412,7 @@ async function boot(): Promise<void> {
 
   // --- Level map ---
   const map = new LevelMapView({
-    ui, motion, textures, theme,
+    ui, motion, textures,
     levels: state.levels,
     currentLevel: state.currentLevel,
     onSelectLevel: (level) => { if (state.lives <= 0) return openLives(); openResult(level); },

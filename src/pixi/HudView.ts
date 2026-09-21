@@ -1,5 +1,4 @@
 import { Container, Rectangle, Sprite, type Text } from 'pixi.js';
-import { UiSurface } from './skin';
 import type { MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { UiButton } from './UiButton';
@@ -123,18 +122,10 @@ class ResourceBadge extends Container {
       host = button;
     }
 
-    // the capsule is a themed badge (the donor's dark pill); under `theme.skin: 'art'` the v0.4 sprite
-    let capsule: Container;
-    if (theme.skin === 'art') {
-      const sprite = new Sprite(textures.hudCapsule);
-      sprite.anchor.set(0.5);
-      sprite.width = CAPSULE_W;
-      sprite.height = CAPSULE_H;
-      capsule = sprite;
-    } else {
-      capsule = new UiSurface({ style: theme.badge.neutral, width: CAPSULE_W, height: CAPSULE_H, shape: 'capsule' });
-      capsule.eventMode = 'none';
-    }
+    const capsule = new Sprite(textures.hudCapsule);
+    capsule.anchor.set(0.5);
+    capsule.width = CAPSULE_W;
+    capsule.height = CAPSULE_H;
     capsule.x = CAPSULE_X;
     host.addChild(capsule);
 
@@ -272,12 +263,11 @@ export class HudView extends Container {
 
     this.gear = null;
     if (options.settings ?? true) {
-      // the gear's backing is the neutral role (the donor's dark rounded square); the gear itself stays an icon texture
       const gear = new UiButton({
         ui: options.ui,
         id: `${this.id}:settings`,
         theme: this.theme,
-        ...(this.theme.skin === 'art' ? { texture: options.textures.hudGearBack } : { role: 'neutral' as const }),
+        texture: options.textures.hudGearBack,
         width: GEAR_SIZE * GEAR_BACK_RATIO,
         height: GEAR_SIZE * GEAR_BACK_RATIO * (140 / 160),
         icon: options.textures.hudGear,

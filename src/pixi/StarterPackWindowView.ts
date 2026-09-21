@@ -57,7 +57,7 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
     this.onBuy = options.onBuy;
     const t = this.textures;
 
-    this.panel.addChildAt(this.createPanel(975, 1355, { style: this.theme.promoPanel, art: t.starterPanel }), 0);
+    this.panel.addChildAt(this.sprite(t.starterPanel, 975, 1355), 0);
     const hero = this.sprite(t.starterIcon, 620, 620);
     hero.position.set(-6, -310);
     this.panel.addChild(hero);
@@ -86,7 +86,7 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
 
     this.boosterBar = new Container();
     this.boosterBar.y = 353;
-    const border = this.createBadge(810, 161, 'accent', 'rounded', t.starterBorder);
+    const border = this.sprite(t.starterBorder, 810, 161);
     const bulb = this.sprite(t.bulb, 190, 190);
     bulb.position.set(-45, -12);
     this.boosterText = createLabel(this.theme, 'x3', { fontSize: 52, stroke: 6, anchorX: 0 });
@@ -94,7 +94,7 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
     this.boosterBar.addChild(border, bulb, this.boosterText);
     this.panel.addChild(this.boosterBar);
 
-    this.buyButton = this.createButton('buy', 'positive', '', () => this.finish(), 600, 206, 92, -8);
+    this.buyButton = this.createButton('buy', t.starterBuy, '', () => this.finish(), 600, 206, 92, -8);
     this.buyButton.y = 542;
     this.panel.addChild(this.buyButton);
     this.placeClose();

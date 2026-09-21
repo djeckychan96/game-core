@@ -52,8 +52,7 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
     this.description.position.set(-9, 248);
     this.panel.addChild(this.description);
 
-    // the panel stays art (the crossed-out clapperboard illustration is baked into it); the price button is a role
-    this.buyButton = this.createButton('buy', 'positive', '', () => this.finish(), 600, 206, 97, -11);
+    this.buyButton = this.createButton('buy', t.noAdsBuy, '', () => this.finish(), 600, 206, 97, -11);
     this.buyButton.y = 517;
     this.panel.addChild(this.buyButton);
     this.placeClose();

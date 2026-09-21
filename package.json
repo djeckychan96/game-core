@@ -40,12 +40,10 @@
     "showcase:purchase": "node scripts/purchase-demo-check.mjs",
     "showcase:ads": "node scripts/ads-demo-check.mjs",
     "showcase:overlay": "node scripts/overlay-demo-check.mjs",
-    "showcase:theme": "node scripts/theme-shots.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
-    "ocean:compare": "node scripts/ocean-compare.mjs",
-    "showcase:gradient": "node scripts/gradient-check.mjs"
+    "ocean:compare": "node scripts/ocean-compare.mjs"
   },
   "peerDependencies": {
     "pixi.js": "^8.0.0"

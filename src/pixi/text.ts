@@ -1,12 +1,10 @@
 import { Container, Text, type TextStyleOptions } from 'pixi.js';
-import { toFillInput } from './skin';
-import type { ReadyUiTheme, UiFill } from './theme';
+import type { ReadyUiTheme } from './theme';
 
 export interface LabelOptions {
   /** Font size in the container's local units. */
   fontSize: number;
-  /** A colour, or a theme fill (a gradient runs across the label's own box). */
-  fill?: number | UiFill;
+  fill?: number;
   /** false = no stroke; a number overrides the theme's stroke ratio in local units. */
   stroke?: boolean | number;
   align?: 'left' | 'center' | 'right';
@@ -17,11 +15,10 @@ export interface LabelOptions {
 
 /** A themed outlined label: white Fira Sans Black with the donor's dark rounded stroke. */
 export function createLabel(theme: ReadyUiTheme, text: string, options: LabelOptions): Text {
-  const fill = options.fill ?? theme.text.fill;
   const style: TextStyleOptions = {
     fontFamily: theme.text.fontFamily,
     fontSize: options.fontSize,
-    fill: typeof fill === 'number' ? fill : toFillInput(fill),
+    fill: options.fill ?? theme.text.fill,
     align: options.align ?? 'center'
   };
   if (options.stroke !== false) {

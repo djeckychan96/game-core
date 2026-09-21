@@ -295,7 +295,7 @@ describe('ReadyUiOverlay', () => {
     expect(Object.keys(rootEntry)).not.toContain('ReadyUiOverlay');
     const source = readFileSync(resolve(__dirname, '../../src/pixi/ReadyUiOverlay.ts'), 'utf-8');
     const imports = source.match(/^import[^;]*;/gm) ?? [];
-    expect(imports.map((line) => /from '([^']+)'/.exec(line)?.[1])).toEqual(['pixi.js', 'pixi.js', './assets', './assets', './theme']);
+    expect(imports.map((line) => /from '([^']+)'/.exec(line)?.[1])).toEqual(['pixi.js', 'pixi.js', './assets', './assets']);
     expect(source).not.toMatch(/requestAnimationFrame\(|setTimeout\(|setInterval\(|ResizeObserver|(window|document)\.addEventListener/);
   });
 });

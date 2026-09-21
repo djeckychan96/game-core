@@ -12,7 +12,7 @@ describe('game-core/pixi public entry', () => {
     for (const name of [
       'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
-      'DEFAULT_READY_UI_THEME', 'ALT_READY_UI_THEME', 'BUBBLE_READY_UI_THEME', 'UI_BUTTON_ROLES', 'resolveTheme', 'buttonStyleOf', 'UiPanel', 'UiSurface', 'drawSurface', 'drawPanel', 'drawCloseMark', 'toFillInput', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
+      'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
       'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
     ]) {
       expect(pixiEntry, name).toHaveProperty(name);
@@ -31,7 +31,7 @@ describe('game-core/pixi public entry', () => {
   });
 
   it('the kit imports the foundation as types only (no core runtime duplicated in the pixi bundle)', () => {
-    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'skin.ts', 'theme.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts'];
+    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts'];
     for (const file of kitFiles) {
       const source = readFileSync(resolve(rootDir, 'src/pixi', file), 'utf-8');
       const foundationImports = source.match(/^import\s+(type\s+)?[^;]*from ['"](\.\.\/)+index['"];/gm) ?? [];

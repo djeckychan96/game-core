@@ -9,11 +9,10 @@ import type {
   WindowHiddenReason,
   WindowState
 } from '../index';
-import type { ReadyUiTextureName, ReadyUiTextures } from './assets';
-import { UiPanel, UiSurface, type UiSurfaceShape } from './skin';
+import type { ReadyUiTextures } from './assets';
 import { UiButton } from './UiButton';
 import { applyTextResolution } from './text';
-import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides, type UiBadgeVariant, type UiButtonRole, type UiPanelStyle } from './theme';
+import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
 export interface ModalInsets {
   top?: number;
@@ -56,12 +55,8 @@ export interface ModalWindowOptions {
   leaveDurationMs?: number;
   /** Tap on the dim backdrop closes with reason 'background'. Default true. */
   closeOnBackdrop?: boolean;
-  /** Draw the × close control (51 design units, `theme.close`). Default true. */
+  /** Draw the red × (donor: 51 design units). Default true. */
   closeButton?: boolean;
-  /** Art for the × instead of the themed mark (also what `theme.skin: 'art'` uses: the donor's red silhouette). */
-  closeTexture?: Texture;
-  /** Art for the window's standard panel instead of the themed surface (`createPanel` draws this sprite). */
-  panelTexture?: Texture;
   /** Contain-fit ratios of the panel's measured bounds. Default 0.88 × 0.84 (donor mobile). */
   fit?: Partial<ModalFit>;
   /** Backdrop color/alpha; defaults to the theme's black 0.55. */
@@ -87,20 +82,9 @@ export function backOut(overshoot: number): EaseFn {
 export const POP_ENTRANCE: ModalEntrance = { fromScale: 0.84, fromY: 60, durationMs: 320, ease: backOut(1.5) };
 export const VICTORY_ENTRANCE: ModalEntrance = { fromScale: 0.7, fromY: 130, durationMs: 440, ease: backOut(1.9) };
 
-/** Donor close control: a 51-unit × whose hit area is expanded to a comfortable square. */
+/** Donor close button: a 51-unit red × whose hit area is expanded to a comfortable square. */
 export const CLOSE_SIZE = 51;
 const CLOSE_HIT = 150;
-
-/** The v0.4 art a role falls back to under `theme.skin: 'art'`. */
-const ROLE_ART: Record<UiButtonRole, ReadyUiTextureName> = {
-  primary: 'btnGreen',
-  secondary: 'btnYellow',
-  positive: 'btnGreen',
-  danger: 'settingsBtnHome',
-  reward: 'btnYellow',
-  neutral: 'hudGearBack',
-  disabled: 'btnGreen'
-};
 
 /**
  * Base of every Ready UI modal, laid out the way the donor's WindowsSystem did it: the dim
@@ -131,7 +115,6 @@ export abstract class ModalWindow<TParams = void> extends Container {
   private readonly onDismiss: ((reason: WindowCloseReason) => void) | null;
   private readonly onHiddenHook: ((reason: WindowHiddenReason) => void) | null;
   private readonly closeOnBackdrop: boolean;
-  private readonly panelTexture: Texture | null;
   private readonly backdropColor: number;
   private readonly backdropAlpha: number;
   private readonly buttons: UiButton[] = [];
@@ -149,7 +132,6 @@ export abstract class ModalWindow<TParams = void> extends Container {
     this.onDismiss = options.onDismiss ?? null;
     this.onHiddenHook = options.onHidden ?? null;
     this.closeOnBackdrop = options.closeOnBackdrop ?? true;
-    this.panelTexture = options.panelTexture ?? null;
     this.backdropColor = options.backdropColor ?? this.theme.colors.backdrop;
     this.backdropAlpha = options.backdropAlpha ?? this.theme.colors.backdropAlpha;
     this.entrance = { ...POP_ENTRANCE, ...(options.entrance ?? {}) };
@@ -168,9 +150,20 @@ export abstract class ModalWindow<TParams = void> extends Container {
 
     this.closeButton = null;
     if (options.closeButton ?? true) {
-      const close = this.createClose('close', CLOSE_SIZE, CLOSE_HIT, options.closeTexture);
+      const close = new UiButton({
+        ui: options.ui,
+        id: `${options.id}:close`,
+        theme: this.theme,
+        texture: options.textures.btnClose,
+        width: CLOSE_SIZE,
+        height: CLOSE_SIZE,
+        minHitSize: CLOSE_HIT,
+        pressScale: 0.86,
+        onTap: () => this.close('button')
+      });
       this.panel.addChild(close);
       this.closeButton = close;
+      this.buttons.push(close);
     }
 
     const controllerOptions: Parameters<UiRuntime['createWindow']>[0] = {
@@ -226,17 +219,13 @@ export abstract class ModalWindow<TParams = void> extends Container {
     return button;
   }
 
-  /**
-   * A themed panel button with the donor's default label metrics (fs 62 at y −9 for 207-tall buttons).
-   * `skin` is a semantic role (the theme colours it) or a texture (game-specific art, kept as is).
-   */
-  protected createButton(id: string, skin: Texture | UiButtonRole, label: string, onTap: () => void, width = 439, height = 207, fontSize = 62, labelOffsetY = -9): UiButton {
-    const art = typeof skin === 'string' ? this.roleArt(skin) : skin;
+  /** A themed panel button with the donor's default label metrics (fs 62 at y −9 for 207-tall buttons). */
+  protected createButton(id: string, texture: Texture, label: string, onTap: () => void, width = 439, height = 207, fontSize = 62, labelOffsetY = -9): UiButton {
     const button = new UiButton({
       ui: this.ui,
       id: `${this.id}:${id}`,
       theme: this.theme,
-      ...(art ? { texture: art } : { role: skin as UiButtonRole }),
+      texture,
       width,
       height,
       label,
@@ -246,63 +235,6 @@ export abstract class ModalWindow<TParams = void> extends Container {
       onTap
     });
     return this.addButton(button);
-  }
-
-  /** A × control: the themed mark (`theme.close`) or, with `art` / under `theme.skin: 'art'`, a sprite. Registered as `<id>:<name>`. */
-  protected createClose(name: string, size: number, hitSize: number, art?: Texture): UiButton {
-    const texture = art ?? (this.theme.skin === 'art' ? this.textures.btnClose : null);
-    const close = new UiButton({
-      ui: this.ui,
-      id: `${this.id}:${name}`,
-      theme: this.theme,
-      ...(texture ? { texture } : { role: 'close' as const }),
-      width: size,
-      height: size,
-      minHitSize: hitSize,
-      pressScale: 0.86,
-      onTap: () => this.close('button')
-    });
-    return this.addButton(close);
-  }
-
-  /**
-   * The window's standard surface (`theme.panel` unless another style is given), centred like the donor panel sprites.
-   * Under `theme.skin: 'art'` or with `panelTexture` the sprite is drawn instead (`art` = this window's donor panel).
-   */
-  protected createPanel(width: number, height: number, options: { style?: UiPanelStyle; headerHeight?: number; art?: Texture } = {}): Container {
-    const texture = this.panelTexture ?? (this.theme.skin === 'art' ? options.art ?? null : null);
-    if (texture) return this.sprite(texture, width, height);
-    const style = options.style ?? this.theme.panel;
-    const panel = new UiPanel({ style, width, height, ...(options.headerHeight !== undefined ? { headerHeight: options.headerHeight } : {}) });
-    panel.eventMode = 'none';
-    return panel;
-  }
-
-  /** An inner well of the panel (`theme.panel.well`; the donor's `panel_inner`). */
-  protected createWell(width: number, height: number, art?: Texture): Container {
-    if (this.theme.skin === 'art' && art) return this.sprite(art, width, height);
-    return this.withoutInput(new UiSurface({ style: this.theme.panel.well, width, height }));
-  }
-
-  /** A badge backing (`theme.badge[variant]`): a capsule, a rounded band or a notched ribbon. */
-  protected createBadge(width: number, height: number, variant: UiBadgeVariant, shape: UiSurfaceShape = 'rounded', art?: Texture): Container {
-    if (this.theme.skin === 'art' && art) return this.sprite(art, width, height);
-    return this.withoutInput(new UiSurface({ style: this.theme.badge[variant], width, height, shape }));
-  }
-
-  /** A content card (`theme.card`). */
-  protected createCard(width: number, height: number, art?: Texture): Container {
-    if (this.theme.skin === 'art' && art) return this.sprite(art, width, height);
-    return this.withoutInput(new UiSurface({ style: this.theme.card, width, height }));
-  }
-
-  private withoutInput(view: UiSurface): UiSurface {
-    view.eventMode = 'none';
-    return view;
-  }
-
-  private roleArt(role: UiButtonRole): Texture | null {
-    return this.theme.skin === 'art' ? this.textures[ROLE_ART[role]] : null;
   }
 
   protected sprite(texture: Texture, width: number, height: number): Sprite {

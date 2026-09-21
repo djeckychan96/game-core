@@ -1,7 +1,6 @@
 import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { MotionHandle } from '../index';
-import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
-import { drawAwning } from './skin';
+import { CLOSE_SIZE, ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 
@@ -89,7 +88,7 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     this.content.eventMode = 'static';
     this.gold = new Container();
     this.content.addChild(this.gold);
-    const ribbon = this.createBadge(1000, 116, 'info', 'ribbon', t.shopRibbon);
+    const ribbon = this.sprite(t.shopRibbon, 1000, 116);
     ribbon.x = 3;
     this.gold.addChild(ribbon);
     this.title = createLabel(this.theme, options.title ?? 'SPECIAL OFFER', { fontSize: 80, stroke: 11 });
@@ -98,27 +97,23 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
 
     const coinTextures: Texture[] = [t.shopCoins1, t.shopCoins2, t.shopCoins3, t.shopCoins4, t.shopCoins5, t.shopCoins6];
     ITEM_SLOTS.forEach(([x, y], i) => {
-      // the card is the button: a themed card surface (or the donor art) as its first child, the press scales the whole card
-      const card = this.createCard(CARD_W, CARD_H, t.shopCard);
       const button = new UiButton({
         ui: this.ui,
         id: `${this.id}:item:${i}`,
         theme: this.theme,
-        ...(card instanceof Sprite ? { texture: t.shopCard } : {}),
+        texture: t.shopCard,
         width: CARD_W,
         height: CARD_H,
         pressScale: 0.9,
         onTap: () => this.buy(i)
       });
-      if (!(card instanceof Sprite)) button.addChildAt(card, 0);
       button.position.set(x, y);
       const icon = new Sprite(coinTextures[i] ?? t.coinBig);
       icon.anchor.set(0.5);
       icon.width = 260;
       icon.height = 220;
       icon.position.set(i === 0 ? 5 : 0, -29);
-      // the amount is the kit's display number (a gradient in the Bubble theme), the price a plain label
-      const amount = createLabel(this.theme, '0', { fontSize: 68, stroke: 8, fill: this.theme.text.numberFill ?? this.theme.text.fill });
+      const amount = createLabel(this.theme, '0', { fontSize: 68, stroke: 8 });
       amount.y = -140;
       const price = createLabel(this.theme, '', { fontSize: 68, stroke: 8 });
       price.y = 141;
@@ -135,18 +130,21 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
 
     this.header = new Container();
     this.header.eventMode = 'none';
-    // the awning: drawn from `theme.awning` when the theme has one (and is not the art skin), else the v0.4 tiles
-    this.awning = null;
-    if (this.theme.awning && this.theme.skin !== 'art') {
-      const awning = new Graphics();
-      awning.eventMode = 'none';
-      this.header.addChild(awning);
-      this.awning = awning;
-    }
     this.panel.addChild(this.header);
 
-    const close = this.createClose('close', SHOP_CLOSE, 160, options.closeTexture);
+    const close = new UiButton({
+      ui: this.ui,
+      id: `${this.id}:close`,
+      theme: this.theme,
+      texture: t.btnClose,
+      width: SHOP_CLOSE,
+      height: SHOP_CLOSE,
+      minHitSize: 160,
+      pressScale: 0.86,
+      onTap: () => this.close('button')
+    });
     this.panel.addChild(close);
+    this.addButton(close);
     this.shopClose = close;
 
     this.content.on('pointerdown', this.onPointerDown, this);
@@ -157,10 +155,6 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
   }
 
   private shopClose: UiButton | null = null;
-  /** The themed awning (null = the tiled art). Redrawn only when its size changes. */
-  private readonly awning: Graphics | null;
-  private awningWidth = 0;
-  private awningHeight = 0;
 
   protected applyParams(params: ShopWindowParams): void {
     if (params.title) {
@@ -200,36 +194,21 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     // awning: tiles across the width, height 36/255 of the screen
     const headerScale = (vh * HEADER_HEIGHT_RATIO) / HEADER_H;
     const tileW = HEADER_W * headerScale;
-    const tileH = HEADER_H * headerScale;
     const count = Math.max(1, Math.ceil(vw / tileW) + 2);
-    const startX = -(count * tileW) / 2 + tileW / 2;
-    if (this.awning) {
-      // one themed awning across the viewport; it declares the tiles' span as its bounds so the header keeps its geometry
-      const awningW = Math.round(vw);
-      const awningH = Math.round(tileH);
-      if (awningW !== this.awningWidth || awningH !== this.awningHeight) {
-        this.awningWidth = awningW;
-        this.awningHeight = awningH;
-        this.awning.clear();
-        drawAwning(this.awning, -awningW / 2, 0, awningW, awningH, this.theme.awning as NonNullable<typeof this.theme.awning>);
-        this.awning.boundsArea = new Rectangle(startX - tileW / 2, 0, count * tileW, tileH);
-        this.awning._didViewChangeTick++;
-      }
-    } else {
-      while (this.headerTiles.length < count) {
-        const tile = new Sprite(this.textures.shopHeader);
-        tile.anchor.set(0.5, 0);
-        tile.eventMode = 'none';
-        this.header.addChild(tile);
-        this.headerTiles.push(tile);
-      }
-      this.headerTiles.forEach((tile, i) => {
-        tile.visible = i < count;
-        tile.width = tileW;
-        tile.height = tileH;
-        tile.position.set(startX + i * tileW, 0);
-      });
+    while (this.headerTiles.length < count) {
+      const tile = new Sprite(this.textures.shopHeader);
+      tile.anchor.set(0.5, 0);
+      tile.eventMode = 'none';
+      this.header.addChild(tile);
+      this.headerTiles.push(tile);
     }
+    const startX = -(count * tileW) / 2 + tileW / 2;
+    this.headerTiles.forEach((tile, i) => {
+      tile.visible = i < count;
+      tile.width = tileW;
+      tile.height = HEADER_H * headerScale;
+      tile.position.set(startX + i * tileW, 0);
+    });
     this.headerIdleY = -vh / 2 + top;
     this.header.y = this.headerIdleY;
     const headerBottom = this.headerIdleY + HEADER_H * headerScale;
@@ -345,3 +324,4 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
   }
 }
 
+void CLOSE_SIZE;

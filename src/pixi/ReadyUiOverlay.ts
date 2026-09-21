@@ -22,7 +22,6 @@ import { Application, Container, Ticker } from 'pixi.js';
 import type { ApplicationOptions } from 'pixi.js';
 import { loadReadyUiAssets } from './assets';
 import type { LoadReadyUiAssetsOptions, ReadyUiTextures } from './assets';
-import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
 export type ReadyUiOverlayInputMode = 'passthrough' | 'ui' | 'modal';
 
@@ -60,8 +59,6 @@ export interface ReadyUiOverlayOptions {
   assets?: LoadReadyUiAssetsOptions | false;
   /** Already loaded textures — skips the load. */
   textures?: ReadyUiTextures;
-  /** The game's theme (overrides over the default, or a resolved theme). Resolved once; `overlay.theme` is what every view gets. */
-  theme?: ReadyUiThemeOverrides;
   /** `CoreRuntime` (or anything with `update`) advanced first in `overlay.update(frameMs)`. The host keeps owning it. */
   core?: { update(frameMs: number): unknown };
   /** `UiRuntime` (or anything with `isBlocking`): while it blocks, the effective input mode is 'modal'. */
@@ -99,8 +96,6 @@ export class ReadyUiOverlay {
   readonly app: Application;
   /** Game views go here (`overlay.add(view)`); draw order = insertion order. */
   readonly root = new Container();
-  /** The one resolved theme of this overlay — pass it as `theme` to every view so the whole Ready UI shares one skin. */
-  readonly theme: ReadyUiTheme;
   /** Wrapper element inside the container: render canvas + hit layer + safe-area probe. */
   readonly layer: HTMLElement;
   /** The transparent render canvas (`pointer-events: none`). */
@@ -129,7 +124,6 @@ export class ReadyUiOverlay {
   /** Use `createReadyUiOverlay(options)`; the constructor only assembles what the factory prepared. */
   constructor(app: Application, options: ReadyUiOverlayOptions, tickers: ManagedTicker[] = [], textures: ReadyUiTextures | null = null) {
     this.app = app;
-    this.theme = resolveTheme(options.theme);
     this.loadedTextures = textures;
     this.container = options.container;
     const doc = this.container.ownerDocument;
