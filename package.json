@@ -44,7 +44,8 @@
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
-    "ocean:compare": "node scripts/ocean-compare.mjs"
+    "ocean:compare": "node scripts/ocean-compare.mjs",
+    "showcase:gradient": "node scripts/gradient-check.mjs"
   },
   "peerDependencies": {
     "pixi.js": "^8.0.0"

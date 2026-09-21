@@ -10,7 +10,7 @@
 // height, the box is the container's `boundsArea`), so a theme never moves a layout, never changes a hit area, never
 // changes the bounds a window is fitted from.
 import { Container, FillGradient, Graphics, Rectangle, type FillInput } from 'pixi.js';
-import type { UiAwningStyle, UiCardStyle, UiCloseStyle, UiFill, UiPanelStyle, UiSurfaceStyle } from './theme';
+import type { UiAwningStyle, UiBand, UiCardStyle, UiCloseStyle, UiColorStop, UiFill, UiPanelStyle, UiSurfaceStyle } from './theme';
 
 /**
  * `rounded`: a rounded rect (`radius` from the style). `capsule`: half-height corners. `ribbon`: notched ends (a title
@@ -20,28 +20,54 @@ export type UiSurfaceShape = 'rounded' | 'capsule' | 'ribbon' | 'tab';
 
 const gradients = new Map<string, FillGradient>();
 
+/** A colour stop for Pixi: the hex colour, or RGBA components in 0..1 when the stop has an alpha of its own. */
+function stopColor(stop: UiColorStop): number | [number, number, number, number] {
+  if (stop.alpha === undefined) return stop.color;
+  return [((stop.color >> 16) & 0xff) / 255, ((stop.color >> 8) & 0xff) / 255, (stop.color & 0xff) / 255, stop.alpha];
+}
+
 /**
- * The Pixi fill for a theme fill. Gradients are `FillGradient`s in the shape's own (local) space, so one gradient
- * serves every surface of that colour pair; they are cached for the lifetime of the module (a handful per theme).
+ * The Pixi fill for a theme fill. Gradients are `FillGradient`s in the shape's own (local) space — Pixi maps the
+ * gradient onto each filled path's bounds (`generateTextureMatrix`) — so one gradient serves every surface with the
+ * same stops; they are cached for the lifetime of the module (a handful per theme). The gradient is a 256-texel
+ * texture sampled with linear filtering: a smooth ramp, never a stepped one.
  */
 export function toFillInput(fill: UiFill): FillInput {
   if (fill.type === 'solid') return { color: fill.color, alpha: fill.alpha ?? 1 };
-  const key = `${fill.direction}:${fill.from}:${fill.to}`;
+  const stops = fill.type === 'linear-gradient' ? fill.stops ?? [{ offset: 0, color: fill.from }, { offset: 1, color: fill.to }] : fill.stops;
+  const key = fill.type === 'linear-gradient' ? `l:${fill.direction}:${JSON.stringify(stops)}` : `r:${JSON.stringify([fill.center, stops])}`;
   let gradient = gradients.get(key);
   if (!gradient) {
-    gradient = new FillGradient({
-      type: 'linear',
-      start: { x: 0, y: 0 },
-      end: fill.direction === 'vertical' ? { x: 0, y: 1 } : { x: 1, y: 0 },
-      colorStops: [
-        { offset: 0, color: fill.from },
-        { offset: 1, color: fill.to }
-      ],
-      textureSpace: 'local'
-    });
+    const colorStops = stops.map((stop) => ({ offset: stop.offset, color: stopColor(stop) }));
+    // Radial: the outer circle is ALWAYS the box's inscribed circle (centre 0.5 / 0.5, radius 0.5). Pixi 8.14 maps a
+    // local-space radial gradient through `outerCenter − outerRadius` in unscaled units, so any other outer circle
+    // lands the whole shape outside the gradient texture (a flat last-stop colour). The light point (`center`, the
+    // inner circle) may sit anywhere inside — that is what gives a sphere its upper highlight.
+    gradient =
+      fill.type === 'linear-gradient'
+        ? new FillGradient({ type: 'linear', start: { x: 0, y: 0 }, end: fill.direction === 'vertical' ? { x: 0, y: 1 } : { x: 1, y: 0 }, colorStops, textureSpace: 'local' })
+        : new FillGradient({ type: 'radial', center: fill.center ?? { x: 0.5, y: 0.4 }, innerRadius: 0, outerCenter: { x: 0.5, y: 0.5 }, outerRadius: 0.5, colorStops, textureSpace: 'local' });
     gradients.set(key, gradient);
   }
   return { fill: gradient, alpha: fill.alpha ?? 1 };
+}
+
+/** The fill of a gloss band: a flat colour, or — with `soft` — the colour fading to transparent towards the inner edge. */
+export function bandFill(band: UiBand): FillInput {
+  const alpha = band.alpha ?? 1;
+  const soft = Math.min(1, Math.max(0, band.soft ?? 0));
+  if (soft <= 0) return { color: band.color, alpha };
+  return toFillInput({
+    type: 'linear-gradient',
+    from: band.color,
+    to: band.color,
+    direction: 'vertical',
+    stops: [
+      { offset: 0, color: band.color, alpha },
+      { offset: 1 - soft, color: band.color, alpha },
+      { offset: 1, color: band.color, alpha: 0 }
+    ]
+  });
 }
 
 function cornerRadius(radius: number, width: number, height: number): number {
@@ -122,11 +148,11 @@ export function drawSurface(g: Graphics, x: number, y: number, width: number, he
     shapePath(g, shape, x, top ? y + lip.height : y, width, bodyHeight - lip.height, style.radius).fill(toFillInput(style.fill));
   } else {
     shapePath(g, shape, x, y, width, bodyHeight, style.radius).fill(toFillInput(style.fill));
-    if (lip) stripPath(g, shape, x, y, width, bodyHeight, style.radius, lip.height, lip.edge ?? 'bottom').fill({ color: lip.color });
+    if (lip) stripPath(g, shape, x, y, width, bodyHeight, style.radius, lip.height, lip.edge ?? 'bottom').fill(lip.fill ? toFillInput(lip.fill) : { color: lip.color });
   }
   const highlight = style.highlight;
   if (highlight && highlight.height > 0 && (highlight.alpha ?? 1) > 0) {
-    stripPath(g, shape, x, y, width, bodyHeight, style.radius, highlight.height, 'top').fill({ color: highlight.color, alpha: highlight.alpha ?? 1 });
+    stripPath(g, shape, x, y, width, bodyHeight, style.radius, highlight.height, 'top').fill(bandFill(highlight));
   }
   const border = style.border;
   if (border && border.width > 0) {
@@ -172,12 +198,13 @@ function awningPath(g: Graphics, x: number, y: number, height: number, stripe: n
 }
 
 /**
- * The shop's striped awning inside the box (x, y, width, height): a soft shadow of the whole silhouette, then the
- * stripes (alternating colours), each ending in a half-disc scallop. The stripes are about `stripeRatio × height`
- * wide — a whole number of them spans the width exactly, so every scallop is whole and inside the box.
+ * The shop's striped awning inside the box (x, y, width, height): a soft shadow of the whole silhouette, then
+ * `segments` stripes across the width (alternating fills, each mapped onto its own stripe so a gradient runs down
+ * every one of them), each ending in a half-disc scallop as wide as the stripe, then the soft gloss across the top.
+ * Every scallop is whole and inside the box; the stripe width follows the viewport width.
  */
 export function drawAwning(g: Graphics, x: number, y: number, width: number, height: number, style: UiAwningStyle): void {
-  const count = Math.max(1, Math.round(width / Math.max(1, height * style.stripeRatio)));
+  const count = Math.max(1, Math.round(style.segments));
   const stripe = width / count;
   const shadow = style.shadow;
   const bodyHeight = Math.max(1, height - (shadow ? Math.max(0, shadow.offsetY) : 0));
@@ -190,7 +217,13 @@ export function drawAwning(g: Graphics, x: number, y: number, width: number, hei
     }
   }
   for (let s = 0; s < count; s++) {
-    awningPath(g, x, y, bodyHeight, stripe, s).fill({ color: s % 2 === 0 ? style.stripeA : style.stripeB });
+    awningPath(g, x, y, bodyHeight, stripe, s).fill(toFillInput(s % 2 === 0 ? style.fillA : style.fillB));
+  }
+  const gloss = style.gloss;
+  if (gloss && gloss.height > 0 && (gloss.alpha ?? 1) > 0) {
+    // the gloss lies on the straight part of the cloth, above the scallops
+    const h = Math.min(gloss.height, Math.max(1, bodyHeight - stripe / 2));
+    g.rect(x, y, width, h).fill(bandFill(gloss));
   }
 }
 

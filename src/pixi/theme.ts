@@ -24,6 +24,11 @@ export interface ReadyUiTextTheme {
   muted: number;
   /** Fallback label colour on buttons whose style has no `text` of its own. */
   onButton: number;
+  /**
+   * Fill of the big display numbers (a shop pack's amount): a solid colour or a gradient across the label's own box.
+   * Omitted = `fill`. This is the one display style of the kit — not a typography system.
+   */
+  numberFill?: UiFill;
 }
 
 export interface ReadyUiColors {
@@ -62,10 +67,22 @@ export interface ReadyUiLevelMapTheme {
 // Skin tokens
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** A surface fill: one colour, or a two-stop linear gradient across the surface's own box. */
+/** One stop of a gradient: where along the gradient (0..1), which colour, optionally how opaque. */
+export interface UiColorStop {
+  offset: number;
+  color: number;
+  alpha?: number;
+}
+
+/**
+ * A surface fill: one colour, a linear gradient across the surface's own box (two stops `from` → `to`, or any list of
+ * `stops`, which wins when given), or a radial gradient in the box's own space: the last stop is reached on the box's
+ * inscribed circle, `center` (0..1 of the box, default 0.5 / 0.4) is where the first stop — the light — sits.
+ */
 export type UiFill =
   | { type: 'solid'; color: number; alpha?: number }
-  | { type: 'linear-gradient'; from: number; to: number; direction: 'vertical' | 'horizontal'; alpha?: number };
+  | { type: 'linear-gradient'; from: number; to: number; direction: 'vertical' | 'horizontal'; alpha?: number; stops?: UiColorStop[] }
+  | { type: 'radial-gradient'; stops: UiColorStop[]; center?: { x: number; y: number }; alpha?: number };
 
 export interface UiBorder {
   color: number;
@@ -86,6 +103,8 @@ export interface UiDepth {
    * Bubble skin: a glossy body over a flat darker edge).
    */
   style?: 'plate' | 'strip';
+  /** A `'strip'` lip may carry a fill of its own (a gradient zone that darkens into its edge) instead of the flat colour. */
+  fill?: UiFill;
 }
 
 /** A hard drop shadow (a second silhouette under the body), inside the surface's box. */
@@ -103,6 +122,11 @@ export interface UiBand {
   /** Band height in the surface's units, cut by the surface's own corners. */
   height: number;
   alpha?: number;
+  /**
+   * How much of the band fades out towards its inner edge (0..1 of the height). 0 (default) = a hard edge (a flat
+   * stripe); 1 = full strength at the surface's edge fading to nothing at the band's inner edge (a soft gloss).
+   */
+  soft?: number;
 }
 
 /** Any rounded surface: window body, button, badge, card, well, tab. */
@@ -142,13 +166,16 @@ export interface UiButtonStyle extends UiSurfaceStyle {
 }
 
 /**
- * A striped awning with a scalloped bottom edge (the shop's header): alternating stripes, each ending in a half-disc.
- * Stripe width = `stripeRatio × height`; the scallops are that wide and half as tall.
+ * A striped awning with a scalloped bottom edge (the shop's header): `segments` alternating stripes across the width
+ * (each filled in its own box, so a gradient runs down every stripe), each ending in a half-disc scallop as wide as the
+ * stripe; an optional soft gloss across the top; a soft shadow under the cloth.
  */
 export interface UiAwningStyle {
-  stripeA: number;
-  stripeB: number;
-  stripeRatio: number;
+  fillA: UiFill;
+  fillB: UiFill;
+  /** Stripes across the width (an odd count keeps both ends the same colour). The width follows the viewport. */
+  segments: number;
+  gloss: UiBand | null;
   shadow: UiShadow | null;
 }
 
@@ -422,84 +449,119 @@ export const ALT_READY_UI_THEME: ReadyUiTheme = deepFreeze({
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Bubble theme — the casual "glossy" language: every surface is a soft vertical gradient with a bright gloss band over
-// its top, a flat darker lip under it, a soft outline and a soft shadow; windows are mid-blue with a lighter header zone
-// and a much lighter inner card (a clear second layer); the CTAs are green / orange / gold with lime / yellow gloss.
-// Measured from a reference casual game's UI (visual principles only — no art is copied), generic enough for any game.
+// Bubble theme — the casual "glossy" language, as three INDEPENDENT layers on every surface: the body is a SMOOTH
+// vertical gradient (three stops: light → the colour → a little darker), the gloss is a soft light that fades into the
+// body over the top, the lip is a flat darker mechanical edge under it; plus a soft outline and a soft shadow. Windows
+// are mid-blue with a lighter header zone and a much lighter inner card (a clear second layer); the CTAs are green /
+// orange / gold with lime / yellow gloss; the level nodes are radial "spheres" in a ring. Measured from a reference
+// casual game's UI (visual principles only — no art is copied), generic enough for any game.
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** Bubble button: a gradient body, a gloss band over its top quarter, a flat darker lip, a soft outline and shadow. */
-function bubbleButton(top: number, bottom: number, gloss: number, lip: number, outline: number, text = 0xfff6e2): UiButtonStyle {
+/** A smooth three-stop vertical body: light at the top, the colour through the middle, a little darker at the bottom. */
+function body(top: number, mid: number, bottom: number): UiFill {
+  return { type: 'linear-gradient', from: top, to: bottom, direction: 'vertical', stops: [{ offset: 0, color: top }, { offset: 0.55, color: mid }, { offset: 1, color: bottom }] };
+}
+
+/** A soft gloss: full strength along the top edge, fading to nothing over `soft` of the band (1 = the whole band). */
+function gloss(color: number, height: number, alpha: number, soft = 1): UiBand {
+  return { color, height, alpha, soft };
+}
+
+/** A sphere-like radial body for a disc: light near the upper centre, the colour, darker towards the rim. */
+function sphere(light: number, mid: number, dark: number): UiFill {
+  return { type: 'radial-gradient', center: { x: 0.5, y: 0.34 }, stops: [{ offset: 0, color: light }, { offset: 0.5, color: mid }, { offset: 1, color: dark }] };
+}
+
+/** Bubble button: a smooth body, a soft gloss over its top, a flat darker lip, a soft outline and shadow. */
+function bubbleButton(top: number, mid: number, bottom: number, glossColor: number, lip: number, outline: number, text = 0xfff6e2): UiButtonStyle {
   return {
-    fill: gradient(top, bottom),
+    fill: body(top, mid, bottom),
     radius: 34,
     border: { color: outline, width: 5, alpha: 0.85 },
-    depth: { color: lip, height: 26, style: 'strip' },
+    depth: { color: lip, height: 24, style: 'strip' },
     shadow: { color: 0x000000, alpha: 0.22, offsetY: 8, layers: 2 },
-    highlight: { color: gloss, height: 48, alpha: 0.9 },
+    highlight: gloss(glossColor, 64, 0.55, 0.8),
     text,
     pressed: { fill: solid(bottom), depth: null, highlight: null }
   };
 }
 
 const BUBBLE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 14, layers: 3 };
+const NODE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 };
 
 export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
   ...DEFAULT_READY_UI_THEME,
-  text: { ...DEFAULT_READY_UI_THEME.text, fill: 0xfff6e2, strokeColor: 0x1e2c4f, strokeRatio: 0.09, secondary: 0xdbe6fb, muted: 0x8fa5d8, onButton: 0xfff6e2 },
+  text: {
+    ...DEFAULT_READY_UI_THEME.text,
+    fill: 0xfff6e2,
+    strokeColor: 0x1e2c4f,
+    strokeRatio: 0.09,
+    secondary: 0xdbe6fb,
+    muted: 0x8fa5d8,
+    onButton: 0xfff6e2,
+    // display numbers: light gold at the top into orange below (the shop amounts)
+    numberFill: { type: 'linear-gradient', from: 0xfff3a6, to: 0xff9f1c, direction: 'vertical', stops: [{ offset: 0, color: 0xfff6b8 }, { offset: 0.45, color: 0xffd23c }, { offset: 1, color: 0xff9f1c }] }
+  },
   colors: { ...DEFAULT_READY_UI_THEME.colors, mapBackground: 0x263048, backdrop: 0x0b1224, backdropAlpha: 0.62, resultBackdrop: 0x1e2740, resultBackdropAlpha: 0.94, versionText: 0x8fa5d8, accent: 0xff6b57, textMuted: 0xdbe6fb },
   panel: {
-    // mid-blue window: lighter at the top, a thin light edge, a flat darker lip, a dark-blue outline, a soft shadow
-    fill: gradient(0x6486ca, 0x4c62a9),
+    // mid-blue window: a smooth body lighter at the top, a soft light zone over it, a flat darker lip, a dark-blue
+    // outline, a soft shadow
+    fill: body(0x6b8ccf, 0x5872bc, 0x4b61a8),
     radius: 52,
     border: { color: 0x33478a, width: 6, alpha: 0.9 },
     depth: { color: 0x43569c, height: 18, style: 'strip' },
     shadow: BUBBLE_SHADOW,
-    highlight: { color: 0xa2bdf2, height: 8, alpha: 0.55 },
+    highlight: gloss(0xb4caf6, 110, 0.32),
     // the header zone: a translucent lighter band with a soft line under it (a separation, not a second slab)
-    headerFill: solid(0xffffff, 0.09),
+    headerFill: solid(0xffffff, 0.08),
     headerHeight: 160,
-    headerDivider: { color: 0x2c3f78, width: 4, alpha: 0.35 },
+    headerDivider: { color: 0x2c3f78, width: 4, alpha: 0.3 },
     // the inner card: much lighter than the window, an inset darker bottom edge — the second layer
-    well: { fill: gradient(0xc8ddfc, 0xa6bce6), radius: 36, border: { color: 0x7d95c6, width: 4, alpha: 0.9 }, depth: { color: 0x94aad8, height: 12, style: 'strip' }, shadow: null, highlight: { color: 0xe6f0ff, height: 8, alpha: 0.7 } }
+    well: { fill: body(0xd2e4fd, 0xbbcff2, 0xa4bae5), radius: 36, border: { color: 0x7d95c6, width: 4, alpha: 0.9 }, depth: { color: 0x92a8d6, height: 10, style: 'strip' }, shadow: null, highlight: gloss(0xffffff, 30, 0.45) }
   },
   promoPanel: {
-    fill: gradient(0xffc94a, 0xff7b3e),
+    fill: body(0xffd35a, 0xffa042, 0xff7a3d),
     radius: 52,
     border: { color: 0xa8481c, width: 8, alpha: 0.9 },
     depth: { color: 0xe5642c, height: 18, style: 'strip' },
     shadow: BUBBLE_SHADOW,
-    highlight: { color: 0xffe9a0, height: 10, alpha: 0.6 },
+    highlight: gloss(0xfff0b0, 70, 0.45),
     headerFill: null,
     headerHeight: 0,
     headerDivider: null,
-    well: { fill: solid(0xfff1d6, 0.55), radius: 36, border: null, depth: null, shadow: null, highlight: { color: 0xffffff, height: 8, alpha: 0.4 } }
+    well: { fill: solid(0xfff1d6, 0.55), radius: 36, border: null, depth: null, shadow: null, highlight: gloss(0xffffff, 24, 0.35) }
   },
   card: {
-    // cream card with a green price band along the bottom (the band is the flat lip), no darker icon inset
-    fill: gradient(0xfff3dc, 0xf7e3c4),
+    // cream card: a smooth warm body; the price zone is the lip strip with a green gradient of its own that darkens
+    // into its bottom edge (the smooth green zone + the dark lip of the reference); no darker icon inset
+    fill: body(0xfff7e8, 0xfbeed8, 0xf4e2c5),
     radius: 30,
-    border: { color: 0xd8bf95, width: 4, alpha: 0.9 },
-    depth: { color: 0x33b41f, height: 98, style: 'strip' },
+    border: { color: 0xd9c39c, width: 4, alpha: 0.9 },
+    depth: {
+      color: 0x2fae1d,
+      height: 98,
+      style: 'strip',
+      fill: { type: 'linear-gradient', from: 0x74dd4e, to: 0x1c8512, direction: 'vertical', stops: [{ offset: 0, color: 0x74dd4e }, { offset: 0.6, color: 0x3cc027 }, { offset: 0.85, color: 0x2fae1d }, { offset: 0.86, color: 0x1f9214 }, { offset: 1, color: 0x1c8512 }] }
+    },
     shadow: { color: 0x000000, alpha: 0.22, offsetY: 10, layers: 2 },
-    highlight: { color: 0xffffff, height: 10, alpha: 0.5 },
+    highlight: gloss(0xffffff, 22, 0.55),
     inset: null
   },
   badge: {
-    // HUD capsule: a slate pill a little lighter than the map, gloss on top, a flat darker lip, a soft shadow
-    neutral: { fill: gradient(0x6d7dae, 0x4f587f), radius: -1, border: { color: 0x2b3454, width: 3, alpha: 0.7 }, depth: { color: 0x424a6c, height: 8, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.28, offsetY: 7, layers: 2 }, highlight: { color: 0x8c9ac4, height: 9, alpha: 0.7 } },
-    accent: { fill: gradient(0xff7b5c, 0xe2452e), radius: 50, border: { color: 0x8f2416, width: 5, alpha: 0.8 }, depth: { color: 0xbb3320, height: 14, style: 'strip' }, shadow: null, highlight: { color: 0xffa892, height: 20, alpha: 0.6 } },
-    info: { fill: gradient(0x6a78ab, 0x4d5788), radius: 16, border: { color: 0x2b3454, width: 5, alpha: 0.8 }, depth: { color: 0x3f4870, height: 14, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.25, offsetY: 8, layers: 2 }, highlight: { color: 0x8f9cc6, height: 16, alpha: 0.6 } }
+    // HUD capsule: a slate pill a little lighter than the map, a soft gloss, a flat darker lip, a soft shadow
+    neutral: { fill: body(0x7f8ebd, 0x62709c, 0x4c567f), radius: -1, border: { color: 0x2b3454, width: 3, alpha: 0.6 }, depth: { color: 0x3f486c, height: 7, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.28, offsetY: 7, layers: 2 }, highlight: gloss(0xaebbdf, 30, 0.45) },
+    accent: { fill: body(0xff9a7e, 0xf1614a, 0xdc4030), radius: 50, border: { color: 0x8f2416, width: 5, alpha: 0.8 }, depth: { color: 0xb32f1d, height: 14, style: 'strip' }, shadow: null, highlight: gloss(0xffc4b4, 56, 0.45) },
+    info: { fill: body(0x7585b8, 0x5c6a99, 0x4a5586), radius: 16, border: { color: 0x2b3454, width: 3, alpha: 0.6 }, depth: { color: 0x3d4669, height: 10, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.2, offsetY: 8, layers: 2 }, highlight: gloss(0x9fadd2, 40, 0.35) }
   },
   button: {
-    primary: bubbleButton(0x5a8cf0, 0x2f62d0, 0x8fb4ff, 0x1d49b0, 0x163a8a),
-    secondary: bubbleButton(0xffb322, 0xf98f06, 0xffd257, 0xd97404, 0xb5640a),
-    positive: bubbleButton(0x4fd02c, 0x31ad1d, 0x84f846, 0x229417, 0x196e10),
-    danger: bubbleButton(0xff6b57, 0xe23d2b, 0xff9d8a, 0xba2818, 0x8f1d10),
-    reward: bubbleButton(0xffe04a, 0xffb01e, 0xfff59a, 0xe8920e, 0xb5640a),
-    // icon-button shell (gear, tools): a slate square with the same gloss / lip language
-    neutral: { fill: gradient(0x8593b5, 0x5f6a8c), radius: 30, border: { color: 0x2f3854, width: 4, alpha: 0.8 }, depth: { color: 0x4a5474, height: 16, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.25, offsetY: 8, layers: 2 }, highlight: { color: 0xa9b7d6, height: 30, alpha: 0.75 }, text: 0xffffff, pressed: { fill: solid(0x525c7c), depth: null, highlight: null } },
-    disabled: { ...bubbleButton(0x9aa4b8, 0x7d869a, 0xb7c0d2, 0x687089, 0x4c536a, 0xe6eaf2), highlight: { color: 0xb7c0d2, height: 48, alpha: 0.5 }, border: { color: 0x4c536a, width: 5, alpha: 0.7 } }
+    primary: bubbleButton(0x6f9cf5, 0x4a7ae4, 0x2f5fd0, 0xa9c6ff, 0x1f48ad, 0x163a8a),
+    secondary: bubbleButton(0xffcf3d, 0xffb020, 0xf5920a, 0xffe680, 0xd86f04, 0xb35d08),
+    positive: bubbleButton(0x62dc3a, 0x3fc424, 0x2fa61a, 0xa8ff5a, 0x1f8f14, 0x1a6e10),
+    danger: bubbleButton(0xff8a6c, 0xf25a44, 0xd83a2a, 0xffb8a4, 0xb02416, 0x8a1c10),
+    reward: bubbleButton(0xffe873, 0xffcf2e, 0xffa91c, 0xfff5b0, 0xe08a0d, 0xb5640a),
+    // icon-button shell (gear, tools, the moves box): a slate square with the same smooth body / gloss / lip language
+    neutral: { fill: body(0x93a1c4, 0x7382a8, 0x5b6a90), radius: 30, border: { color: 0x2f3854, width: 4, alpha: 0.8 }, depth: { color: 0x48527a, height: 14, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.25, offsetY: 8, layers: 2 }, highlight: gloss(0xc0cce6, 44, 0.5), text: 0xffffff, pressed: { fill: solid(0x525c7c), depth: null, highlight: null } },
+    disabled: { ...bubbleButton(0xa8b0c2, 0x8f97aa, 0x7a8296, 0xc7cdd9, 0x666e84, 0x4c536a, 0xe6eaf2), highlight: gloss(0xc7cdd9, 64, 0.3, 0.8), border: { color: 0x4c536a, width: 5, alpha: 0.7 } }
   },
   close: {
     // a bold light-blue × with round caps on a soft dark outline (it must read on the light awning stripes too), no backing
@@ -511,21 +573,23 @@ export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
     pressed: { foreground: 0xa6c2ea }
   },
   tab: {
-    bar: { fill: gradient(0x445684, 0x35446c), radius: 40, border: { color: 0x243055, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: { color: 0x5d6f9e, height: 8, alpha: 0.6 } },
+    bar: { fill: body(0x4a5c8c, 0x3d4d7a, 0x33426a), radius: 40, border: { color: 0x243055, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: gloss(0x6d7fae, 24, 0.4) },
     item: { fill: solid(0xffffff, 0), radius: 36, border: null, depth: null, shadow: null },
-    active: { fill: gradient(0x6b8ad0, 0x4f6fbd), radius: 36, border: { color: 0x2c3f78, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: { color: 0x9ab6ee, height: 10, alpha: 0.6 } },
+    active: { fill: body(0x7394d8, 0x5a7bc6, 0x4b6cb6), radius: 36, border: { color: 0x2c3f78, width: 4, alpha: 0.8 }, depth: null, shadow: null, highlight: gloss(0xa8c1f2, 30, 0.45) },
     text: 0xc7d3ea,
     activeText: 0xfff3d0
   },
-  // the shop awning in the same blue family: light / mid-blue stripes with scalloped ends and a soft shadow
-  awning: { stripeA: 0xbfd6f6, stripeB: 0x5f88ce, stripeRatio: 0.7, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } },
-  // level nodes: green discs in a gold ring (the current one brighter), a grey disc in a slate ring when locked
+  // the shop awning in the same blue family: seven light / mid-blue stripes (each a smooth gradient down to its scallop),
+  // a soft gloss across the top, a soft shadow under the cloth
+  awning: { fillA: body(0xd8e7fb, 0xbfd6f6, 0xa6c2ec), fillB: body(0x7ea3de, 0x5f88ce, 0x4a72bb), segments: 7, gloss: gloss(0xffffff, 34, 0.3), shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } },
+  // level nodes: radial spheres in a ring, a thin darker rim under the ring (green in gold; grey in slate when locked)
   levelNode: {
-    completed: { fill: gradient(0x8ae651, 0x4db82b), radius: -1, border: { color: 0xd9a93c, width: 16 }, depth: { color: 0x3e9a22, height: 40, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xc3ff8a, height: 56, alpha: 0.55 } },
-    current: { fill: gradient(0x9bf05c, 0x5bc733), radius: -1, border: { color: 0xf2c14e, width: 18 }, depth: { color: 0x45a626, height: 44, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xd6ff9e, height: 60, alpha: 0.65 } },
-    locked: { fill: gradient(0xbdbcc8, 0x8e8f9e), radius: -1, border: { color: 0x6d7386, width: 14 }, depth: { color: 0x7a7d8f, height: 40, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 }, highlight: { color: 0xe2e3ea, height: 56, alpha: 0.45 } }
+    completed: { fill: sphere(0x9ff062, 0x5cc432, 0x3b9a22), radius: -1, border: { color: 0xd9a93c, width: 16 }, depth: { color: 0x2f8a1e, height: 34, style: 'strip' }, shadow: NODE_SHADOW },
+    current: { fill: sphere(0xc6ff7c, 0x6fd63b, 0x43a827), radius: -1, border: { color: 0xf2c14e, width: 18 }, depth: { color: 0x3a9a25, height: 36, style: 'strip' }, shadow: NODE_SHADOW },
+    locked: { fill: sphere(0xd3d3dc, 0xa4a5b2, 0x767889), radius: -1, border: { color: 0x6d7386, width: 14 }, depth: { color: 0x5f6273, height: 32, style: 'strip' }, shadow: NODE_SHADOW }
   }
 });
+
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Resolution

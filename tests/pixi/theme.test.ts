@@ -369,16 +369,18 @@ describe('Bubble skin primitives (V1.1)', () => {
     // a UiSurface takes the tab shape and the theme's tab tokens
     const active = new UiSurface({ style: BUBBLE_READY_UI_THEME.tab.active, width: 300, height: 120, shape: 'tab' });
     expect(active.getLocalBounds()).toMatchObject({ x: -150, y: -60, width: 300, height: 120 });
-    expect(colorsOf(active.graphics)).toContain(0x9ab6ee);
+    // a smooth body and a soft gloss are gradient textures; the outline is the one flat colour
+    expect(instructions(active.graphics).map((i) => [i.action, i.texture])).toEqual([['fill', true], ['fill', true], ['stroke', false]]);
+    expect(colorsOf(active.graphics)).toEqual([0xffffff, 0xffffff, 0x2c3f78]); // a texture fill carries a white tint
     expect(resolveTheme({ tab: { activeText: 0x123456 } }).tab).toEqual({ ...DEFAULT_READY_UI_THEME.tab, activeText: 0x123456 });
     expect(resolveTheme({ tab: { active: { highlight: null } } }, BUBBLE_READY_UI_THEME).tab.active.highlight).toBeNull();
   });
 
   it('the awning is stripes ending in scallops, a whole number across the width, inside the box; the Shop draws it instead of the tiles', () => {
     const g = new Graphics();
-    drawAwning(g, -195, 0, 390, 119, { stripeA: 0xbfd6f6, stripeB: 0x5f88ce, stripeRatio: 0.7, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } });
+    drawAwning(g, -195, 0, 390, 119, { fillA: { type: 'solid', color: 0xbfd6f6 }, fillB: { type: 'solid', color: 0x5f88ce }, segments: 5, gloss: null, shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 } });
     const drawn = instructions(g);
-    // 2 shadow layers (one fill each), then round(390 / 83.3) = 5 stripes
+    // 2 shadow layers (one fill each), then the 5 stripes
     expect(drawn.map((i) => i.action)).toEqual(Array(7).fill('fill'));
     expect(drawn[0]?.alpha).toBeCloseTo(0.15, 6);
     expect(drawn.slice(2).map((i) => i.color)).toEqual([0xbfd6f6, 0x5f88ce, 0xbfd6f6, 0x5f88ce, 0xbfd6f6]);
@@ -388,6 +390,16 @@ describe('Bubble skin primitives (V1.1)', () => {
     expect(first.maxY).toBeCloseTo(119 - 12, 6);
     const last = pathBounds(g, 6);
     expect(last.maxX).toBeCloseTo(195, 6);
+    // gradient stripes are textures mapped onto each stripe; the gloss is one soft band over the straight part
+    const glossy = new Graphics();
+    drawAwning(glossy, 0, 0, 390, 60, BUBBLE_READY_UI_THEME.awning as NonNullable<typeof BUBBLE_READY_UI_THEME.awning>);
+    const drawnGlossy = instructions(glossy);
+    expect(drawnGlossy).toHaveLength(2 + 7 + 1);
+    expect(drawnGlossy.slice(2, 9).every((i) => i.texture)).toBe(true);
+    expect(drawnGlossy[9]?.texture).toBe(true);
+    const glossBounds = pathBounds(glossy, 9);
+    expect(glossBounds).toMatchObject({ minX: 0, minY: 0, maxX: 390 });
+    expect(glossBounds.maxY).toBeLessThanOrEqual(60 - 12 - 390 / 14 + 0.01);
     const bounds = g.getLocalBounds();
     expect(bounds.x).toBeGreaterThanOrEqual(-195.01);
     expect(bounds.x + bounds.width).toBeLessThanOrEqual(195.01);
@@ -400,7 +412,9 @@ describe('Bubble skin primitives (V1.1)', () => {
     const awning = field<Graphics>(bubble, 'awning');
     expect(awning).toBeInstanceOf(Graphics);
     expect(field<Sprite[]>(bubble, 'headerTiles')).toHaveLength(0);
-    expect(colorsOf(awning)).toContain(0x5f88ce);
+    // 2 shadow layers, 7 gradient stripes, the soft gloss
+    expect(instructions(awning).filter((i) => i.texture)).toHaveLength(8);
+    expect(instructions(awning)).toHaveLength(10);
     const redraws = awning.context.instructions.length;
     bubble.resize(390, 844, { insets: { top: 47, bottom: 34 } });
     expect(awning.context.instructions.length).toBe(redraws); // same size: not rebuilt
@@ -458,20 +472,28 @@ describe('Bubble skin primitives (V1.1)', () => {
       expect(style.radius).toBeGreaterThan(0);
     }
     expect(BUBBLE_READY_UI_THEME.panel.well.highlight).not.toBeNull();
-    expect(BUBBLE_READY_UI_THEME.panel.headerFill).toEqual({ type: 'solid', color: 0xffffff, alpha: 0.09 });
+    expect(BUBBLE_READY_UI_THEME.panel.headerFill).toEqual({ type: 'solid', color: 0xffffff, alpha: 0.08 });
     expect(BUBBLE_READY_UI_THEME.card.inset).toBeNull();
     expect(BUBBLE_READY_UI_THEME.card.depth?.height).toBe(98);
+    expect(BUBBLE_READY_UI_THEME.card.depth?.fill?.type).toBe('linear-gradient');
     expect(BUBBLE_READY_UI_THEME.close.background).toBeNull();
     expect(BUBBLE_READY_UI_THEME.levelMap).toEqual(DEFAULT_READY_UI_THEME.levelMap);
+    // V1.2: the three layers are independent — a three-stop smooth body, a soft gloss (fades), a flat lip
+    const positive = BUBBLE_READY_UI_THEME.button.positive;
+    expect(positive.fill.type === 'linear-gradient' && positive.fill.stops?.length).toBe(3);
+    expect(positive.highlight?.soft).toBeGreaterThan(0);
+    expect(positive.depth?.style).toBe('strip');
+    expect(BUBBLE_READY_UI_THEME.levelNode?.current.fill.type).toBe('radial-gradient');
+    expect(BUBBLE_READY_UI_THEME.text.numberFill?.type).toBe('linear-gradient');
 
     const kit = createKit();
     const button = new UiButton({ ui: kit.ui, id: 'b', theme: BUBBLE_READY_UI_THEME, role: 'positive', label: 'GO', onTap: () => {} });
-    // 2 shadow layers, body (gradient), lip, gloss, border
+    // 2 shadow layers, body (gradient), lip (flat), gloss (a fading gradient), border
     const idle = instructions(button.skin as Graphics);
     expect(idle.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'fill', 'fill', 'stroke']);
     expect(idle[2]?.texture).toBe(true);
-    expect(idle[3]).toMatchObject({ color: 0x229417 });
-    expect(idle[4]).toMatchObject({ color: 0x84f846 });
+    expect(idle[3]).toMatchObject({ color: 0x1f8f14 });
+    expect(idle[4]?.texture).toBe(true);
     expect((button.labelText as Text).style.fill).toBe(0xfff6e2);
     button.emit('pointerdown', pointer(1, 1) as never);
     advance(kit.core, 80);
@@ -479,18 +501,18 @@ describe('Bubble skin primitives (V1.1)', () => {
     // pressed: the flat bottom colour, no lip, no gloss — the shadow and the border stay
     const pressed = instructions(button.skin as Graphics);
     expect(pressed.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'stroke']);
-    expect(pressed[2]).toMatchObject({ color: 0x31ad1d });
+    expect(pressed[2]).toMatchObject({ color: 0x2fa61a });
     button.emit('pointerup', pointer(1, 1) as never);
     advance(kit.core, 300);
     expect(instructions(button.skin as Graphics)).toHaveLength(6);
     button.setEnabled(false);
-    expect(colorsOf(button.skin as Graphics)).toContain(0x687089);
+    expect(colorsOf(button.skin as Graphics)).toContain(0x666e84);
     button.destroy();
     // a pressed override may keep the gloss (omitted) or replace it
     const keep = new UiButton({ ui: kit.ui, id: 'k', theme: BUBBLE_READY_UI_THEME, role: 'positive', style: { ...BUBBLE_READY_UI_THEME.button.positive, shadow: null, pressed: { fill: { type: 'solid', color: 0x111111 } } }, onTap: () => {} });
     keep.emit('pointerdown', pointer(1, 1) as never);
     advance(kit.core, 80);
-    expect(colorsOf(keep.skin as Graphics)).toEqual([0x111111, 0x229417, 0x84f846, 0x196e10]);
+    expect(instructions(keep.skin as Graphics).map((i) => [i.action, i.texture, i.color])).toEqual([['fill', false, 0x111111], ['fill', false, 0x1f8f14], ['fill', true, 0xffffff], ['stroke', false, 0x1a6e10]]);
     keep.destroy();
     expect(kit.uiErrors).toEqual([]);
   });
@@ -623,9 +645,8 @@ describe('ModalWindow skin', () => {
     const c = windowGeometry(BUBBLE_READY_UI_THEME);
     expect(c.errors).toEqual([]);
     expect(a.out).toEqual(c.out);
-    expect(c.colors).toContain(0x84f846); // positive gloss
-    expect(c.colors).toContain(0x229417); // positive lip
-    expect(c.colors).toContain(0x94aad8); // well lip
+    expect(c.colors).toContain(0x1f8f14); // positive lip
+    expect(c.colors).toContain(0x92a8d6); // well lip
     expect(c.colors).not.toContain(0x7354d7);
     // the fits are the same even though every Bubble surface draws a soft shadow: the shadow is inside the declared box
     expect(c.colors.filter((color) => color === 0x000000).length).toBeGreaterThan(a.colors.filter((color) => color === 0x000000).length);
@@ -636,7 +657,7 @@ describe('ModalWindow skin', () => {
     const view = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: BUBBLE_READY_UI_THEME, toggleWell: true, onToggle: () => {}, onHome: () => {}, onRestart: () => {} });
     const well = field<UiSurface>(view, 'toggleWell');
     expect(well).toBeInstanceOf(UiSurface);
-    expect(colorsOf(well.graphics)).toContain(0x94aad8);
+    expect(colorsOf(well.graphics)).toContain(0x92a8d6);
     const panel = field<Container>(view, 'panel');
     const row = field<Container>(view, 'toggleRow');
     expect(panel.getChildIndex(well)).toBe(panel.getChildIndex(row) - 1);

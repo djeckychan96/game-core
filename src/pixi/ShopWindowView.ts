@@ -117,7 +117,8 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
       icon.width = 260;
       icon.height = 220;
       icon.position.set(i === 0 ? 5 : 0, -29);
-      const amount = createLabel(this.theme, '0', { fontSize: 68, stroke: 8 });
+      // the amount is the kit's display number (a gradient in the Bubble theme), the price a plain label
+      const amount = createLabel(this.theme, '0', { fontSize: 68, stroke: 8, fill: this.theme.text.numberFill ?? this.theme.text.fill });
       amount.y = -140;
       const price = createLabel(this.theme, '', { fontSize: 68, stroke: 8 });
       price.y = 141;

@@ -59,6 +59,7 @@ class FakeContext2D {
   clip(): void {}
   drawImage(): void {}
   createLinearGradient() { return { addColorStop(): void {} }; }
+  createRadialGradient() { return { addColorStop(): void {} }; }
   createPattern() { return null; }
 }
 

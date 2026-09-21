@@ -343,30 +343,42 @@ new SettingsWindowView({ ui, motion, textures, theme: overlay.theme, onToggle })
   PNG skins). `npm run showcase:theme` shoots every window under the four variants (default, alt,
   bubble, art) and fails if the default, the alt and the bubble theme differ in geometry.
 
-#### Bubble skin (Theme System V1.1)
+#### Bubble skin (Theme System V1.1 / V1.2)
 
 `BUBBLE_READY_UI_THEME` is the kit's glossy casual language, measured from a reference casual UI
-for its visual principles only (no art copied): every surface is a soft vertical gradient with a
-bright gloss band over its top, a flat darker lip under it, a soft outline and a soft shadow;
-windows are mid-blue with a lighter translucent header zone and a much lighter inner card (the
-second layer); the CTAs are green / orange / gold with lime / yellow gloss, the icon-button shell
-a slate square, the × a bold light-blue mark. It is expressed with three additions to the surface
-tokens — nothing else changed, every V1 theme resolves unchanged:
+for its visual principles only (no art copied). Every surface is three INDEPENDENT layers: a
+smooth body gradient, a soft gloss that fades into it over the top, a flat darker lip under it —
+plus a soft outline and a soft shadow; windows are mid-blue with a lighter translucent header zone
+and a much lighter inner card (the second layer); the CTAs are green / orange / gold with lime /
+yellow gloss, the icon-button shell a slate square, the × a bold light-blue mark, the level nodes
+radial spheres in a ring. It is expressed with additions to the surface tokens — nothing else
+changed, every V1 theme resolves unchanged:
 
-- `highlight: { color, height, alpha? }` — the gloss band, a strip of the surface's own outline
-  along its top edge (cut by the corners, a straight inner boundary), drawn over the body and
-  under the border; `pressed.highlight: null` drops it at full press.
+- `fill` gradients take any list of `stops` (`{ offset, color, alpha? }`; the Bubble bodies are
+  three stops: light → the colour → a little darker) and a `'radial-gradient'` (the last stop on
+  the box's inscribed circle, `center` = where the light sits). A gradient is a 256-texel texture
+  mapped onto each filled path's own bounds and sampled linearly: a smooth ramp by construction
+  (`npm run showcase:gradient` measures it — no jump above 2 luminance levels per pixel).
+- `highlight: { color, height, alpha?, soft? }` — the gloss, a strip of the surface's own outline
+  along its top edge (cut by the corners), drawn over the body and under the border. `soft`
+  (0..1) fades it out towards its inner edge; a hard flat stripe (`soft: 0`, the V1.1 look) reads
+  as a second slab on top of the body — that was the root cause of the "banded" V1.1 surfaces.
+  `pressed.highlight: null` drops the gloss at full press.
 - `depth.style: 'strip'` — a lip that is the strip of the outline along the bottom (or top) edge,
-  with a straight boundary; `'plate'` (the default) keeps the V1 stacked look (a smaller body
-  resting on the lip). The shop card of the Bubble theme uses a tall strip lip as its price band.
+  with a straight boundary (a mechanical edge, meant to be visible); `'plate'` (the default)
+  keeps the V1 stacked look. `depth.fill` gives the strip a gradient of its own — the shop card's
+  price zone is a green gradient darkening into its bottom 14 %.
 - `shadow.layers` — a soft shadow: that many silhouettes at growing offsets, each at
   `alpha / layers`, all inside the box (the body is still `height − offsetY` tall).
+- `text.numberFill` — the one display style: the fill of big numbers (the shop amounts), a gold
+  gradient in the Bubble theme (`createLabel(theme, text, { fill })` takes a theme fill).
 - Shape `'tab'` (rounded top corners over a flat bottom) and `theme.tab` (`bar`, `item`,
   `active`, `text`, `activeText`) are the tab-bar shells for a bottom navigation or a category
   row — tokens and a `UiSurface` shape, no tab component.
-- `theme.awning` (`stripeA`, `stripeB`, `stripeRatio`, `shadow`; null in the V1 themes) draws the
-  shop's striped, scalloped awning from tokens (`drawAwning`) instead of the tiled art; the header
-  keeps the tiles' geometry.
+- `theme.awning` (`fillA`, `fillB`, `segments`, `gloss`, `shadow`; null in the V1 themes) draws the
+  shop's striped, scalloped awning from tokens (`drawAwning`) instead of the tiled art: `segments`
+  stripes across the viewport width (seven in the Bubble theme), each filled in its own box so a
+  gradient runs down every stripe, a soft gloss across the top; the header keeps the tiles' geometry.
 - `theme.levelNode` (`completed` / `current` / `locked` surfaces; null in the V1 themes) draws the
   level-map node as a disc (`shape: 'capsule'` on a square: the ring is its border, gloss and lip as
   everywhere) instead of the badge art; stars, the lock, the number and the HARD pill stay as they
