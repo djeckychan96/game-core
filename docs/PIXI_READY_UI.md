@@ -379,16 +379,27 @@ changed, every V1 theme resolves unchanged:
   shop's striped, scalloped awning from tokens (`drawAwning`) instead of the tiled art: `segments`
   stripes across the viewport width (seven in the Bubble theme), each filled in its own box so a
   gradient runs down every stripe, a soft gloss across the top; the header keeps the tiles' geometry.
-- `theme.levelNode` (null in the V1 themes) draws the level-map node as a layered 3D button instead
-  of the badge art: a base (`ring` fill, `ringRatio` of the badge size wide, the node's `shadow`)
-  with the `side` fill inside it, and a `cap` surface on top that carries the number and the stars.
-  `selectedRing` replaces the ring of the focused node; `lock: false` drops the lock icon; `rail`
-  draws the rail from tokens (`done` behind the reachable levels, `future` ahead of the current one)
-  and the focus glow is hidden. The selection lift is generic `LevelMapView` behaviour: once the map
-  has settled on a REAL selection change (an instant `scrollToLevel`, the end of a snap or an
-  animated scroll — never on a resize, a rebuild or an idle frame), the cap rises by `lift` × its
-  diameter in 170 ms (ease out) and returns in 300 ms (ease in-out); the root, the ring and the hit
-  area never move; a re-selection or `cancelAll` cancels the lift and puts the cap back at once.
+- `theme.levelNode` (null in the V1 themes) draws the level-map node as a piston instead of the
+  badge art — four layers, the first two still: the base (`ring` fill, `ringRatio` of the badge size
+  wide, the node's `shadow`) with the `base` floor inside it; the `side` wall — the cap's disc swept
+  from the floor up to the cap's current elevation and clipped by the floor's circle
+  (`drawLevelNodeWall`), so the extrusion always fills the space under the cap with no gap; and the
+  `cap` surface (`capInset` of the badge size smaller than the floor) that carries the number and
+  the stars. The cap rests `restElevation` × its diameter above the floor, so a rim of the wall is
+  visible even at rest; `selectedRing` replaces the ring of the focused node; `lock: false` drops
+  the lock icon; `rail` draws the rail from tokens (`done` behind the reachable levels, `future`
+  ahead of the current one) and the focus glow is hidden. The selection lift is generic
+  `LevelMapView` behaviour: once the map has settled on a REAL selection change (an instant
+  `scrollToLevel`, the end of a snap or an animated scroll — never on a resize, a rebuild or an idle
+  frame), the cap rises by `lift` × its diameter on top of its rest elevation in 170 ms (ease out)
+  and returns to rest in 300 ms (ease in-out), the wall redrawn to it on every step; the root, the
+  base and the hit area never move; a re-selection, a resize or `cancelAll` cancels the lift and
+  puts the cap back at its REST elevation at once.
+- `face` on any surface (`{ fill, lift, inset?, highlight? }`) raises a second rounded shape over
+  the body, inset inside the outline and `lift` shorter, so the body shows under it as the button's
+  rounded thickness (a 3D button, not a flat strip); a button's label sits on the face and
+  `pressed.face` lowers it. The Bubble `primary` role (the SoliPix PLAY) is a dark-green body in a
+  gold outline with a light green face raised 22 units over it.
 - `SettingsWindowView({ toggleWell: true })` draws the toggles and their captions on the theme's
   inner card (`panel.well`), sized to the visible toggles; a skin, never a layout change (the
   toggles and the in-level buttons keep their positions; nothing is drawn under `skin: 'art'`).

@@ -155,6 +155,22 @@ export function drawSurface(g: Graphics, x: number, y: number, width: number, he
     stripPath(g, shape, x, y, width, bodyHeight, style.radius, highlight.height, 'top').fill(bandFill(highlight));
   }
   const border = style.border;
+  const face = style.face;
+  if (face) {
+    // the raised face: the same shape inset inside the border, `lift` shorter — the body under it is the thickness
+    const edge = (border && border.width > 0 ? border.width : 0) + Math.max(0, face.inset ?? 0);
+    const fw = width - edge * 2;
+    const fh = bodyHeight - edge * 2 - Math.max(0, face.lift);
+    if (fw > 0 && fh > 0) {
+      const outer = cornerRadius(shape === 'capsule' ? -1 : style.radius, width, bodyHeight);
+      const radius = shape === 'capsule' ? -1 : Math.max(0, outer - edge);
+      shapePath(g, shape, x + edge, y + edge, fw, fh, radius).fill(toFillInput(face.fill));
+      const faceGloss = face.highlight;
+      if (faceGloss && faceGloss.height > 0 && (faceGloss.alpha ?? 1) > 0) {
+        stripPath(g, shape, x + edge, y + edge, fw, fh, radius, faceGloss.height, 'top').fill(bandFill(faceGloss));
+      }
+    }
+  }
   if (border && border.width > 0) {
     shapePath(g, shape, x, y, width, bodyHeight, style.radius).stroke({ color: border.color, alpha: border.alpha ?? 1, width: border.width, alignment: 1, join: 'round' });
   }
@@ -228,11 +244,11 @@ export function drawAwning(g: Graphics, x: number, y: number, width: number, hei
 }
 
 /**
- * The base of a level-map node centred on (0, 0): the soft shadow under the whole node (circles, so the disc stays
- * round), the ring disc of `size`, then the side disc inside the ring — the cap (a `UiSurface`) sits on top of it and
- * lifts away from it. Everything lies inside the node's `size` box.
+ * The still base of a level-map node centred on (0, 0): the soft shadow under the whole node (circles, so the disc
+ * stays round), the ring disc of `size`, then the floor disc inside the ring. The wall (`drawLevelNodeWall`) and the
+ * cap sit on top of it; nothing here ever moves. Everything lies inside the node's `size` box.
  */
-export function drawLevelNodeBase(g: Graphics, size: number, ring: UiFill, side: UiFill, ringRatio: number, shadow: UiShadow | null): void {
+export function drawLevelNodeBase(g: Graphics, size: number, ring: UiFill, floor: UiFill, ringRatio: number, shadow: UiShadow | null): void {
   const r = size / 2;
   if (shadow && shadow.alpha > 0) {
     const layers = Math.max(1, Math.floor(shadow.layers ?? 1));
@@ -243,7 +259,33 @@ export function drawLevelNodeBase(g: Graphics, size: number, ring: UiFill, side:
     }
   }
   g.circle(0, 0, r).fill(toFillInput(ring));
-  g.circle(0, 0, Math.max(1, r - size * Math.max(0, ringRatio))).fill(toFillInput(side));
+  g.circle(0, 0, Math.max(1, r - size * Math.max(0, ringRatio))).fill(toFillInput(floor));
+}
+
+/**
+ * The side wall of a level-map node: the cap's disc (radius `capRadius`, resting on the floor at (0, 0)) swept up to
+ * the cap's current `elevation`, clipped by the floor's circle (radius `innerRadius`) — one continuous extrusion whose
+ * top edge hides under the cap and whose bottom follows the round floor, with no gap at any elevation. Drawn again
+ * whenever the elevation changes (a few arcs and lines).
+ */
+export function drawLevelNodeWall(g: Graphics, capRadius: number, innerRadius: number, elevation: number, fill: UiFill): void {
+  const rc = Math.max(1, Math.min(capRadius, innerRadius));
+  const ri = Math.max(rc, innerRadius);
+  const e = Math.max(0, elevation);
+  // how far up the vertical sides stay inside the floor's circle; above that the wall follows the circle itself
+  const side = Math.min(e, Math.sqrt(Math.max(0, ri * ri - rc * rc)));
+  g.moveTo(-rc, 0).arc(0, 0, rc, Math.PI, 0, true).lineTo(rc, -side);
+  if (e > side) {
+    // the sides left the circle: continue along the floor's circle up to the height of the cap's centre (or its top)
+    const top = Math.min(e, ri);
+    const xTop = Math.sqrt(Math.max(0, ri * ri - top * top));
+    const a1 = Math.atan2(-side, rc);
+    const a2 = Math.atan2(-top, xTop);
+    g.arc(0, 0, ri, a1, a2, true).lineTo(-xTop, -top).arc(0, 0, ri, Math.atan2(-top, -xTop), Math.atan2(-side, -rc), true);
+  } else {
+    g.lineTo(-rc, -side);
+  }
+  g.closePath().fill(toFillInput(fill));
 }
 
 /** The close control's mark: an optional backing surface and the × (outline under the arms, then the arms), centred on (0, 0). */

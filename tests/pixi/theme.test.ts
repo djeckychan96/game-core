@@ -12,7 +12,7 @@ import {
   type UiButtonRole,
   type UiFill
 } from '../../src/pixi/theme';
-import { UiPanel, UiSurface, drawAwning, drawCloseMark, drawPanel, drawSurface, toFillInput } from '../../src/pixi/skin';
+import { UiPanel, UiSurface, drawAwning, drawCloseMark, drawLevelNodeWall, drawPanel, drawSurface, toFillInput } from '../../src/pixi/skin';
 import { UiButton } from '../../src/pixi/UiButton';
 import { ModalWindow, type ModalWindowOptions } from '../../src/pixi/ModalWindow';
 import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
@@ -431,7 +431,7 @@ describe('Bubble skin primitives (V1.1)', () => {
   });
 
   it('level-map nodes: `theme.levelNode` builds a layered node (ring + side base, a cap with the number, a themed rail, no glow) with the badge geometry; the V1 themes keep the badge art', () => {
-    type NodeProbe = { state: 'completed' | 'current' | 'locked'; root: Container; inner: Container; label: Container; stars: Container[]; lock: Container | null; base: Graphics | null; cap: Container | null; capSize: number };
+    type NodeProbe = { state: 'completed' | 'current' | 'locked'; root: Container; inner: Container; label: Container; stars: Container[]; lock: Container | null; base: Graphics | null; wall: Graphics | null; cap: Container | null; capSize: number; innerRadius: number; restElevation: number; elevation: number };
     const build = (theme: ReadyUiTheme) => {
       const kit = createKit();
       const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme, levels: [{ index: 1, stars: 3 }, { index: 2, stars: 2 }, { index: 3, stars: 0 }, { index: 4, stars: 0 }], currentLevel: 3, onSelectLevel: () => {} });
@@ -447,17 +447,32 @@ describe('Bubble skin primitives (V1.1)', () => {
     expect(bubble.facts.map((f) => [f.y, f.hit])).toEqual(plain.facts.map((f) => [f.y, f.hit]));
     const skin = BUBBLE_READY_UI_THEME.levelNode as NonNullable<typeof BUBBLE_READY_UI_THEME.levelNode>;
     const D = BUBBLE_READY_UI_THEME.levelMap.badgeSize;
-    const capSize = D - 2 * D * skin.ringRatio;
+    const innerRadius = D / 2 - D * skin.ringRatio;
+    const capSize = 2 * (innerRadius - D * skin.capInset);
+    const rest = skin.restElevation * capSize;
+    expect(rest).toBeGreaterThan(0);
     for (const f of bubble.facts) {
       const n = f.node;
+      // a piston: the still base, the wall, the cap — in that order
       expect(n.base).toBeInstanceOf(Graphics);
-      expect(f.first).toBe(n.base);
+      expect(n.wall).toBeInstanceOf(Graphics);
       expect(n.cap).toBeInstanceOf(Container);
-      expect(n.capSize).toBe(capSize);
+      expect(n.inner.children.slice(0, 3)).toEqual([n.base, n.wall, n.cap]);
+      expect(n.capSize).toBeCloseTo(capSize, 6);
+      expect(n.innerRadius).toBeCloseTo(innerRadius, 6);
       const disc = (n.cap as Container).children[0] as UiSurface;
       expect(disc).toBeInstanceOf(UiSurface);
       expect(disc.getLocalBounds()).toMatchObject({ x: -capSize / 2, y: -capSize / 2, width: capSize, height: capSize });
-      // the number (and the stars) sit on the cap; the base carries 2 shadow layers, the ring and the side
+      // at rest the cap already sits its rest elevation above the floor and the wall reaches up to it: a visible rim
+      expect(n.restElevation).toBeCloseTo(rest, 6);
+      expect(n.elevation).toBeCloseTo(rest, 6);
+      expect((n.cap as Container).y).toBeCloseTo(-rest, 6);
+      const wallBounds = pathBounds(n.wall as Graphics, 0);
+      expect(wallBounds.minY).toBeCloseTo(-rest, 3);
+      expect(wallBounds.maxY).toBeCloseTo(capSize / 2, 3);
+      expect(Math.abs(wallBounds.minX)).toBeCloseTo(capSize / 2, 3);
+      expect(instructions(n.wall as Graphics)).toHaveLength(1);
+      // the number (and the stars) sit on the cap; the base carries 2 shadow layers, the ring and the floor
       expect((n.cap as Container).children).toContain(n.label);
       for (const star of n.stars) expect((n.cap as Container).children).toContain(star);
       const drawn = instructions(n.base as Graphics);
@@ -465,7 +480,7 @@ describe('Bubble skin primitives (V1.1)', () => {
       const ringFill = ((n.base as Graphics).context.instructions[2]?.data as { style: { fill: unknown } }).style.fill;
       const expectedRing = n.state === 'current' ? skin.selectedRing : skin[n.state].ring; // level 3 is the focused one
       expect(ringFill).toBe((toFillInput(expectedRing) as { fill: unknown }).fill);
-      expect(drawn[3]).toMatchObject({ color: (skin[n.state].side as { color: number }).color });
+      expect(drawn[3]).toMatchObject({ color: (skin[n.state].base as { color: number }).color });
       expect(n.lock).toBeNull(); // Bubble: no lock icon
     }
     expect(bubble.facts[0]?.node.stars).toHaveLength(3);
@@ -479,6 +494,8 @@ describe('Bubble skin primitives (V1.1)', () => {
       expect(f.first).toBeInstanceOf(Sprite);
       expect(f.node.cap).toBeNull();
       expect(f.node.base).toBeNull();
+      expect(f.node.wall).toBeNull();
+      expect(f.node.elevation).toBe(0);
     }
     expect((plain.facts[2]?.first as Sprite).texture).toBe(plain.kit.textures.badgeCurrent);
     expect(plain.facts[3]?.node.lock).not.toBeNull();
@@ -492,72 +509,141 @@ describe('Bubble skin primitives (V1.1)', () => {
     expect(bubble.kit.uiErrors).toEqual([]);
   });
 
-  it('level-map selection lift: the cap rises by a quarter of its diameter once the map settles, returns, runs once per real change, cancels on a quick re-selection, never leaves an offset', () => {
-    type NodeProbe = { root: Container; cap: Container | null; capSize: number };
+  it('level-map selection lift: the cap rises by a quarter of its diameter over its rest elevation once the map settles, the wall follows it, it returns to rest, runs once per real change, cancels on a quick re-selection, never leaves an offset', () => {
+    type NodeProbe = { root: Container; base: Graphics | null; wall: Graphics | null; cap: Container | null; capSize: number; restElevation: number; elevation: number };
     const kit = createKit();
     const levels = Array.from({ length: 6 }, (_, i) => ({ index: i + 1, stars: i < 3 ? 3 : 0 }));
     const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, theme: BUBBLE_READY_UI_THEME, levels, currentLevel: 4, onSelectLevel: () => {} });
     map.resize(390, 844, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
     const nodes = () => field<Map<number, NodeProbe>>(map, 'nodes');
-    const capOf = (level: number) => nodes().get(level)?.cap as Container;
+    const nodeOf = (level: number) => nodes().get(level) as NodeProbe;
+    const elev = (level: number) => nodeOf(level).elevation;
     const skin = BUBBLE_READY_UI_THEME.levelNode as NonNullable<typeof BUBBLE_READY_UI_THEME.levelNode>;
-    const rise = (nodes().get(4) as NodeProbe).capSize * skin.lift; // 264 × 0.25 = 66 node units
-    expect(rise).toBe(66);
-    // the initial focus is not a selection change: nothing lifts
+    const rest = nodeOf(4).restElevation;
+    const rise = nodeOf(4).capSize * skin.lift; // 252 × 0.25 = 63 node units on top of the 20.16 rest
+    expect(rest).toBeCloseTo(0.08 * 252, 6);
+    expect(rise).toBeCloseTo(63, 6);
+    /** The wall is drawn exactly up to the cap: its top edge is the cap's elevation, its bottom the floor's rim. */
+    const wallFollowsCap = (level: number): void => {
+      const n = nodeOf(level);
+      const bounds = pathBounds(n.wall as Graphics, 0);
+      expect(bounds.minY).toBeCloseTo(-n.elevation, 3);
+      expect(bounds.maxY).toBeCloseTo(n.capSize / 2, 3);
+      expect((n.cap as Container).y).toBeCloseTo(-n.elevation, 6);
+    };
+    // the initial focus is not a selection change: nothing lifts, but the cap already rests above the floor
     advance(kit.core, 600);
-    expect(capOf(4).y).toBe(0);
+    expect(elev(4)).toBeCloseTo(rest, 6);
+    wallFollowsCap(4);
     expect(kit.motion.getStats().activeMotions).toBe(0);
     // an instant scroll to another level: the map is in place, the cap lifts at once — fast up, softer down
     map.scrollToLevel(2, false);
-    const root2y = (nodes().get(2) as NodeProbe).root.y;
+    const node2 = nodeOf(2);
+    const root2y = node2.root.y;
+    const hit2 = { ...(node2.root.hitArea as unknown as { x: number; y: number; width: number; height: number }) };
+    const base2 = instructions(node2.base as Graphics).length;
     advance(kit.core, 100);
-    expect(capOf(2).y).toBeLessThan(-30);
+    expect(elev(2)).toBeGreaterThan(rest + 30);
+    wallFollowsCap(2);
     advance(kit.core, 70);
-    expect(capOf(2).y).toBeCloseTo(-rise, 3);
+    expect(elev(2)).toBeCloseTo(rest + rise, 3);
+    wallFollowsCap(2);
     advance(kit.core, 150);
-    expect(capOf(2).y).toBeGreaterThan(-rise);
-    expect(capOf(2).y).toBeLessThan(0);
+    expect(elev(2)).toBeGreaterThan(rest);
+    expect(elev(2)).toBeLessThan(rest + rise);
+    wallFollowsCap(2);
     advance(kit.core, 150);
-    expect(capOf(2).y).toBe(0);
-    expect((nodes().get(2) as NodeProbe).root.y).toBe(root2y); // only the cap moved
+    expect(elev(2)).toBeCloseTo(rest, 6); // back to REST, not to a flat zero
+    wallFollowsCap(2);
+    // only the cap and the wall moved: the root, the hit area and the base are exactly as before
+    expect(node2.root.y).toBe(root2y);
+    expect({ ...(node2.root.hitArea as unknown as { x: number; y: number; width: number; height: number }) }).toEqual(hit2);
+    expect(instructions(node2.base as Graphics)).toHaveLength(base2);
+    expect((node2.base as Graphics).y).toBe(0);
     expect(kit.motion.getStats().activeMotions).toBe(0);
     // idle: no repeat
     advance(kit.core, 3000);
-    expect(capOf(2).y).toBe(0);
+    expect(elev(2)).toBeCloseTo(rest, 6);
     expect(kit.motion.getStats().activeMotions).toBe(0);
     // the same level again: not a change, no lift
     map.scrollToLevel(2, false);
     advance(kit.core, 100);
-    expect(capOf(2).y).toBe(0);
-    // a quick re-selection cancels the running lift and puts the cap back at once
+    expect(elev(2)).toBeCloseTo(rest, 6);
+    // a quick re-selection cancels the running lift and puts the cap back at its rest at once
     map.scrollToLevel(3, false);
     advance(kit.core, 60);
-    expect(capOf(3).y).toBeLessThan(0);
+    expect(elev(3)).toBeGreaterThan(rest);
     map.scrollToLevel(5, false);
-    expect(capOf(3).y).toBe(0);
+    expect(elev(3)).toBeCloseTo(rest, 6);
+    wallFollowsCap(3);
     advance(kit.core, 60);
-    expect(capOf(5).y).toBeLessThan(0);
-    // a resize mid-lift rebuilds the nodes: no offset survives and nothing lifts by itself
+    expect(elev(5)).toBeGreaterThan(rest);
+    // a resize mid-lift: every cap is at its rest elevation, nothing lifts by itself
     map.resize(400, 900, { insets: { top: 47, bottom: 120 }, pixelRatio: 2 });
-    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    for (const n of nodes().values()) { expect(n.elevation).toBeCloseTo(n.restElevation, 6); expect(n.restElevation).toBeGreaterThan(0); }
     advance(kit.core, 1000);
-    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    for (const n of nodes().values()) expect(n.elevation).toBeCloseTo(n.restElevation, 6);
     // an animated scroll lifts only once the map has settled
     map.scrollToLevel(1, true);
     advance(kit.core, 100);
-    for (const n of nodes().values()) expect((n.cap as Container).y).toBe(0);
+    for (const n of nodes().values()) expect(n.elevation).toBeCloseTo(n.restElevation, 6);
     advance(kit.core, 700); // the scroll (≤ 650 ms) is over, the lift is on its way up
-    expect(capOf(1).y).toBeLessThan(0);
+    expect(elev(1)).toBeGreaterThan(rest);
+    wallFollowsCap(1);
     advance(kit.core, 600);
-    expect(capOf(1).y).toBe(0);
+    expect(elev(1)).toBeCloseTo(rest, 6);
     expect(kit.motion.getStats().activeMotions).toBe(0);
-    // cancelAll mid-lift: the cap is back at once
+    // cancelAll mid-lift: the cap is back at its rest at once
     map.scrollToLevel(4, false);
     advance(kit.core, 80);
-    expect(capOf(4).y).toBeLessThan(0);
+    expect(elev(4)).toBeGreaterThan(rest);
     kit.core.cancelAll();
-    expect(capOf(4).y).toBe(0);
+    expect(elev(4)).toBeCloseTo(rest, 6);
+    wallFollowsCap(4);
     map.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+
+  it('a raised face (the 3D button): the body shows under the face as a rounded thickness inside the outline; the press lowers the face', () => {
+    const primary = BUBBLE_READY_UI_THEME.button.primary;
+    expect(primary.face).not.toBeNull();
+    expect(primary.depth).toBeNull();
+    const g = new Graphics();
+    drawSurface(g, 0, 0, 522, 228, primary);
+    const drawn = instructions(g);
+    // 3 shadow layers, the body, the face, the face gloss, the gold outline
+    expect(drawn.map((i) => i.action)).toEqual(['fill', 'fill', 'fill', 'fill', 'fill', 'fill', 'stroke']);
+    expect(drawn[3]?.texture).toBe(true);
+    expect(drawn[4]?.texture).toBe(true);
+    expect(drawn[6]).toMatchObject({ color: 0xe8b83c });
+    const bodyHeight = 228 - 12;
+    const edge = 8 + 2;
+    const face = pathBounds(g, 4);
+    expect(face.minX).toBeCloseTo(edge, 3);
+    expect(face.maxX).toBeCloseTo(522 - edge, 3);
+    expect(face.minY).toBeCloseTo(edge, 3);
+    expect(face.maxY).toBeCloseTo(bodyHeight - edge - 22, 3); // the thickness: 22 of body under the face, inside the outline
+    expect(pathBounds(g, 3)).toMatchObject({ minX: 0, minY: 0, maxX: 522, maxY: bodyHeight });
+    // the wall of a node: at rest a low rim, at a lift a wall up to the cap, clipped by the floor's circle
+    const wall = new Graphics();
+    drawLevelNodeWall(wall, 126, 132, 20, { type: 'solid', color: 0x2c8a1b });
+    expect(pathBounds(wall, 0)).toMatchObject({ minX: -126, minY: -20, maxX: 126, maxY: 126 });
+    const high = new Graphics();
+    drawLevelNodeWall(high, 126, 132, 83, { type: 'solid', color: 0x2c8a1b });
+    const hb = pathBounds(high, 0);
+    expect(hb.minY).toBeCloseTo(-83, 3);
+    expect(hb.maxY).toBeCloseTo(126, 3);
+    expect(hb.maxX).toBeLessThanOrEqual(132.01); // never outside the floor's circle
+    // a pressed primary button lowers its face
+    const kit = createKit();
+    const button = new UiButton({ ui: kit.ui, id: 'p', theme: BUBBLE_READY_UI_THEME, role: 'primary', width: 522, height: 228, label: 'PLAY', onTap: () => {} });
+    const top = -228 / 2; // a button's skin is drawn around its centre
+    expect(pathBounds(button.skin as Graphics, 4).maxY).toBeCloseTo(top + bodyHeight - edge - 22, 3);
+    button.emit('pointerdown', pointer(1, 1) as never);
+    advance(kit.core, 80);
+    expect(button.isPressed).toBe(true);
+    expect(pathBounds(button.skin as Graphics, 4).maxY).toBeCloseTo(top + bodyHeight - edge - 6, 3);
+    button.destroy();
     expect(kit.uiErrors).toEqual([]);
   });
 
@@ -566,10 +652,14 @@ describe('Bubble skin primitives (V1.1)', () => {
     for (const role of UI_BUTTON_ROLES) {
       const style = buttonStyleOf(BUBBLE_READY_UI_THEME, role);
       expect(style.fill.type).toBe('linear-gradient');
-      expect(style.highlight).not.toBeNull();
-      // every role has a flat strip lip except the screen CTA (primary: one body in a gold outline, no lip)
-      if (role === 'primary') expect(style.depth).toBeNull();
-      else expect(style.depth?.style).toBe('strip');
+      // every role has a gloss and a flat strip lip except the screen CTA (primary: a raised face in a gold outline, its gloss on the face, no lip)
+      if (role === 'primary') {
+        expect(style.depth).toBeNull();
+        expect(style.face?.highlight).not.toBeNull();
+      } else {
+        expect(style.highlight).not.toBeNull();
+        expect(style.depth?.style).toBe('strip');
+      }
       expect(style.shadow?.layers).toBeGreaterThan(1);
       expect(style.radius).toBeGreaterThan(0);
     }

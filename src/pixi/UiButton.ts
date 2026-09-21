@@ -8,6 +8,7 @@ import type { ReadyUiTheme, UiButtonRole, UiButtonStyle, UiCloseStyle, UiSurface
 function pressedStyle(base: UiButtonStyle, pressed: NonNullable<UiButtonStyle['pressed']>): UiSurfaceStyle {
   const style: UiSurfaceStyle = { ...base, fill: pressed.fill ?? base.fill, depth: pressed.depth === undefined ? base.depth : pressed.depth, border: pressed.border === undefined ? base.border : pressed.border };
   if (pressed.highlight !== undefined) style.highlight = pressed.highlight;
+  if (pressed.face !== undefined) style.face = pressed.face;
   return style;
 }
 

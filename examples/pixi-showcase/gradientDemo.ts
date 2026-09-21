@@ -3,7 +3,7 @@
 // level-node sphere, a shop card and a display number. `scripts/gradient-check.mjs` reads the pixels back and measures
 // the luminance profile down the middle of every surface: a smooth ramp has no per-pixel jump, a stripe has one.
 import { Application, Container, FillGradient, Graphics, Rectangle, Text } from 'pixi.js';
-import { BUBBLE_READY_UI_THEME, createLabel, drawAwning, drawCard, drawLevelNodeBase, drawSurface, type UiFill, type UiSurfaceStyle } from 'game-core/pixi';
+import { BUBBLE_READY_UI_THEME, createLabel, drawAwning, drawCard, drawLevelNodeBase, drawLevelNodeWall, drawSurface, type UiFill, type UiSurfaceStyle } from 'game-core/pixi';
 
 declare global {
   interface Window {
@@ -75,13 +75,16 @@ place('C · lip strip only', 100, 390, (g) => box(g, { ...plain(solid(0x3fc424))
 place('C2 · lip with its own gradient (card)', 290, 390, (g) => box(g, { ...plain(theme.card.fill), depth: theme.card.depth }));
 place('D · V1.1 positive, all layers', 100, 520, (g) => box(g, v11));
 place('D2 · V1.2 positive, all layers', 290, 520, (g) => box(g, v12));
-// a level node: the ring + side base, the sphere-shaded cap on top (the layer that lifts on selection)
+// a level node at rest: the still base (ring + floor), the wall up to the cap's rest elevation, the sphere-shaded cap
 const nodeSkin = theme.levelNode as NonNullable<typeof theme.levelNode>;
 const drawNode = (g: Graphics, state: 'current' | 'locked', selected: boolean): void => {
   const style = nodeSkin[state];
-  drawLevelNodeBase(g, 300, selected ? nodeSkin.selectedRing : style.ring, style.side, nodeSkin.ringRatio, nodeSkin.shadow);
-  const cap = 300 - 2 * 300 * nodeSkin.ringRatio;
-  drawSurface(g, -cap / 2, -cap / 2, cap, cap, { ...style.cap, shadow: null }, 'capsule');
+  drawLevelNodeBase(g, 300, selected ? nodeSkin.selectedRing : style.ring, style.base, nodeSkin.ringRatio, nodeSkin.shadow);
+  const inner = 150 - 300 * nodeSkin.ringRatio;
+  const capRadius = inner - 300 * nodeSkin.capInset;
+  const rest = nodeSkin.restElevation * capRadius * 2;
+  drawLevelNodeWall(g, capRadius, inner, rest, style.side);
+  drawSurface(g, -capRadius, -capRadius - rest, capRadius * 2, capRadius * 2, { ...style.cap, shadow: null }, 'capsule');
 };
 place('N · node (selected)', 80, 690, (g) => drawNode(g, 'current', true), 300, 300, 0.5);
 place('N2 · node (locked)', 200, 690, (g) => drawNode(g, 'locked', false), 300, 300, 0.4);

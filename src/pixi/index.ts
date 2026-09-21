@@ -29,7 +29,7 @@ export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
 export { UiButton, DEFAULT_BUTTON_WIDTH, DEFAULT_BUTTON_HEIGHT, DEFAULT_CLOSE_SIZE } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
-export { UiPanel, UiSurface, drawSurface, drawPanel, drawCard, drawCloseMark, drawAwning, drawLevelNodeBase, toFillInput, bandFill } from './skin';
+export { UiPanel, UiSurface, drawSurface, drawPanel, drawCard, drawCloseMark, drawAwning, drawLevelNodeBase, drawLevelNodeWall, toFillInput, bandFill } from './skin';
 export type { UiPanelOptions, UiSurfaceShape } from './skin';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
@@ -67,6 +67,7 @@ export type {
   UiDepth,
   UiShadow,
   UiBand,
+  UiFace,
   UiColorStop,
   UiTabStyle,
   UiAwningStyle,

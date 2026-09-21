@@ -9,7 +9,7 @@ import {
 } from 'pixi.js';
 import type { ButtonController, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
-import { UiSurface, drawLevelNodeBase, toFillInput } from './skin';
+import { UiSurface, drawLevelNodeBase, drawLevelNodeWall, toFillInput } from './skin';
 import { applyTextResolution, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides, type UiLevelNodeSkin } from './theme';
 
@@ -87,11 +87,20 @@ interface LevelNode {
   label: Text;
   stars: Sprite[];
   lock: Sprite | null;
-  /** Themed node (`theme.levelNode`): the ring + side base, and the cap the number sits on — the layer that lifts. */
+  /** Themed node (`theme.levelNode`), a piston: the still base (ring + floor), the wall that follows the cap, and the cap the number sits on. */
   base: Graphics | null;
+  wall: Graphics | null;
   cap: Container | null;
   /** The cap's diameter in node units (the lift is a fraction of it). */
   capSize: number;
+  /** The floor's radius (the wall is clipped by it). */
+  innerRadius: number;
+  /** The cap's elevation at rest (the wall is always a little visible). */
+  restElevation: number;
+  /** The animated part of the elevation (0 at rest). */
+  lift: number;
+  /** The cap's current elevation over the floor: `restElevation + lift`; the wall is drawn to it. */
+  elevation: number;
 }
 
 const FIGMA_BADGE_BASE = 232;
@@ -574,16 +583,26 @@ export class LevelMapView extends Container {
     // `face` is the layer the number, the stars and the lock sit on — the cap of a themed node, the badge itself otherwise
     const nodeSkin = this.nodeSkin;
     let base: Graphics | null = null;
+    let wall: Graphics | null = null;
     let cap: Container | null = null;
     let capSize = D;
+    let innerRadius = D / 2;
+    let restElevation = 0;
     let face: Container = inner;
     if (nodeSkin) {
+      // a piston: the still base (ring + floor), the wall that follows the cap, the cap resting a little above the floor
       const style = nodeSkin[state];
       base = new Graphics();
       base.eventMode = 'none';
-      drawLevelNodeBase(base, D, this.focusLevelValue === level ? nodeSkin.selectedRing : style.ring, style.side, nodeSkin.ringRatio, nodeSkin.shadow);
+      drawLevelNodeBase(base, D, this.focusLevelValue === level ? nodeSkin.selectedRing : style.ring, style.base, nodeSkin.ringRatio, nodeSkin.shadow);
       inner.addChild(base);
-      capSize = Math.max(1, D - 2 * D * Math.max(0, nodeSkin.ringRatio));
+      innerRadius = Math.max(1, D / 2 - D * Math.max(0, nodeSkin.ringRatio));
+      const capRadius = Math.max(1, innerRadius - D * Math.max(0, nodeSkin.capInset));
+      capSize = capRadius * 2;
+      restElevation = Math.max(0, nodeSkin.restElevation) * capSize;
+      wall = new Graphics();
+      wall.eventMode = 'none';
+      inner.addChild(wall);
       cap = new Container();
       const disc = new UiSurface({ style: { ...style.cap, shadow: null }, width: capSize, height: capSize, shape: 'capsule' });
       disc.eventMode = 'none';
@@ -667,7 +686,8 @@ export class LevelMapView extends Container {
       },
       onTap: () => this.onNodeTap(level)
     });
-    const node: LevelNode = { index: level, state, root, inner, controller, label, stars, lock, base, cap, capSize };
+    const node: LevelNode = { index: level, state, root, inner, controller, label, stars, lock, base, wall, cap, capSize, innerRadius, restElevation, lift: 0, elevation: 0 };
+    this.applyLift(node, 0); // the cap rests at its elevation, the wall drawn to it
 
     root.on('pointerdown', (event: FederatedPointerEvent) => {
       this.pressed = node;
@@ -779,7 +799,22 @@ export class LevelMapView extends Container {
     if (!skin || !node.base || node.base.destroyed) return;
     const style = skin[node.state];
     node.base.clear();
-    drawLevelNodeBase(node.base, this.theme.levelMap.badgeSize, selected ? skin.selectedRing : style.ring, style.side, skin.ringRatio, skin.shadow);
+    drawLevelNodeBase(node.base, this.theme.levelMap.badgeSize, selected ? skin.selectedRing : style.ring, style.base, skin.ringRatio, skin.shadow);
+  }
+
+  /**
+   * Sets the animated part of a themed node's elevation: the cap (with the number) moves to `restElevation + lift`
+   * and the wall is redrawn up to it, so the extrusion always fills the space under the cap. The base and the hit
+   * area are untouched.
+   */
+  private applyLift(node: LevelNode, lift: number): void {
+    const skin = this.nodeSkin;
+    if (!skin || !node.cap || !node.wall || node.cap.destroyed || node.wall.destroyed) return;
+    node.lift = Math.max(0, lift);
+    node.elevation = node.restElevation + node.lift;
+    node.cap.y = -node.elevation;
+    node.wall.clear();
+    drawLevelNodeWall(node.wall, node.capSize / 2, node.innerRadius, node.elevation, skin[node.state].side);
   }
 
   /** The map has settled on the focused level: lift its cap if the selection really changed on the way here. */
@@ -792,22 +827,25 @@ export class LevelMapView extends Container {
     this.liftCap(node, node.capSize * skin.lift);
   }
 
-  /** The cap rises by `rise` node units (a fraction of its diameter) and settles back; the ring and the hit area stay. */
+  /**
+   * The cap rises by `rise` node units (a fraction of its diameter) over its rest elevation and settles back to it;
+   * the wall follows every step; the ring, the floor and the hit area stay.
+   */
   private liftCap(node: LevelNode, rise: number): void {
     const cap = node.cap;
     if (!cap) return;
     this.cancelLift();
     this.lifted = node;
-    cap.y = 0;
-    const binding = (to: number) => [{ get: () => cap.y, set: (v: number) => { cap.y = v; }, to }];
+    this.applyLift(node, 0);
+    const binding = (to: number) => [{ get: () => node.lift, set: (v: number) => this.applyLift(node, v), to }];
     const settle = () => {
-      if (!cap.destroyed) cap.y = 0;
+      this.applyLift(node, 0);
       if (this.lifted === node) this.lifted = null;
     };
     this.motion.sequence({
       scope: this.liftScope,
       steps: [
-        { type: 'tween', bindings: binding(-rise), durationMs: LIFT_UP_MS, ease: 'easeOut' },
+        { type: 'tween', bindings: binding(rise), durationMs: LIFT_UP_MS, ease: 'easeOut' },
         { type: 'tween', bindings: binding(0), durationMs: LIFT_DOWN_MS, ease: 'easeInOut' }
       ],
       onComplete: settle,
@@ -815,12 +853,12 @@ export class LevelMapView extends Container {
     });
   }
 
-  /** Stops a running lift and puts its cap back — no offset ever accumulates across cancels, resizes or rebuilds. */
+  /** Stops a running lift and puts its cap back at its REST elevation — no offset ever accumulates across cancels, resizes or rebuilds. */
   private cancelLift(): void {
     this.motion.cancelScope(this.liftScope);
     const lifted = this.lifted;
     this.lifted = null;
-    if (lifted?.cap && !lifted.cap.destroyed) lifted.cap.y = 0;
+    if (lifted) this.applyLift(lifted, 0);
   }
 
   private startShinePulse(): void {

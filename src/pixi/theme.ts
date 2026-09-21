@@ -129,6 +129,21 @@ export interface UiBand {
   soft?: number;
 }
 
+/**
+ * A raised face over the body of a surface: a second rounded shape with the same corners, inset inside the border and
+ * sitting `lift` above the body's bottom edge — the body shows under it as the button's thickness, following the corner
+ * radius (a real 3D button, not a flat strip). The label of a button sits on the face.
+ */
+export interface UiFace {
+  fill: UiFill;
+  /** The visible thickness of the body under the face, in the surface's units. */
+  lift: number;
+  /** Extra inset of the face from the inside of the border on the top and the sides. Default 0. */
+  inset?: number;
+  /** A gloss on the face itself. */
+  highlight?: UiBand | null;
+}
+
 /** Any rounded surface: window body, button, badge, card, well, tab. */
 export interface UiSurfaceStyle {
   fill: UiFill;
@@ -139,6 +154,8 @@ export interface UiSurfaceStyle {
   shadow: UiShadow | null;
   /** Top gloss band. Omitted or null = none (Theme System V1 surfaces). */
   highlight?: UiBand | null;
+  /** A raised face over the body (a 3D button). Omitted or null = none. */
+  face?: UiFace | null;
 }
 
 /** A standard window surface: body + optional header band with its own fill and divider. */
@@ -162,7 +179,7 @@ export interface UiButtonStyle extends UiSurfaceStyle {
   /** Label colour. */
   text: number;
   /** Look at full press; `null` = only the press scale. Omitted fields keep the idle value. */
-  pressed: { fill?: UiFill; depth?: UiDepth | null; border?: UiBorder | null; highlight?: UiBand | null } | null;
+  pressed: { fill?: UiFill; depth?: UiDepth | null; border?: UiBorder | null; highlight?: UiBand | null; face?: UiFace | null } | null;
 }
 
 /**
@@ -258,25 +275,34 @@ export interface ReadyUiTheme {
 /** The three looks of a level-map node (the same states `LevelMapView` reports). */
 export type UiLevelNodeVariant = 'completed' | 'current' | 'locked';
 
-/** One state of a level-map node: the cap that lifts, the side under it, the ring around it. */
+/**
+ * One state of a level-map node — a piston: a still ring around a still dark floor, a side wall that fills the space
+ * between the floor and the cap, and the cap on top that lifts (the number sits on it).
+ */
 export interface UiLevelNodeStyle {
   /** The disc on top: the number sits on it and it lifts on selection. Its own `shadow` is not drawn (the base carries the node's shadow). */
   cap: UiSurfaceStyle;
-  /** The side of the node, exposed under the cap while it is lifted. */
+  /** The still floor inside the ring (seen around the cap and under the wall's rim). */
+  base: UiFill;
+  /** The side wall between the floor and the cap: a continuous extrusion whose height follows the cap's elevation. */
   side: UiFill;
-  /** The ring (the base) around the cap. */
+  /** The ring around the floor. */
   ring: UiFill;
 }
 
 /** The level-map node skin: one style per state plus the node-wide parameters (all in node units of `levelMap.badgeSize`). */
 export interface UiLevelNodeSkin extends Record<UiLevelNodeVariant, UiLevelNodeStyle> {
-  /** Ring width around the cap, as a fraction of the node's badge size. */
+  /** Ring width, as a fraction of the node's badge size. */
   ringRatio: number;
+  /** How much smaller than the ring's inner circle the cap is (a socket margin), as a fraction of the badge size. */
+  capInset: number;
+  /** The cap's elevation at rest, as a fraction of the cap's diameter: the wall is always a little visible under it. */
+  restElevation: number;
   /** The ring of the focused (selected) node, whatever its state. */
   selectedRing: UiFill;
   /** Soft shadow under the whole node (drawn with the base). */
   shadow: UiShadow | null;
-  /** How far the cap lifts when the level gets selected, as a fraction of the cap's diameter (0 = no lift). */
+  /** How far the cap lifts on top of its rest elevation when the level gets selected, as a fraction of the cap's diameter (0 = no lift). */
   lift: number;
   /** Draw the lock icon on a locked node. */
   lock: boolean;
@@ -517,6 +543,8 @@ const BUBBLE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 14, laye
 const NODE_SHADOW: UiShadow = { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 2 };
 const GOLD_RING: UiFill = body(0xf7d75f, 0xe8b83c, 0xcf9a24);
 const SILVER_RING: UiFill = body(0xe3e9f3, 0xc6cedd, 0xa7b0c4);
+/** The green node's side wall: a soft vertical gradient, darker towards the floor. */
+const GREEN_WALL: UiFill = body(0x3d9c27, 0x2c8a1b, 0x1f6b14);
 
 /** A node cap: a sphere-shaded disc with a faint gloss, no lip (the node's side is a layer of its own). */
 function nodeCap(light: number, mid: number, dark: number): UiSurfaceStyle {
@@ -588,16 +616,18 @@ export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
     info: { fill: body(0x7585b8, 0x5c6a99, 0x4a5586), radius: 16, border: { color: 0x2b3454, width: 3, alpha: 0.6 }, depth: { color: 0x3d4669, height: 10, style: 'strip' }, shadow: { color: 0x000000, alpha: 0.2, offsetY: 8, layers: 2 }, highlight: gloss(0x9fadd2, 40, 0.35) }
   },
   button: {
-    // the screen's main CTA (PLAY): one smooth green body in a gold outline with a soft shadow — no lip
+    // the screen's main CTA (PLAY): a 3D button — a dark-green body in a gold outline with a soft shadow, and a light
+    // green face raised over it (the body shows under the face as the button's rounded thickness); no flat lip
     primary: {
-      fill: body(0x8cec54, 0x4fcd2f, 0x35b023),
+      fill: body(0x2f8f1f, 0x257a18, 0x1c6212),
       radius: 40,
       border: { color: 0xe8b83c, width: 8 },
       depth: null,
       shadow: { color: 0x000000, alpha: 0.3, offsetY: 12, layers: 3 },
-      highlight: gloss(0xc8ff96, 70, 0.4),
+      highlight: null,
+      face: { fill: body(0x8cec54, 0x4fcd2f, 0x38b526), lift: 22, inset: 2, highlight: gloss(0xc8ff96, 60, 0.4) },
       text: 0xfff6e2,
-      pressed: { fill: solid(0x35b023), highlight: null }
+      pressed: { face: { fill: body(0x5fd13a, 0x3fb827, 0x2fa41e), lift: 6, inset: 2, highlight: null } }
     },
     secondary: bubbleButton(0xffcf3d, 0xffb020, 0xf5920a, 0xffe680, 0xd86f04, 0xb35d08),
     positive: bubbleButton(0x62dc3a, 0x3fc424, 0x2fa61a, 0xa8ff5a, 0x1f8f14, 0x1a6e10),
@@ -630,10 +660,12 @@ export const BUBBLE_READY_UI_THEME: ReadyUiTheme = deepFreeze({
   // side, a sphere-shaded cap that lifts by a quarter of its diameter when the level gets selected; no lock icon, a
   // bright blue rail behind the reachable levels and a dark one ahead
   levelNode: {
-    completed: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), side: solid(0x2b7d1a), ring: GOLD_RING },
-    current: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), side: solid(0x2b7d1a), ring: SILVER_RING },
-    locked: { cap: nodeCap(0xc9cede, 0x9ea6bc, 0x737b93), side: solid(0x555c72), ring: SILVER_RING },
+    completed: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), base: solid(0x1b5c12), side: GREEN_WALL, ring: GOLD_RING },
+    current: { cap: nodeCap(0xa9f56a, 0x5ecb34, 0x3fa526), base: solid(0x1b5c12), side: GREEN_WALL, ring: SILVER_RING },
+    locked: { cap: nodeCap(0xc9cede, 0x9ea6bc, 0x737b93), base: solid(0x3a3f50), side: body(0x6b7389, 0x555c72, 0x444a5e), ring: SILVER_RING },
     ringRatio: 0.06,
+    capInset: 0.02,
+    restElevation: 0.08,
     selectedRing: GOLD_RING,
     shadow: NODE_SHADOW,
     lift: 0.25,
