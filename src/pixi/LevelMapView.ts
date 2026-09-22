@@ -7,7 +7,7 @@ import {
   Sprite,
   type Text
 } from 'pixi.js';
-import type { ButtonController, MotionHandle, MotionRuntime, UiRuntime } from '../index';
+import type { ButtonController, MotionHandle, MotionRuntime, MotionTweenOptions, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { applyTextResolution, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
@@ -86,6 +86,14 @@ interface LevelNode {
   label: Text;
   stars: Sprite[];
   lock: Sprite | null;
+  /**
+   * The motions that write into this node, owned by the node: the one tween driving `root.scale` (focus lift, then the
+   * infinite pulse, or the settle back to the base scale) and the locked-tap shake sequence driving `inner.x`. A new
+   * one replaces the previous one (one writer per property), and destroyNode() cancels both BEFORE `root.destroy()`:
+   * Pixi nulls a destroyed container's scale/position, so a tween that outlived its node would throw on its next write.
+   */
+  scaleMotion: MotionHandle | null;
+  shakeMotion: MotionHandle | null;
 }
 
 const FIGMA_BADGE_BASE = 232;
@@ -287,12 +295,10 @@ export class LevelMapView extends Container {
     data.stars = clamp(Math.round(stars), 0, 3);
     const node = this.nodes.get(level);
     if (!node) return;
-    this.destroyNode(node);
+    const focused = this.highlighted === node;
+    this.destroyNode(node); // cancels the node's own motions and clears `highlighted` when it was this node
     this.nodes.set(level, this.createNode(level));
-    if (this.highlighted?.index === level) {
-      this.highlighted = null;
-      this.highlight(level);
-    }
+    if (focused) this.highlight(level); // the redrawn node takes the focus lift + pulse over
     this.updateCulling();
   }
 
@@ -491,9 +497,8 @@ export class LevelMapView extends Container {
       this.pressed.controller.cancel();
       this.pressed = null;
     }
-    this.motion.cancelScope(this.pulseScope);
     this.highlighted = null;
-    for (const node of this.nodes.values()) this.destroyNode(node);
+    for (const node of this.nodes.values()) this.destroyNode(node); // each node cancels its own motions first
     this.nodes.clear();
     for (const seg of this.railLayer.removeChildren()) seg.destroy();
 
@@ -610,7 +615,7 @@ export class LevelMapView extends Container {
       },
       onTap: () => this.onNodeTap(level)
     });
-    const node: LevelNode = { index: level, state, root, inner, controller, label, stars, lock };
+    const node: LevelNode = { index: level, state, root, inner, controller, label, stars, lock, scaleMotion: null, shakeMotion: null };
 
     root.on('pointerdown', (event: FederatedPointerEvent) => {
       this.pressed = node;
@@ -634,11 +639,22 @@ export class LevelMapView extends Container {
   }
 
   private destroyNode(node: LevelNode): void {
+    this.cancelNodeMotion(node); // before the containers go away: nothing may write into a destroyed root/inner
     node.controller.dispose();
     node.root.removeAllListeners();
     node.root.destroy({ children: true });
     if (this.highlighted === node) this.highlighted = null;
     if (this.pressed === node) this.pressed = null;
+  }
+
+  /** Cancels the motions a node owns (the fields are cleared first, so a reentrant cancel finds nothing to repeat). */
+  private cancelNodeMotion(node: LevelNode): void {
+    const scale = node.scaleMotion;
+    const shake = node.shakeMotion;
+    node.scaleMotion = null;
+    node.shakeMotion = null;
+    scale?.cancel();
+    shake?.cancel();
   }
 
   private onNodeTap(level: number): void {
@@ -658,7 +674,8 @@ export class LevelMapView extends Container {
     const inner = node.inner;
     const binding = { get: () => inner.x, set: (v: number) => { inner.x = v; }, to: 0 };
     const step = (to: number, durationMs: number) => ({ type: 'tween' as const, bindings: [{ ...binding, to }], durationMs, ease: 'easeInOut' as const });
-    this.motion.sequence({
+    node.shakeMotion?.cancel(); // a second tap restarts the shake instead of stacking a second writer on inner.x
+    node.shakeMotion = this.motion.sequence({
       scope: this.fxScope,
       steps: [step(-16, 50), step(16, 70), step(-9, 60), step(0, 60)],
       onCancel: () => { inner.x = 0; }
@@ -670,30 +687,21 @@ export class LevelMapView extends Container {
   private highlight(level: number): void {
     const node = this.nodes.get(level) ?? null;
     if (node === this.highlighted) return;
-    this.motion.cancelScope(this.pulseScope);
     const base = this.theme.levelMap.nodeScale;
     const prev = this.highlighted;
     this.highlighted = node;
-    if (prev && !prev.root.destroyed) {
-      this.tweenScale(prev.root, base, 180, 'easeOut');
-    }
+    // a node's scale has exactly one writer, its own scaleMotion: the previous focus settles back through its own
+    // tween (replacing its pulse), and nodes still settling from earlier focus changes are left to finish
+    if (prev) this.tweenNodeScale(prev, base, { durationMs: 180, ease: 'easeOut' });
     if (!node) return;
     const big = base * this.theme.levelMap.focusBoost;
-    this.motion.tween({
-      scope: this.pulseScope,
-      bindings: [this.scaleBinding(node.root, big)],
+    this.tweenNodeScale(node, big, {
       durationMs: 200,
       ease: 'backOut',
       onComplete: () => {
-        if (this.highlighted !== node || node.root.destroyed || node.state === 'locked') return;
-        this.motion.tween({
-          scope: this.pulseScope,
-          bindings: [this.scaleBinding(node.root, big * 1.05)],
-          durationMs: 700,
-          ease: 'easeInOut',
-          repeat: Infinity,
-          yoyo: true
-        });
+        // the lift was not cancelled, so the node is alive and still ours; only a locked focus stays still
+        if (this.highlighted !== node || node.state === 'locked') return;
+        this.tweenNodeScale(node, big * 1.05, { durationMs: 700, ease: 'easeInOut', repeat: Infinity, yoyo: true });
       }
     });
   }
@@ -702,8 +710,14 @@ export class LevelMapView extends Container {
     return { get: () => target.scale.x, set: (v: number) => { target.scale.set(v); }, to };
   }
 
-  private tweenScale(target: Container, to: number, durationMs: number, ease: 'easeOut' | 'easeInOut' | 'backOut'): void {
-    this.motion.tween({ scope: this.pulseScope, bindings: [this.scaleBinding(target, to)], durationMs, ease });
+  /** Replaces the tween driving `node.root.scale`; the previous one is cancelled first, so the node never has two. */
+  private tweenNodeScale(
+    node: LevelNode,
+    to: number,
+    options: Pick<MotionTweenOptions, 'durationMs' | 'ease' | 'repeat' | 'yoyo' | 'onComplete'>
+  ): void {
+    node.scaleMotion?.cancel();
+    node.scaleMotion = this.motion.tween({ ...options, scope: this.pulseScope, bindings: [this.scaleBinding(node.root, to)] });
   }
 
   private startShinePulse(): void {

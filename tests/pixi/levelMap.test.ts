@@ -239,4 +239,73 @@ describe('LevelMapView', () => {
     expect(kit.uiErrors).toEqual([]);
     expect(kit.motionErrors).toEqual([]);
   });
+  // --- node lifecycle vs. the motions that write into a node (regression: the focus pulse outlived its node) ---
+
+  it('setLevelStars on the focused node moves the focus pulse to the redrawn node — nothing keeps writing into the destroyed root', () => {
+    const kit = createKit();
+    const { map } = createMap(kit);
+    advance(kit.core, 400); // the 200 ms focus lift is done: the infinite pulse runs on node 19
+    const old = node(map, 19);
+    expect(kit.motion.getStats().activeTweens).toBe(2); // shine + pulse
+    const big = map.theme.levelMap.nodeScale * map.theme.levelMap.focusBoost;
+    expect(old.scale.x).toBeGreaterThanOrEqual(big * 0.99);
+
+    // SoliPix onWin: the level just won (= the focused node) gets its stars while the pulse is running
+    map.setLevelStars(19, 3);
+    expect(old.destroyed).toBe(true);
+    const fresh = node(map, 19);
+    expect(fresh).not.toBe(old);
+    advance(kit.core, 1000);
+    // the old pulse must have been cancelled WITH its node: a binding-set into a destroyed root (scale is null after
+    // Container.destroy) is exactly the '[MotionRuntime] callback/binding threw' console error seen in the host
+    expect(kit.motionErrors).toEqual([]);
+    expect(kit.motion.getStats().bindingErrors).toBe(0);
+    // the redrawn node carries the focus: lifted and pulsing, and there is still exactly one pulse
+    expect(fresh.scale.x).toBeGreaterThanOrEqual(big * 0.99);
+    const s1 = fresh.scale.x;
+    advance(kit.core, 350); // half a pulse pass later the scale has moved
+    expect(fresh.scale.x).not.toBeCloseTo(s1, 4);
+    expect(kit.motion.getStats().activeTweens).toBe(2); // shine + the ONE pulse, now on the fresh node
+    expect(kit.uiErrors).toEqual([]);
+    map.destroy();
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+  });
+
+  it('a node redrawn while it settles back from the focus takes its settle tween down with it', () => {
+    const kit = createKit();
+    const { map } = createMap(kit);
+    advance(kit.core, 400);
+    map.scrollToLevel(18, false); // focus 19 → 18: node 19 settles back to the base scale over 180 ms
+    advance(kit.core, 16);
+    const settling = node(map, 19);
+    map.setLevelStars(19, 3); // redrawn mid-settle
+    expect(settling.destroyed).toBe(true);
+    advance(kit.core, 500);
+    expect(kit.motionErrors).toEqual([]);
+    expect(node(map, 19).scale.x).toBeCloseTo(map.theme.levelMap.nodeScale, 6);
+    expect(node(map, 18).scale.x).toBeGreaterThanOrEqual(map.theme.levelMap.nodeScale * map.theme.levelMap.focusBoost * 0.99);
+    map.destroy();
+  });
+
+  it('a locked-node shake is cancelled with its node when the map rebuilds', () => {
+    const kit = createKit();
+    const { map, locked } = createMap(kit);
+    const root = node(map, 21);
+    const y = map.levelScreenY(21);
+    map.emit('pointerdown', pointer(195, y) as never);
+    root.emit('pointerdown', pointer(195, y) as never);
+    advance(kit.core, 80);
+    root.emit('pointerup', pointer(195, y) as never);
+    map.emit('pointerup', pointer(195, y) as never);
+    advance(kit.core, 16);
+    expect(locked).toEqual([21]);
+    expect(kit.motion.getStats().activeSequences).toBe(1); // the 240 ms shake is in flight on node 21's inner container
+    const shaking = root.children[0] as Container;
+    map.setProgress({ levels: 36, currentLevel: 20 }); // rebuild while the shake runs
+    expect(shaking.destroyed).toBe(true);
+    advance(kit.core, 500);
+    expect(kit.motionErrors).toEqual([]);
+    expect(kit.motion.getStats().activeSequences).toBe(0);
+    map.destroy();
+  });
 });
