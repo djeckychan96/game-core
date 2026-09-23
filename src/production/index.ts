@@ -1,5 +1,5 @@
 // Production foundation V1 (root entry `game-core`): the Gameplay Contract V1 and the Game Production
-// Profile V1 — types plus the profile validator. No runtime reads them yet.
+// Profile V1 — types plus the profile validator. SaveGate (src/save) reads `id` + `save`.
 export { validateGameProductionProfile, PROGRESSION_MODES, PRODUCTION_OWNERS } from './profile';
 export type {
   ProductionOwner,

@@ -296,3 +296,14 @@ export type {
   GameplayInputQueries,
   GameplayContract
 } from './production';
+export { SaveGate } from './save';
+export type {
+  SaveGatePhase,
+  SaveReadStatus,
+  SaveGroupRead,
+  SaveLoadResult,
+  SaveWriteReason,
+  SaveWriteResult,
+  SaveGateSnapshot,
+  SaveGateOptions
+} from './save';

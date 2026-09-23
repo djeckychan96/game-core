@@ -88,5 +88,9 @@ export const GORODKI_PROFILE: GameProductionProfile = {
     coinPacks: [{ productId: 'gorodki_coins_small', amount: 100, fallbackPrice: '49 ₽' }]
   },
   platform: { target: 'dev' },
-  save: { keys: ['gorodki-progress-v2', 'gorodki-progress-v1', 'gorodki-background-v2'] }
+  // two read groups, like host/main.js createSaveStore: a legacy raw background must not lock the progress
+  save: {
+    keys: ['gorodki-progress-v2', 'gorodki-progress-v1', 'gorodki-background-v2'],
+    groups: [['gorodki-progress-v2', 'gorodki-progress-v1'], ['gorodki-background-v2']]
+  }
 };

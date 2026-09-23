@@ -1,6 +1,6 @@
 // Game Production Profile V1 — one game's production DECISIONS as one declarative object. Types and a
-// validator only, in the style of validateGamePlatformConfig: no section has behaviour yet (SaveGate, the
-// wallet, ads / purchase composition, Ready UI options and the bootstrap are the slices that read it).
+// validator, in the style of validateGamePlatformConfig. `id` + `save` are read by SaveGate (src/save); the
+// other sections have no behaviour yet (the wallet, ads / purchase composition, Ready UI options, bootstrap).
 import { validateAdsPolicy } from '../ads/policy';
 import type { AdsPolicy } from '../ads/policy';
 import { PLATFORM_PROVIDERS } from '../platform/config';
@@ -87,10 +87,17 @@ export interface ProductionPlatformProfile {
 /** The game's own keys in platform storage; their format stays the gameplay's. */
 export interface ProductionSaveProfile {
   keys: readonly string[];
+  /**
+   * Optional read groups (read-failure domains): a partition of `keys`, each group read by ONE
+   * `storage.get`, so a failed read leaves only its own group read-only. Absent = one group of every
+   * key. Gorodki: the progress (v2 + the v1 it migrates) and the background choice — a legacy raw
+   * background value fails its read and must not lock the progress.
+   */
+  groups?: readonly (readonly string[])[];
 }
 
 export interface GameProductionProfile {
-  /** The game's name for namespacing (ads policy name, storage prefixes). */
+  /** The game's name for namespacing (ads policy name, storage prefixes, the Core save record `<id>.core`). */
   id: string;
   progression: ProductionProgressionProfile;
   ui: ProductionUiProfile;
@@ -213,10 +220,47 @@ export function validateGameProductionProfile(profile: GameProductionProfile): v
 
   oneOf('platform.target', section('platform', root.platform, ['target']).target, PLATFORM_PROVIDERS);
 
-  const keys = section('save', root.save, ['keys']).keys;
+  checkSaveSection(root.id as string, root.save, fail);
+}
+
+/** The storage key of the game's Core-owned record (SaveGate): `<profile.id>.core`, never one of `save.keys`. */
+export function coreSaveKey(id: string): string {
+  return `${id}.core`;
+}
+
+/** The read groups of a save section: `groups` as given, else one group of every key. */
+export function saveReadGroups(save: ProductionSaveProfile): readonly (readonly string[])[] {
+  return save.groups ?? [save.keys];
+}
+
+/**
+ * The save section's rules, shared by validateGameProductionProfile and SaveGate: `keys` non-empty, unique
+ * and never the Core record's key; `groups`, when given, puts every key in exactly one group.
+ */
+export function checkSaveSection(id: string, save: unknown, fail: (message: string) => never): void {
+  if (!isObject(save)) fail('save must be an object');
+  const record = save as Record<string, unknown>;
+  for (const key of Object.keys(record)) if (key !== 'keys' && key !== 'groups') fail(`save.${key} is not a profile field (allowed: keys, groups)`);
+  const keys = record.keys;
   if (!Array.isArray(keys) || keys.length === 0) fail('save.keys must be a non-empty array');
-  (keys as unknown[]).forEach((key, i) => {
+  const list = keys as unknown[];
+  list.forEach((key, i) => {
     if (typeof key !== 'string' || key.trim() === '') fail(`save.keys[${i}] must be a non-empty string`);
-    if ((keys as unknown[]).indexOf(key) !== i) fail(`save.keys[${i}] "${key as string}" is listed twice`);
+    if (list.indexOf(key) !== i) fail(`save.keys[${i}] "${key as string}" is listed twice`);
+    if (key === coreSaveKey(id)) fail(`save.keys[${i}] "${key as string}" is the Core record's key — Core state never shares a key with the game's save`);
+  });
+  if (record.groups === undefined) return;
+  if (!Array.isArray(record.groups) || record.groups.length === 0) fail('save.groups must be a non-empty array when given');
+  const grouped = new Set<unknown>();
+  (record.groups as unknown[]).forEach((group, g) => {
+    if (!Array.isArray(group) || group.length === 0) fail(`save.groups[${g}] must be a non-empty array`);
+    (group as unknown[]).forEach((key, i) => {
+      if (!list.includes(key)) fail(`save.groups[${g}][${i}] must be one of save.keys`);
+      if (grouped.has(key)) fail(`save.groups[${g}][${i}] "${key as string}" is in two groups`);
+      grouped.add(key);
+    });
+  });
+  list.forEach((key, i) => {
+    if (!grouped.has(key)) fail(`save.keys[${i}] "${key as string}" is in no group — with save.groups every key belongs to exactly one`);
   });
 }

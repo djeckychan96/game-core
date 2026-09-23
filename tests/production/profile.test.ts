@@ -128,5 +128,17 @@ describe('rejected profiles', () => {
     rejects(variant(MINIMAL_PROFILE, (p) => { p.save.keys = []; }), /save\.keys must be a non-empty array/);
     rejects(variant(MINIMAL_PROFILE, (p) => { p.save.keys = ['a', 'a']; }), /save\.keys\[1\] "a" is listed twice/);
     rejects(variant(MINIMAL_PROFILE, (p) => { p.save.keys = ['']; }), /save\.keys\[0\] must be a non-empty string/);
+    rejects(variant(MINIMAL_PROFILE, (p) => { p.save.mirror = true; }), /save\.mirror is not a profile field \(allowed: keys, groups\)/);
+  });
+
+  test('save groups (SaveGate read-failure domains) partition save.keys; the Core record key is reserved', () => {
+    expect(GORODKI_PROFILE.save.groups).toEqual([['gorodki-progress-v2', 'gorodki-progress-v1'], ['gorodki-background-v2']]);
+    expect(SOLIPIX_PROFILE.save.groups).toBeUndefined(); // flat keys = one group, unchanged
+    rejects(variant(MINIMAL_PROFILE, (p) => { p.save.keys = ['minimal.core']; }), /save\.keys\[0\] "minimal\.core" is the Core record's key/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.save.groups = [['gorodki-progress-v2']]; }), /save\.keys\[1\] "gorodki-progress-v1" is in no group/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.save.groups[1].push('gorodki-progress-v1'); }), /save\.groups\[1\]\[1\] "gorodki-progress-v1" is in two groups/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.save.groups[1] = ['gorodki-music']; }), /save\.groups\[1\]\[0\] must be one of save\.keys/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.save.groups[1] = []; }), /save\.groups\[1\] must be a non-empty array/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.save.groups = 'all'; }), /save\.groups must be a non-empty array when given/);
   });
 });
