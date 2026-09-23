@@ -4,9 +4,10 @@
 //
 // Ported as is: SDK boot (20 s, one retry, 30 s "SDK is dead" memory), the non-blocking player with
 // guest mode and the background retry (5 × 15 s), the cloud read (8 s × 3 attempts, a total failure
-// REJECTS), the serialized + throttled `setData` (one in flight, ≥ 3 s apart), the ad lifecycle
-// (audio pause before the show, gameplay restored only if it was running, watchdog, the local
-// rewarded-availability latch), payments with every timeout. Left to the host on purpose: the local
+// REJECTS), the serialized + throttled `setData` (one in flight, ≥ 3 s apart; each call is the whole
+// confirmed object with the patch on top — the SDK replaces the object, `storage.set` stays a PATCH),
+// the ad lifecycle (audio pause before the show, gameplay restored only if it was running, watchdog,
+// the local rewarded-availability latch), payments with every timeout. Left to the host on purpose: the local
 // mirror, the rollback guard, `save_seq`, cloud identity adoption, the guest-conflict write guard,
 // the granted-token registry (PurchaseRuntime), restore / catalog retry schedules, `registerShown`.
 import type { PlatformPurchase, PlatformPurchaseResult } from '../../../purchases/types';
@@ -142,7 +143,14 @@ export class YandexPlatform implements GamePlatform {
   /** The SDK has no `isAvailable`: true until an `onError` / `onClose(false)` of a rewarded, then false for the session. */
   private rewardedAvailable = true;
   private saveInFlight = false;
+  /** The write chain in flight — what a `clear` that joins it waits for. Meaningful only while `saveInFlight`. */
+  private saveChain: Promise<void> | null = null;
   private pendingPatch: Record<string, unknown> | null = null;
+  /**
+   * The player's WHOLE cloud object as last confirmed: the one full `getData()` before the first write,
+   * then every successful `setData`. null = not read yet — no write is safe before it is.
+   */
+  private confirmedCloud: Record<string, unknown> | null = null;
   private lastSetDataAt = 0;
   private disposed = false;
 
@@ -343,10 +351,26 @@ export class YandexPlatform implements GamePlatform {
     // a GUEST has no cloud to read. Never `{}`: the host would take it for a new player and its
     // default profile would overwrite the cloud save once the player arrives.
     if (!player) throw new Error(YANDEX_NO_PLAYER);
+    const data = await this.fetchCloud(player, keys);
+    const result: Record<string, unknown> = {};
+    for (const key of keys) {
+      const value = data[key];
+      if (value !== undefined) result[key] = value;
+    }
+    return result;
+  }
+
+  /** `getData` (no keys = the player's whole object): 3 attempts with pauses, a total failure or a non-object THROWS. */
+  private async fetchCloud(player: YandexPlayer, keys?: readonly string[]): Promise<Record<string, unknown>> {
     let data: unknown;
     for (let attempt = 0; ; attempt++) {
       try {
-        data = await withTimeout(Promise.resolve().then(() => player.getData([...keys])), YANDEX_TIMEOUTS.getData, 'getData', this.timers);
+        data = await withTimeout(
+          Promise.resolve().then(() => (keys ? player.getData([...keys]) : player.getData())),
+          YANDEX_TIMEOUTS.getData,
+          'getData',
+          this.timers
+        );
         break;
       } catch (error) {
         // the profile is critical: 3 attempts with pauses; a total failure is THROWN
@@ -355,12 +379,7 @@ export class YandexPlatform implements GamePlatform {
       }
     }
     if (data === null || typeof data !== 'object' || Array.isArray(data)) throw new TypeError('yandex: getData answered a non-object');
-    const result: Record<string, unknown> = {};
-    for (const key of keys) {
-      const value = (data as Record<string, unknown>)[key];
-      if (value !== undefined) result[key] = value;
-    }
-    return result;
+    return data as Record<string, unknown>;
   }
 
   private async writeCloud(patch: Record<string, unknown>): Promise<boolean> {
@@ -371,48 +390,82 @@ export class YandexPlatform implements GamePlatform {
     }
     const player = this.player;
     if (!player) return false; // a guest: no cloud — the host keeps its mirror
-    const merged: Record<string, unknown> = { ...(this.pendingPatch ?? {}) };
-    for (const [key, value] of Object.entries(patch)) if (value !== undefined) merged[key] = value;
-    this.pendingPatch = merged;
+    this.queuePatch(patch);
     // already writing: never a parallel setData (the platform's rate limit hangs the calls) — the
     // chain in flight writes this patch with its final turn; answered ok at once, like the donor
     if (this.saveInFlight) return true;
-    this.saveInFlight = true;
-    try {
-      const wait = this.lastSetDataAt + YANDEX_TIMEOUTS.saveMinInterval - this.now();
-      if (wait > 0) await sleep(wait, this.timers);
-      do {
-        const data: Record<string, unknown> = this.pendingPatch ?? {};
-        this.pendingPatch = null;
-        this.lastSetDataAt = this.now();
-        try {
-          await withTimeout(Promise.resolve().then(() => player.setData(data, true)), YANDEX_TIMEOUTS.setData, 'setData', this.timers);
-        } catch (error) {
-          // a failure / timeout is NOT a success. The donor's retry re-reads the whole model; with
-          // patches the unwritten one is carried into the next write instead — nothing is lost.
-          this.pendingPatch = { ...data, ...(this.pendingPatch ?? {}) };
-          this.diagnostic('cloud_save_failed', error);
-          return false;
-        }
-        if (this.pendingPatch) await sleep(YANDEX_TIMEOUTS.saveMinInterval, this.timers);
-      } while (this.pendingPatch);
-      return true;
-    } finally {
-      this.saveInFlight = false;
-    }
+    return this.startSaveChain(player).then(
+      () => true,
+      () => false
+    );
   }
 
-  /** The donor's `user.reset`: `setData({ key: null }, true)`, outside the write throttle. */
+  /** The donor's `user.reset` = `{ key: null }` — a patch like any other, so it never drops the other keys either. */
   private async clearCloud(keys: readonly string[]): Promise<void> {
     await this.ensureSdkReady();
     const player = this.player;
     if (!player) throw new Error(YANDEX_NO_PLAYER);
     const patch: Record<string, unknown> = {};
-    for (const key of keys) {
-      patch[key] = null;
-      if (this.pendingPatch) delete this.pendingPatch[key]; // a cleared key must not come back with a carried patch
+    for (const key of keys) patch[key] = null; // also replaces a carried value of the key
+    this.queuePatch(patch);
+    // not answered at once like a joining set(): a reset waits for the write that carries it, and REJECTS
+    // with that write's error (the key stays queued for the next write, like any unwritten patch)
+    await (this.saveInFlight && this.saveChain ? this.saveChain : this.startSaveChain(player));
+  }
+
+  private queuePatch(patch: Record<string, unknown>): void {
+    const merged: Record<string, unknown> = { ...(this.pendingPatch ?? {}) };
+    for (const [key, value] of Object.entries(patch)) if (value !== undefined) merged[key] = value;
+    this.pendingPatch = merged;
+  }
+
+  private startSaveChain(player: YandexPlayer): Promise<void> {
+    this.saveInFlight = true;
+    this.saveChain = this.runSaveChain(player);
+    return this.saveChain;
+  }
+
+  /**
+   * One chain of `setData` turns: one call in flight, ≥ 3 s apart, until nothing is queued. `setData`
+   * REPLACES the player's whole object (the SDK: `getData` answers the data of the LAST `setData` call), so a
+   * turn never sends a bare patch: it sends the confirmed whole object with the queued patch on top, and
+   * that object becomes the confirmed one only once the call succeeded.
+   */
+  private async runSaveChain(player: YandexPlayer): Promise<void> {
+    try {
+      const wait = this.lastSetDataAt + YANDEX_TIMEOUTS.saveMinInterval - this.now();
+      if (wait > 0) await sleep(wait, this.timers);
+      do {
+        let base = this.confirmedCloud;
+        if (!base) {
+          // the first write of the session: ONE full read first — a write without the whole object would
+          // erase every key it does not name. A failed read writes nothing; the patch stays queued.
+          try {
+            base = this.confirmedCloud = await this.fetchCloud(player);
+          } catch (error) {
+            this.diagnostic('cloud_save_failed', error);
+            throw error;
+          }
+        }
+        const patch: Record<string, unknown> = this.pendingPatch ?? {};
+        this.pendingPatch = null;
+        const data: Record<string, unknown> = { ...base, ...patch };
+        this.lastSetDataAt = this.now();
+        try {
+          await withTimeout(Promise.resolve().then(() => player.setData(data, true)), YANDEX_TIMEOUTS.setData, 'setData', this.timers);
+        } catch (error) {
+          // a failure / timeout is NOT a success: the confirmed object stays, the unwritten patch is
+          // carried into the next write (the donor re-read its whole model instead) — nothing is lost
+          this.pendingPatch = { ...patch, ...(this.pendingPatch ?? {}) };
+          this.diagnostic('cloud_save_failed', error);
+          throw error;
+        }
+        this.confirmedCloud = data;
+        if (this.pendingPatch) await sleep(YANDEX_TIMEOUTS.saveMinInterval, this.timers);
+      } while (this.pendingPatch);
+    } finally {
+      this.saveInFlight = false;
     }
-    await withTimeout(Promise.resolve().then(() => player.setData(patch, true)), YANDEX_TIMEOUTS.setData, 'reset', this.timers);
   }
 
   // ---------------------------------------------------------------- gameplay

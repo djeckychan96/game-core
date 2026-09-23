@@ -25,7 +25,8 @@ const { PlatformRuntime, AdsRuntime, MemoryAdsStateStore, parseAdsTsv, PurchaseR
 const lines = [];
 const step = (name, detail) => lines.push(`${String(lines.length + 1).padStart(2, '0')}  ${name.padEnd(22)} ${detail}`);
 
-// ---- a fake Yandex Games SDK with the production shapes (callback ads, held receipts, key-value cloud)
+// ---- a fake Yandex Games SDK with the production shapes (callback ads, held receipts, a key-value cloud
+// whose setData REPLACES the whole object — the SDK: getData answers the data of the LAST setData call)
 const fake = {
   calls: [],
   cloud: { profile: { level: 20, coins: 0 } },
@@ -42,11 +43,11 @@ const player = {
   getData: (keys) => {
     fake.calls.push('getData');
     if (fake.getDataFailures > 0) return (fake.getDataFailures--, Promise.reject(new Error('network')));
-    return Promise.resolve(Object.fromEntries(keys.filter((k) => k in fake.cloud).map((k) => [k, fake.cloud[k]])));
+    return Promise.resolve(Object.fromEntries((keys ?? Object.keys(fake.cloud)).filter((k) => k in fake.cloud).map((k) => [k, fake.cloud[k]])));
   },
   setData: (data, flush) => {
     fake.calls.push(`setData:flush=${flush}`);
-    Object.assign(fake.cloud, JSON.parse(JSON.stringify(data)));
+    fake.cloud = JSON.parse(JSON.stringify(data));
     return Promise.resolve();
   }
 };
@@ -109,12 +110,15 @@ assert.deepEqual(await platform.storage.get(['profile', 'an']), { profile: { lev
 assert.equal(await platform.storage.set({ profile: { level: 21, coins: 50 }, an: { uuid: 'u-1' } }), true);
 assert.deepEqual(fake.cloud, { profile: { level: 21, coins: 50 }, an: { uuid: 'u-1' } });
 assert.ok(fake.calls.includes('setData:flush=true'));
+// a lone key (the SaveGate Core record) is a PATCH: the replacing setData must not drop the game's save
+assert.equal(await platform.storage.set({ 'game.core': { wallet: 20 } }), true);
+assert.deepEqual(fake.cloud, { profile: { level: 21, coins: 50 }, an: { uuid: 'u-1' }, 'game.core': { wallet: 20 } });
 fake.getDataFailures = 3;
 const readsBefore = fake.calls.filter((c) => c === 'getData').length;
 await assert.rejects(platform.storage.get(['profile']), /network/);
 assert.equal(fake.calls.filter((c) => c === 'getData').length - readsBefore, 3);
 assert.equal(typeof YANDEX_NO_PLAYER, 'string');
-step('cloud storage', 'getData ok; setData(patch, flush=true) ok; 3 failed reads → REJECT (never an empty profile)');
+step('cloud storage', 'getData ok; set(patch) = setData(whole object, flush=true), other keys kept; 3 failed reads → REJECT');
 
 // ---- catalog: the platform's READY price strings
 const refreshed = await platform.catalog.refresh();

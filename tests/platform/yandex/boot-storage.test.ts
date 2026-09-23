@@ -156,7 +156,7 @@ test('cloud read failure REJECTS: 3 attempts (8 s timeout each, pauses 1 s / 3 s
   await expect(garbage.platform.storage.get(['profile'])).rejects.toThrow(/non-object/);
 });
 
-test('cloud write: setData(patch, flush=true); one write in flight, later ones collapse into a final write ≥ 3 s apart', async () => {
+test('cloud write: setData(whole object, flush=true); one write in flight, later ones collapse into a final write ≥ 3 s apart', async () => {
   const h = makeYandex();
   const { storage } = h.platform;
   expect(await storage.set({ profile: { level: 1 }, an: { uuid: 'u' }, skipped: undefined })).toBe(true);
@@ -175,7 +175,7 @@ test('cloud write: setData(patch, flush=true); one write in flight, later ones c
   expect(h.fake.cloud).toEqual({ profile: { level: 3 }, an: { uuid: 'u', n: 2 } });
 });
 
-test('cloud write failure / timeout answers false, and the unwritten patch rides with the next write; clear = setData(null) outside the throttle', async () => {
+test('cloud write failure / timeout answers false, and the unwritten patch rides with the next write; clear = a { key: null } patch through the same chain', async () => {
   const h = makeYandex();
   const { storage } = h.platform;
   await h.platform.identity.ready();
@@ -197,10 +197,10 @@ test('cloud write failure / timeout answers false, and the unwritten patch rides
 
   h.fake.setDataMode = 'ok';
   await storage.clear(['profile']); // the donor's user.reset — and the carried `profile` patch must not come back
-  expect(h.fake.writes.at(-1)).toEqual({ data: { profile: null }, flush: true });
+  expect(h.fake.writes.at(-1)).toEqual({ data: { an: { uuid: 'u' }, profile: null }, flush: true });
   await vi.advanceTimersByTimeAsync(YANDEX_TIMEOUTS.saveMinInterval);
   expect(await storage.set({ an: { uuid: 'u2' } })).toBe(true);
-  expect(h.fake.cloud).toEqual({ an: { uuid: 'u2' } });
+  expect(h.fake.cloud).toEqual({ an: { uuid: 'u2' }, profile: null });
 });
 
 // ---------------------------------------------------------------- gameplay

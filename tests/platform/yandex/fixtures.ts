@@ -41,7 +41,14 @@ export class FakeYandex {
   getDataFailures = 0;
   getDataMode: FakeMode = 'ok';
   getDataAnswer: unknown = undefined;
-  setDataMode: FakeMode = 'ok';
+  /** `hold` = the call stays in flight until the test settles it through `heldWrites` (applied on success only). */
+  setDataMode: FakeMode | 'hold' = 'ok';
+  /**
+   * `replace` = production: `setData` REPLACES the player's whole object (the SDK docs: `getData` answers the
+   * data set by the LAST `setData` call). `merge` = a per-key SDK. The adapter must be a PATCH over both.
+   */
+  setDataSemantics: 'replace' | 'merge' = 'replace';
+  readonly heldWrites: Array<{ succeed(): void; fail(): void }> = [];
   readonly writes: Array<{ data: Record<string, unknown>; flush: boolean | undefined }> = [];
 
   catalog: YandexCatalogProduct[] = [];
@@ -77,10 +84,23 @@ export class FakeYandex {
       this.writes.push({ data: JSON.parse(JSON.stringify(data)), flush });
       if (this.setDataMode === 'hang') return never();
       if (this.setDataMode === 'fail') return Promise.reject(new Error('rate_limit'));
-      for (const [key, value] of Object.entries(data)) {
-        if (value === null) delete this.cloud[key];
-        else this.cloud[key] = JSON.parse(JSON.stringify(value));
+      const sent: Record<string, unknown> = JSON.parse(JSON.stringify(data));
+      const apply = (): void => {
+        if (this.setDataSemantics === 'replace') {
+          this.cloud = sent;
+          return;
+        }
+        for (const [key, value] of Object.entries(sent)) {
+          if (value === null) delete this.cloud[key];
+          else this.cloud[key] = value;
+        }
+      };
+      if (this.setDataMode === 'hold') {
+        return new Promise<void>((resolve, reject) => {
+          this.heldWrites.push({ succeed: () => (apply(), resolve()), fail: () => reject(new Error('rate_limit')) });
+        });
       }
+      apply();
       return Promise.resolve();
     }
   };
