@@ -307,3 +307,19 @@ export type {
   SaveGateSnapshot,
   SaveGateOptions
 } from './save';
+export { SoftCurrencyWallet } from './economy';
+export type {
+  SoftCurrencyWalletStatus,
+  SoftCurrencyWalletProblem,
+  SoftCurrencyRefusal,
+  SoftCurrencyChangeContext,
+  SoftCurrencyResult,
+  LevelRewardKind,
+  LevelRewardResult,
+  SoftCurrencyChangeKind,
+  SoftCurrencyChange,
+  SoftCurrencyListener,
+  SoftCurrencyWalletSnapshot,
+  SoftCurrencySaveGate,
+  SoftCurrencyWalletOptions
+} from './economy';

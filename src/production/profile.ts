@@ -1,6 +1,7 @@
 // Game Production Profile V1 — one game's production DECISIONS as one declarative object. Types and a
-// validator, in the style of validateGamePlatformConfig. `id` + `save` are read by SaveGate (src/save); the
-// other sections have no behaviour yet (the wallet, ads / purchase composition, Ready UI options, bootstrap).
+// validator, in the style of validateGamePlatformConfig. `id` + `save` are read by SaveGate (src/save), a
+// core-owned `economy.softCurrency` by SoftCurrencyWallet (src/economy); the other sections have no behaviour
+// yet (ads / purchase composition, Ready UI options, bootstrap).
 import { validateAdsPolicy } from '../ads/policy';
 import type { AdsPolicy } from '../ads/policy';
 import { PLATFORM_PROVIDERS } from '../platform/config';
@@ -26,16 +27,21 @@ export interface ProductionUiProfile {
   music: boolean;
 }
 
-/** Coins for one level end, an integer ≥ 0. Gets the gameplay's levelEnd result as is; Core never inspects the function. */
+/**
+ * Coins for one won level, an integer ≥ 0. Gets the gameplay's levelEnd result as is. SoftCurrencyWallet
+ * calls it (never for a fail); the validator never calls or inspects it.
+ */
 export type LevelRewardPolicy = (result: GameplayLevelResult) => number;
 
-/** Core keeps the balance (a new player starts at `startBalance`) and pays the level reward. */
+/** Core keeps the balance (SoftCurrencyWallet; a new player starts at `startBalance`) and pays the level reward. */
 export interface CoreSoftCurrencyProfile {
   id: string;
   owner: 'core';
   startBalance: number;
-  /** Omitted = no level reward (the currency comes from packs only). */
+  /** The FIRST completion of a level — paid once per level. Omitted = no level reward (the currency comes from packs only). */
   levelReward?: LevelRewardPolicy;
+  /** Any later win of a level. Omitted = replays pay nothing: no reward farming unless the game asks for it. */
+  replayReward?: LevelRewardPolicy;
 }
 
 /** The gameplay keeps the balance and its own level reward (SoliPix: its save + computeVictoryCoins); Core only grants into it (packs). */
@@ -170,17 +176,18 @@ export function validateGameProductionProfile(profile: GameProductionProfile): v
     if (!isObject(currency)) fail('economy.softCurrency must be false or an object');
     const owner = (currency as Record<string, unknown>).owner;
     oneOf('economy.softCurrency.owner', owner, PRODUCTION_OWNERS);
+    const coreOnly = ['startBalance', 'levelReward', 'replayReward'];
     if (owner === 'gameplay') {
-      const { startBalance, levelReward } = currency as Record<string, unknown>;
-      if (startBalance !== undefined || levelReward !== undefined) {
-        fail(`economy.softCurrency.${startBalance !== undefined ? 'startBalance' : 'levelReward'} is for a core-owned currency — a gameplay-owned one keeps its own balance and rewards`);
-      }
+      const field = coreOnly.find((key) => (currency as Record<string, unknown>)[key] !== undefined);
+      if (field) fail(`economy.softCurrency.${field} is for a core-owned currency — a gameplay-owned one keeps its own balance and rewards`);
     }
-    const soft = section('economy.softCurrency', currency, owner === 'core' ? ['id', 'owner', 'startBalance', 'levelReward'] : ['id', 'owner']);
+    const soft = section('economy.softCurrency', currency, owner === 'core' ? ['id', 'owner', ...coreOnly] : ['id', 'owner']);
     name('economy.softCurrency.id', soft.id);
     if (owner === 'core') {
       if (!Number.isSafeInteger(soft.startBalance) || (soft.startBalance as number) < 0) fail('economy.softCurrency.startBalance must be an integer ≥ 0 for a core-owned currency');
-      if (soft.levelReward !== undefined && typeof soft.levelReward !== 'function') fail('economy.softCurrency.levelReward must be a function (result) => integer ≥ 0');
+      for (const field of ['levelReward', 'replayReward']) {
+        if (soft[field] !== undefined && typeof soft[field] !== 'function') fail(`economy.softCurrency.${field} must be a function (result) => integer ≥ 0`);
+      }
     }
   }
 

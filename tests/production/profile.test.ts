@@ -39,10 +39,12 @@ describe('valid profiles', () => {
     expect(() => validateGameProductionProfile(MINIMAL_PROFILE)).not.toThrow();
   });
 
-  test('the validator never calls or inspects levelReward; the policy itself maps a levelEnd result to an integer ≥ 0', () => {
+  test('the validator never calls or inspects levelReward / replayReward; the policy itself maps a levelEnd result to an integer ≥ 0', () => {
     const levelReward = vi.fn(() => 7);
-    validateGameProductionProfile(variant(GORODKI_PROFILE, (p) => { p.economy.softCurrency.levelReward = levelReward; }));
+    const replayReward = vi.fn(() => 1);
+    validateGameProductionProfile(variant(GORODKI_PROFILE, (p) => { p.economy.softCurrency.levelReward = levelReward; p.economy.softCurrency.replayReward = replayReward; }));
     expect(levelReward).not.toHaveBeenCalled();
+    expect(replayReward).not.toHaveBeenCalled();
     const soft = GORODKI_PROFILE.economy.softCurrency;
     if (soft === false || soft.owner !== 'core' || !soft.levelReward) throw new Error('fixture');
     expect(soft.levelReward({ level: 4, levelId: 'classic-9', win: true, firstCompletion: true, stars: 3, metrics: { throws: 2, par: 3 } })).toBe(30);
@@ -88,6 +90,8 @@ describe('rejected profiles', () => {
     rejects(variant(SOLIPIX_PROFILE, (p) => { p.economy.softCurrency.startBalance = 100; }), /startBalance is for a core-owned currency/);
     rejects(variant(SOLIPIX_PROFILE, (p) => { p.economy.softCurrency.levelReward = () => 5; }), /levelReward is for a core-owned currency/);
     rejects(variant(GORODKI_PROFILE, (p) => { p.economy.softCurrency.levelReward = { first: 10 }; }), /levelReward must be a function/);
+    rejects(variant(SOLIPIX_PROFILE, (p) => { p.economy.softCurrency.replayReward = () => 5; }), /replayReward is for a core-owned currency/);
+    rejects(variant(GORODKI_PROFILE, (p) => { p.economy.softCurrency.replayReward = 5; }), /replayReward must be a function/);
     rejects(variant(GORODKI_PROFILE, (p) => { p.economy.softCurrency.id = ''; }), /economy\.softCurrency\.id must be a name/);
     rejects(variant(MINIMAL_PROFILE, (p) => { p.economy.softCurrency = true; }), /economy\.softCurrency must be false or an object/);
   });
