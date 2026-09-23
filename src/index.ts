@@ -261,3 +261,38 @@ export { createPurchaseAdsHandler, isConfirmedPayment } from './composition/purc
 export type { PurchaseAdsSink } from './composition/purchaseAds';
 export { createPlatformAnalyticsContext, readPlatformAnalyticsFields } from './composition/platformAnalytics';
 export type { PlatformAnalyticsSource, PlatformAnalyticsFields, PlatformAnalyticsHostContext } from './composition/platformAnalytics';
+export { validateGameProductionProfile, PROGRESSION_MODES, PRODUCTION_OWNERS } from './production';
+export type {
+  ProductionOwner,
+  ProgressionMode,
+  ProductionProgressionProfile,
+  ProductionUiProfile,
+  LevelRewardPolicy,
+  CoreSoftCurrencyProfile,
+  GameplaySoftCurrencyProfile,
+  SoftCurrencyProfile,
+  ProductionEconomyProfile,
+  ProductionAdsProfile,
+  ProductionNoAdsProduct,
+  ProductionCoinPack,
+  ProductionMonetizationProfile,
+  ProductionPlatformProfile,
+  ProductionSaveProfile,
+  GameProductionProfile,
+  GameplayMetricValue,
+  GameplayMetrics,
+  GameplayLevelRef,
+  GameplayLevelStart,
+  GameplayLevelResult,
+  GameplayLevelExit,
+  GameplayEvents,
+  GameplayLevelProgress,
+  GameplayProgress,
+  GameplayPauseReason,
+  GameplayCommands,
+  GameplayFrameOwner,
+  GameplayInputMode,
+  GameplayIntegrationModes,
+  GameplayInputQueries,
+  GameplayContract
+} from './production';
