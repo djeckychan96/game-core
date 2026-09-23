@@ -69,7 +69,7 @@ flowchart TB
 | Реальный iPhone | PASS | PASS |
 | Core UI | PASS | PASS |
 | Сохранения | PASS | PASS |
-| Soft currency | существующая экономика игры | добавлена через `SoftCurrencyWallet` |
+| Soft currency | существующая экономика игры | добавлена через `SoftCurrencyWallet`, монеты в HUD |
 | Экран результата | свой DOM-экран игры | `ResultWindowView` Core |
 | Реальный Yandex Games draft | PASS | — |
 | Реальные реклама и платежи | PASS | — |
@@ -88,16 +88,14 @@ flowchart TB
 
 <table>
   <tr>
-    <td align="center" valign="top" width="25%"><img src="docs/images/gorodki-wallet-hud.png" width="200" alt="Городки: gameplay и монеты в HUD Game Core"></td>
-    <td align="center" valign="top" width="25%"><img src="docs/images/gorodki-result-reward.png" width="200" alt="Городки: ResultWindowView Game Core с наградой 10"></td>
-    <td align="center" valign="top" width="25%"><img src="docs/images/solipix-production-ui.png" width="200" alt="SoliPix: DOM gameplay и HUD Game Core"></td>
-    <td align="center" valign="top" width="25%"><img src="docs/images/level-map.png" width="200" alt="SoliPix: LevelMapView Game Core"></td>
+    <td align="center" valign="top" width="33%"><img src="docs/images/solipix-production-ui.png" width="240" alt="SoliPix: DOM gameplay и HUD Game Core"></td>
+    <td align="center" valign="top" width="33%"><img src="docs/images/level-map.png" width="240" alt="SoliPix: LevelMapView Game Core"></td>
+    <td align="center" valign="top" width="33%"><img src="docs/images/gorodki-result-reward.png" width="240" alt="Городки: ResultWindowView Game Core с наградой 10"></td>
   </tr>
   <tr>
-    <td valign="top">Городки: 3D-gameplay и HUD Core с монетами.</td>
-    <td valign="top">Городки: <code>ResultWindowView</code> с наградой.</td>
     <td valign="top">SoliPix: DOM-gameplay и HUD Core.</td>
     <td valign="top">SoliPix: карта уровней Core.</td>
+    <td valign="top">Городки: экран результата Core с наградой.</td>
   </tr>
 </table>
 
