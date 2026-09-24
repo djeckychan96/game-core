@@ -7,7 +7,7 @@ import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
 import { NoAdsWindowView } from '../../src/pixi/NoAdsWindowView';
 import { StarterPackWindowView } from '../../src/pixi/StarterPackWindowView';
 import type { UiButton } from '../../src/pixi/UiButton';
-import type { Container, Text } from 'pixi.js';
+import type { Container, Rectangle, Text } from 'pixi.js';
 
 function field<T>(view: object, name: string): T {
   const value = (view as Record<string, unknown>)[name];
@@ -121,6 +121,253 @@ describe('ResultWindowView', () => {
     expect(panel.x).toBeCloseTo(160, 1);
     expect(panel.y).toBeCloseTo(20 + 528 / 2, 1);
     view.destroy();
+  });
+});
+
+describe('ResultWindowView outcome: fail', () => {
+  type Shown = { visible: boolean; y: number; height: number; x: number };
+  const FAIL: ResultWindowParams = { level: 7, stars: 3, rewardCoins: 50, outcome: 'fail' };
+
+  function create(kit: ReturnType<typeof createKit>, log: string[], withExit = true): ResultWindowView {
+    return new ResultWindowView({
+      ui: kit.ui, motion: kit.motion, textures: kit.textures,
+      onNext: (p) => log.push(`next:${p.level}:${p.outcome ?? 'default'}`),
+      onRetry: (p) => log.push(`retry:${p.level}:${p.outcome ?? 'default'}`),
+      ...(withExit ? { onExit: (p: ResultWindowParams) => log.push(`exit:${p.level}:${p.outcome ?? 'default'}`) } : {}),
+      onDismiss: (r) => log.push(`dismiss:${r}`)
+    });
+  }
+
+  /** Everything a player can see or tap, in panel design units. */
+  function snapshot(view: ResultWindowView) {
+    const panel = field<Container>(view, 'panel');
+    const b = panel.getLocalBounds();
+    const btn = (name: string) => {
+      const x = field<UiButton>(view, name);
+      return { visible: x.visible, enabled: x.enabled, x: x.x, y: x.y, label: x.labelText?.text };
+    };
+    return {
+      title: field<Text>(view, 'titleText').text,
+      subtitle: field<Text>(view, 'subtitleText').text,
+      reward: ['rewardCaption', 'rewardCoin', 'rewardAmount'].map((n) => field<Shown>(view, n).visible),
+      amount: field<Text>(view, 'rewardAmount').text,
+      next: btn('nextButton'), retry: btn('retryButton'), failRetry: btn('failRetryButton'), exit: btn('exitButton'),
+      close: field<UiButton>(view, 'closeButton').position.y,
+      bounds: [b.x, b.y, b.width, b.height].map((v) => Math.round(v)),
+      stars: field<Shown[]>(view, 'stars').map((s) => s.visible)
+    };
+  }
+
+  /** Largest vertical hole between the visible panel children (design units). */
+  function largestGap(view: ResultWindowView): number {
+    const panel = field<Container>(view, 'panel');
+    const spans = panel.children.filter((c) => c.visible).map((c) => [c.y - c.height / 2, c.y + c.height / 2] as const).sort((a, b) => a[0] - b[0]);
+    let gap = 0;
+    let bottom = spans[0]![1];
+    for (const [top, end] of spans.slice(1)) { gap = Math.max(gap, top - bottom); bottom = Math.max(bottom, end); }
+    return gap;
+  }
+
+  it('1. default outcome is win: reward, CONTINUE, RETRY, stars — the fail buttons never show', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show(RESULT);
+    advance(kit.core, 2000);
+    const s = snapshot(view);
+    expect(s.subtitle).toBe('COMPLETED!');
+    expect(s.reward).toEqual([true, true, true]);
+    expect(s.amount).toBe('100');
+    expect(s.next).toMatchObject({ visible: true, enabled: true, x: -230, y: 310, label: 'CONTINUE' });
+    expect(s.retry).toMatchObject({ visible: true, enabled: true, x: 230, y: 310, label: 'RETRY' });
+    expect(s.failRetry).toMatchObject({ visible: false, enabled: false });
+    expect(s.exit).toMatchObject({ visible: false, enabled: false });
+    expect(s.stars).toEqual([true, true, false]);
+    view.destroy();
+  });
+
+  it('2. explicit outcome win renders exactly like the default', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.show(RESULT);
+    advance(kit.core, 2000);
+    const byDefault = snapshot(view);
+    view.close('programmatic');
+    advance(kit.core, 200);
+    view.show({ ...RESULT, outcome: 'win' });
+    advance(kit.core, 2000);
+    expect(snapshot(view)).toEqual(byDefault);
+    view.destroy();
+  });
+
+  it('3. fail hides the stars and pops none of them', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.show(FAIL);
+    advance(kit.core, 460); // the entrance ends here; a win would start the star pops now
+    expect(view.state).toBe('shown');
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    advance(kit.core, 1500);
+    expect(snapshot(view).stars).toEqual([false, false, false]);
+    view.destroy();
+  });
+
+  it('4. fail hides the reward caption, icon and value and leaves no empty reward space', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.show(RESULT);
+    advance(kit.core, 600);
+    const winGap = largestGap(view);
+    view.close('programmatic');
+    advance(kit.core, 200);
+    view.show(FAIL);
+    advance(kit.core, 600);
+    const s = snapshot(view);
+    expect(s.title).toBe('LEVEL 7');
+    expect(s.subtitle).toBe('FAILED');
+    expect(s.reward).toEqual([false, false, false]);
+    expect(s.next).toMatchObject({ visible: false, enabled: false });
+    expect(s.retry).toMatchObject({ visible: false, enabled: false });
+    // no hole where the reward was: every gap is at most the victory layout's own spacing
+    expect(largestGap(view)).toBeLessThanOrEqual(Math.max(winGap, 80));
+    // the shorter composition is centered in the safe area, not hung from the victory origin
+    view.resize(390, 844, { insets: { top: 40, bottom: 20 } });
+    const panel = field<Container>(view, 'panel');
+    const b = panel.getLocalBounds();
+    expect(panel.y + (b.y + b.height / 2) * panel.scale.y).toBeCloseTo(40 + 784 / 2, 1);
+    expect(panel.scale.x * b.width).toBeLessThanOrEqual(390 * 0.88 + 0.01);
+    view.destroy();
+  });
+
+  it('5. fail primary is a green RETRY: onRetry runs once after the close, never onNext', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show(FAIL);
+    advance(kit.core, 600);
+    const s = snapshot(view);
+    const primary = field<UiButton>(view, 'failRetryButton');
+    expect(s.failRetry).toMatchObject({ visible: true, enabled: true, x: 0, label: 'RETRY' });
+    expect(primary.background.texture).toBe(kit.textures.btnGreen);
+    expect(s.failRetry.y).toBeLessThan(s.exit.y); // primary on top
+    tap(primary, kit);
+    expect(view.state).toBe('leaving');
+    expect(log).toEqual([]);
+    advance(kit.core, 200);
+    expect(view.state).toBe('hidden');
+    expect(log).toEqual(['retry:7:fail']);
+    view.destroy();
+  });
+
+  it('6. the secondary EXIT exists only with onExit and runs it as a close continuation', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show(FAIL);
+    advance(kit.core, 600);
+    const exit = field<UiButton>(view, 'exitButton');
+    expect(snapshot(view).exit).toMatchObject({ visible: true, enabled: true, x: 0, label: 'EXIT' });
+    expect(exit.background.texture).toBe(kit.textures.btnYellow);
+    // hit areas: the two stacked buttons and the × never overlap
+    const rect = (name: string) => {
+      const b = field<UiButton>(view, name);
+      const h = b.hitArea as Rectangle;
+      return { l: b.x + h.x * b.scale.x, t: b.y + h.y * b.scale.y, r: b.x + (h.x + h.width) * b.scale.x, bt: b.y + (h.y + h.height) * b.scale.y };
+    };
+    const [p, e, c] = [rect('failRetryButton'), rect('exitButton'), rect('closeButton')];
+    expect(p.bt).toBeLessThanOrEqual(e.t);
+    expect(c.bt <= p.t || c.l >= p.r).toBe(true);
+    tap(exit, kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['exit:7:fail']);
+
+    const kit2 = createKit();
+    const log2: string[] = [];
+    const bare = create(kit2, log2, false);
+    bare.show(FAIL);
+    advance(kit2.core, 600);
+    expect(snapshot(bare).exit).toMatchObject({ visible: false, enabled: false });
+    expect(snapshot(bare).failRetry).toMatchObject({ visible: true, enabled: true });
+    tap(field<UiButton>(bare, 'exitButton'), kit2);
+    advance(kit2.core, 200);
+    expect(log2).toEqual([]);
+    expect(bare.state).toBe('shown');
+    view.destroy();
+    bare.destroy();
+  });
+
+  it('7. × / backdrop run only onDismiss, exactly once; nothing double-fires while leaving', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show(FAIL);
+    advance(kit.core, 600);
+    const close = field<UiButton>(view, 'closeButton');
+    tap(close, kit);
+    expect(view.state).toBe('leaving');
+    tap(close, kit);
+    tap(field<UiButton>(view, 'failRetryButton'), kit);
+    tap(field<UiButton>(view, 'exitButton'), kit);
+    expect(view.close('background')).toBe(false);
+    advance(kit.core, 200);
+    expect(log).toEqual(['dismiss:button']);
+
+    view.show(FAIL);
+    advance(kit.core, 600);
+    tap(field<UiButton>(view, 'failRetryButton'), kit);
+    tap(close, kit);
+    tap(field<UiButton>(view, 'exitButton'), kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['dismiss:button', 'retry:7:fail']);
+
+    view.show(FAIL);
+    advance(kit.core, 600);
+    view.close('background');
+    advance(kit.core, 200);
+    expect(log).toEqual(['dismiss:button', 'retry:7:fail', 'dismiss:background']);
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+  });
+
+  it('8. win ⇄ fail across repeated show / close / cancel keeps each layout intact', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    const buttons = kit.ui.getStats().buttons;
+    view.show(RESULT);
+    advance(kit.core, 2000);
+    const win = snapshot(view);
+    view.close('programmatic');
+    advance(kit.core, 200);
+    view.show(FAIL);
+    advance(kit.core, 600);
+    const fail = snapshot(view);
+    for (let i = 0; i < 3; i++) {
+      tap(field<UiButton>(view, 'failRetryButton'), kit);
+      advance(kit.core, 200);
+      view.show({ ...RESULT, outcome: 'win' });
+      advance(kit.core, 2000);
+      expect(snapshot(view)).toEqual(win);
+      tap(field<UiButton>(view, 'nextButton'), kit);
+      advance(kit.core, 200);
+      view.show(FAIL);
+      advance(kit.core, 100);
+      kit.core.cancelAll(); // cancelled mid-entrance: no continuation
+      expect(view.state).toBe('hidden');
+      view.show(FAIL);
+      advance(kit.core, 600);
+      expect(snapshot(view)).toEqual(fail);
+    }
+    view.close('programmatic');
+    advance(kit.core, 200);
+    // a programmatic close runs the default continuation (onDismiss) like on every ModalWindow
+    expect(log).toEqual(['dismiss:programmatic', 'retry:7:fail', 'next:19:win', 'retry:7:fail', 'next:19:win', 'retry:7:fail', 'next:19:win', 'dismiss:programmatic']);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    expect(kit.ui.getStats().buttons).toBe(buttons);
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+    expect(kit.ui.getStats().windows).toBe(0);
   });
 });
 

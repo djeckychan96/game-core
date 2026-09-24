@@ -7,14 +7,20 @@ import { resolveTheme } from './theme';
 
 export interface ResultWindowParams {
   level: number;
-  /** 0..3 stars, popped in over the ribbon one by one; 0 / undefined draws no stars. */
+  /**
+   * `'win'` (default) is the victory layout; `'fail'` is the final-defeat layout: the ribbon with
+   * `LEVEL <n>` / `FAILED`, no stars, no reward, a green RETRY (`onRetry`) over an optional
+   * yellow EXIT (`onExit`). Callbacks receive these params, so they can read the outcome.
+   */
+  outcome?: 'win' | 'fail';
+  /** 0..3 stars, popped in over the ribbon one by one; 0 / undefined draws no stars. Ignored on fail. */
   stars?: number;
-  /** Coins earned (shown under the big coin). */
+  /** Coins earned (shown under the big coin). Ignored on fail (pass 0). */
   rewardCoins: number;
-  /** Ribbon lines. Defaults: `LEVEL <n>` / `COMPLETED!` */
+  /** Ribbon lines. Defaults: `LEVEL <n>` / `COMPLETED!` (win) or `FAILED` (fail). */
   title?: string;
   subtitle?: string;
-  /** Show the secondary (retry) button. Default true. */
+  /** Show the secondary (retry) button on a win. Default true. On a fail RETRY is the primary. */
   retry?: boolean;
 }
 
@@ -22,31 +28,43 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
   id?: string;
   /** Primary button label. Default `CONTINUE`. */
   nextLabel?: string;
-  /** Secondary button label. Default `RETRY`. */
+  /** Retry label (the win's secondary, the fail's primary). Default `RETRY`. */
   retryLabel?: string;
+  /** The fail's secondary button label. Default `EXIT`. */
+  exitLabel?: string;
   /** Caption above the reward. Default `REWARDS`. */
   rewardsLabel?: string;
   /** Business continuations: run only after the window has fully closed. */
   onNext: (params: ResultWindowParams) => void;
   onRetry?: (params: ResultWindowParams) => void;
+  /** The fail's EXIT (e.g. back to the map); the button is drawn only when this is given. */
+  onExit?: (params: ResultWindowParams) => void;
 }
 
 /**
- * Level result / victory window — the donor's LevelComplete geometry: no panel, the red ribbon at
+ * Level result window. Win: the donor's LevelComplete geometry — no panel, the red ribbon at
  * y −317 with `LEVEL n` / `COMPLETED!`, `REWARDS` caption, the big coin with the amount under it,
  * green CONTINUE at (−230, 310) and a yellow secondary at (230, 310), × at (445, −369); slate
  * 0.94 backdrop and the 440 ms back.out(1.9) pop. Optional stars crown the ribbon.
- * Next/Retry are close() continuations, so a cancelled window never triggers navigation.
+ * Fail: the same ribbon and ×, then RETRY (green, primary) and EXIT (yellow, smaller) stacked
+ * right under it — no stars, no reward space — with the shorter box centered in the safe area.
+ * Next/Retry/Exit are close() continuations, so a cancelled window never triggers navigation;
+ * the × and the backdrop run only `onDismiss(reason)`, never a retry or an exit.
  */
 export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private readonly titleText: Text;
   private readonly subtitleText: Text;
   private readonly stars: Sprite[] = [];
+  private readonly rewardCaption: Text;
+  private readonly rewardCoin: Sprite;
   private readonly rewardAmount: Text;
   private readonly nextButton: UiButton;
   private readonly retryButton: UiButton;
+  private readonly failRetryButton: UiButton;
+  private readonly exitButton: UiButton;
   private readonly onNext: (params: ResultWindowParams) => void;
   private readonly onRetry: ((params: ResultWindowParams) => void) | null;
+  private readonly onExit: ((params: ResultWindowParams) => void) | null;
   private params: ResultWindowParams | null = null;
 
   constructor(options: ResultWindowViewOptions) {
@@ -59,6 +77,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     });
     this.onNext = options.onNext;
     this.onRetry = options.onRetry ?? null;
+    this.onExit = options.onExit ?? null;
     const t = this.textures;
 
     const ribbon = this.sprite(t.victoryRibbon, 1019, 239);
@@ -87,33 +106,53 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.subtitleText.y = -304;
     this.panel.addChild(this.titleText, this.subtitleText);
 
-    const caption = createLabel(this.theme, options.rewardsLabel ?? 'REWARDS', { fontSize: 38, stroke: 9 });
-    caption.y = -139;
-    const coin = this.sprite(t.coinBig, 196, 210);
+    this.rewardCaption = createLabel(this.theme, options.rewardsLabel ?? 'REWARDS', { fontSize: 38, stroke: 9 });
+    this.rewardCaption.y = -139;
+    this.rewardCoin = this.sprite(t.coinBig, 196, 210);
     this.rewardAmount = createLabel(this.theme, '0', { fontSize: 88, stroke: 9 });
     this.rewardAmount.y = 101;
-    this.panel.addChild(caption, coin, this.rewardAmount);
+    this.panel.addChild(this.rewardCaption, this.rewardCoin, this.rewardAmount);
 
     this.nextButton = this.createButton('next', t.btnGreen, options.nextLabel ?? 'CONTINUE', () => this.finish('next'));
     this.nextButton.position.set(-230, 310);
     this.retryButton = this.createButton('retry', t.btnYellow, options.retryLabel ?? 'RETRY', () => this.finish('retry'));
     this.retryButton.position.set(230, 310);
-    this.panel.addChild(this.nextButton, this.retryButton);
+    // fail: the win's CONTINUE size for the primary, the secondary at 0.85 of it, 26 units apart
+    this.failRetryButton = this.createButton('fail-retry', t.btnGreen, options.retryLabel ?? 'RETRY', () => this.finish('retry'));
+    this.failRetryButton.position.set(0, -48);
+    this.exitButton = this.createButton('exit', t.btnYellow, options.exitLabel ?? 'EXIT', () => this.finish('exit'), 373, 176, 53, -8);
+    this.exitButton.position.set(0, 170);
+    this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
     this.placeClose();
   }
 
   protected applyParams(params: ResultWindowParams): void {
     this.params = params;
+    const fail = params.outcome === 'fail';
     this.titleText.text = params.title ?? `LEVEL ${params.level}`;
     fitLabelWidth(this.titleText, 760);
-    this.subtitleText.text = params.subtitle ?? 'COMPLETED!';
+    this.subtitleText.text = params.subtitle ?? (fail ? 'FAILED' : 'COMPLETED!');
     fitLabelWidth(this.subtitleText, 760);
-    this.rewardAmount.text = formatAmount(params.rewardCoins);
-    const showRetry = (params.retry ?? true) && this.onRetry !== null;
-    this.retryButton.visible = showRetry;
-    this.retryButton.setEnabled(showRetry);
+    this.rewardCaption.visible = !fail;
+    this.rewardCoin.visible = !fail;
+    this.rewardAmount.visible = !fail;
+    this.rewardAmount.text = fail ? '' : formatAmount(params.rewardCoins);
+    const showRetry = !fail && (params.retry ?? true) && this.onRetry !== null;
+    setShown(this.nextButton, !fail);
+    setShown(this.retryButton, showRetry);
     this.nextButton.x = showRetry ? -230 : 0;
+    setShown(this.failRetryButton, fail);
+    setShown(this.exitButton, fail && this.onExit !== null);
     for (const star of this.stars) star.visible = false;
+  }
+
+  /** A fail is shorter than a win: center its measured box, not the victory origin. */
+  protected override layoutPanel(): void {
+    super.layoutPanel();
+    if (this.params?.outcome !== 'fail') return;
+    const bounds = this.panelBounds();
+    const safe = this.safeArea();
+    this.setIdle(safe.x + safe.width / 2, safe.y + safe.height / 2 - (bounds.y + bounds.height / 2) * this.fitScale, this.fitScale);
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
@@ -121,7 +160,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   }
 
   protected override onShown(): void {
-    const earned = Math.max(0, Math.min(3, Math.round(this.params?.stars ?? 0)));
+    const earned = this.params?.outcome === 'fail' ? 0 : Math.max(0, Math.min(3, Math.round(this.params?.stars ?? 0)));
     for (let i = 0; i < earned; i++) {
       const star = this.stars[i];
       if (!star) continue;
@@ -142,12 +181,19 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     for (const star of this.stars) star.visible = false;
   }
 
-  private finish(action: 'next' | 'retry'): void {
+  private finish(action: 'next' | 'retry' | 'exit'): void {
     const params = this.params;
     if (!params) return;
     this.close('button', () => {
       if (action === 'next') this.onNext(params);
-      else this.onRetry?.(params);
+      else if (action === 'retry') this.onRetry?.(params);
+      else this.onExit?.(params);
     });
   }
+}
+
+/** Hidden buttons are also disabled, so no path can tap them. */
+function setShown(button: UiButton, shown: boolean): void {
+  button.visible = shown;
+  button.setEnabled(shown);
 }

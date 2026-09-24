@@ -129,7 +129,9 @@ async function boot(): Promise<void> {
       map.setProgress({ levels: state.levels, currentLevel: state.currentLevel });
       map.scrollToLevel(state.currentLevel);
     },
-    onRetry: (params) => openResult(params.level)
+    onRetry: (params) => openResult(params.level),
+    // outcome 'fail' only: EXIT goes back to the map (the window has already closed)
+    onExit: (params) => map.scrollToLevel(params.level)
   });
   const shopWindow = new ShopWindowView({
     ui, motion, textures,
@@ -174,6 +176,8 @@ async function boot(): Promise<void> {
     const stars = 1 + ((level * 7) % 3); // deterministic demo stars 1..3
     resultWindow.show({ level, stars, rewardCoins: 40 + (level % 5) * 15, retry: (won?.stars ?? 0) > 0 || level < state.currentLevel });
   };
+  /** Final defeat: RETRY replays the level (the demo then wins it), EXIT returns to the map. */
+  const openFail = (level: number) => resultWindow.show({ level, rewardCoins: 0, outcome: 'fail' });
   const openShop = () => shopWindow.show({ items: DEMO_SHOP_ITEMS });
   const openLives = () => livesWindow.show({ lives: state.lives, maxLives: DEMO_MAX_LIVES, timerText: formatTimer(state.refillSeconds), refillPrice: DEMO_REFILL_PRICE });
   const openSettings = () => settingsWindow.show({ ...settings, version: `VERSION ${BUILD_INFO.version}` });
@@ -682,7 +686,7 @@ async function boot(): Promise<void> {
     resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow,
     playButton, toolbar, offerStrip, starterIcon, noAdsIcon,
     ripple, ripplePresets: RIPPLE_PRESETS, setRipplePreset,
-    openResult, openShop, openLives, openSettings, openNoAds, openStarter, openOffer,
+    openResult, openFail, openShop, openLives, openSettings, openNoAds, openStarter, openOffer,
     offers, offerState, offerEvents,
     offerClock: { now: () => Math.floor(clock.nowMs / 1000), jump: (seconds: number) => jumpClock(seconds, `+${seconds}s`), expire: offerExpire, next: offerNext, reset: offerReset },
     offerDemo: { shownOfferId: () => shownOfferId, purchasing, iconTimer: offerIconTimer, status: offerStatus },
