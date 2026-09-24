@@ -40,7 +40,8 @@ export interface PlatformPurchaseResult extends PlatformPurchase {
  *   next `restore()` finishes the consume without a second grant.
  * Under both, each receipt of a pass is granted as soon as its own order allows — never after
  * another receipt's consume. An adapter without `consume` has nothing to wait for — both read as
- * `before-consume`.
+ * `before-consume`. Ledger mode (`PurchaseRuntimeOptions.ledger`) ignores it for consumables: apply
+ * durably, then consume — that closes the lost-consume-answer window of `after-consume`.
  */
 export type RestoreGrantPolicy = 'after-consume' | 'before-consume';
 
@@ -115,7 +116,15 @@ export type PurchaseErrorReason =
   /** `resolveGrant` / `grant` threw — same consequence as `no_grant`. */
   | 'grant_threw'
   /** `adapter.restore()` rejected or threw. */
-  | 'restore_failed';
+  | 'restore_failed'
+  /**
+   * Ledger mode: `PurchaseLedger.apply` answered `not_durable`, threw, or answered something else — the
+   * effect is not confirmed durable. Nothing was consumed: the receipt stays on the platform, and the
+   * next `restore()` applies it again (the ledger is idempotent by token).
+   */
+  | 'not_durable'
+  /** Ledger mode: a consumable receipt without a token cannot be applied idempotently — left on the platform, not consumed. */
+  | 'no_token';
 
 /**
  * Everything the host instruments. `granted` is the ONLY success event — for direct and restored
@@ -155,6 +164,49 @@ export type PurchaseEvent<TGrant = unknown> =
 export type PurchaseEventType = PurchaseEvent['type'];
 export type PurchaseEventHandler<TGrant = unknown> = (event: PurchaseEvent<TGrant>) => void;
 
+/**
+ * What `PurchaseLedger.apply` answers for one token:
+ * - `applied` — THIS call made the effect and the token durable together (one confirmed write);
+ * - `already_applied` — the token is in the owner's CONFIRMED durable record already: nothing was applied;
+ * - `not_durable` — no durable confirmation (the write failed, timed out, is ambiguous, or there is no
+ *   durable storage at all — a guest): Core does not consume, does not report a grant, and may call
+ *   `apply` again with the same token later.
+ */
+export type PurchaseLedgerApplyResult = 'applied' | 'already_applied' | 'not_durable';
+
+export interface PurchaseLedgerEntry<TGrant = unknown> {
+  /** The payment's key — what the owner records as applied, next to the effect. */
+  token: string;
+  /** The product the platform says was paid. */
+  productId: string;
+  /** `resolveGrant(productId)` — the effect to apply. */
+  rewards: TGrant;
+  context: PurchaseGrantContext;
+}
+
+/**
+ * Durable, idempotent delivery of a CONSUMABLE, provided by whoever OWNS the value (the host for a
+ * gameplay-owned balance, a Core module for a Core-owned one). Core cannot make a token and an effect
+ * that live in two records atomic, so the owner does it — in ONE operation, never check-then-apply:
+ * 1. Atomic: the effect and the token are written by ONE durable write of ONE record (e.g. the game
+ *    save holding `coins` AND `appliedPurchaseTokens`). Any durable state that holds the effect holds
+ *    the token, and the other way round.
+ * 2. Idempotent by token: the effect is never applied twice for a token — whether it is confirmed or
+ *    only pending in memory after a write that did not confirm.
+ * 3. Honest: `applied` / `already_applied` only when the token is in a CONFIRMED write (a storage `set`
+ *    that answered true); a pending token is written again and answered by that write.
+ * 4. Deterministic: the write carries the whole record state (never a blind `balance += n` over an
+ *    unknown server state), so repeating it after an ambiguous answer cannot apply the effect twice.
+ * 5. The record is loaded before `restore()` runs, and every later write of it keeps the tokens.
+ * Core calls `apply` at most once at a time per token, consumes only after `applied` /
+ * `already_applied`, and never consumes after `not_durable`. The guarantee is per save lineage:
+ * two devices writing the same record concurrently over a storage without versioning can still
+ * overwrite each other (a storage concern, not the ledger's).
+ */
+export interface PurchaseLedger<TGrant = unknown> {
+  apply(entry: PurchaseLedgerEntry<TGrant>): PurchaseLedgerApplyResult | PromiseLike<PurchaseLedgerApplyResult>;
+}
+
 export type PurchaseErrorPhase = 'onEvent';
 
 export interface PurchaseErrorContext {
@@ -182,6 +234,15 @@ export interface PurchaseRuntimeOptions<TGrant = unknown> {
   onPurchaseError?: PurchaseCallbackErrorHandler;
   /** The host's own payer knowledge (profile payment count, a saved flag); OR-ed with this session's payments. */
   isPayer?(): boolean;
+  /**
+   * Ledger mode (opt-in, the production-safe path for consumables): every CONSUMABLE is delivered by
+   * `ledger.apply` — effect + token in one durable write of the value owner — and consumed only after
+   * it answered `applied` / `already_applied`, on the direct path and on restore alike (`restoreGrant`
+   * no longer orders consumables). `grant` and the `granted` registry then serve entitlements only;
+   * the registry is still READ for consumables, so a token granted before the switch is never applied
+   * again. Without it: the legacy pipeline — best-effort crash durability, see `tests/purchases/crash-windows.test.ts`.
+   */
+  ledger?: PurchaseLedger<TGrant>;
   /**
    * The consume policy, by product id — game config, read once at construction. A product that is
    * not listed is a `consumable`, so a host without this option runs the v0.6 pipeline unchanged.

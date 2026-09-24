@@ -101,6 +101,7 @@ test('a package consumer sees exactly the PurchaseRuntime public API and none of
       type PurchaseEventType, type PurchaseEventHandler, type PurchaseErrorPhase, type PurchaseErrorContext,
       type PurchaseCallbackErrorHandler, type PurchaseRuntimeOptions, type PurchaseStatus, type PurchaseResult,
       type RestoredPurchase, type RestoreResult, type PurchasePending, type PurchaseRuntimeStats,
+      type PurchaseLedger, type PurchaseLedgerEntry, type PurchaseLedgerApplyResult,
       type PurchaseAnalyticsSink, type PurchaseAnalyticsRecord, type PurchasePrice, type PurchasePriceResolver,
       type OfferReward
     } from '../../src/index';
@@ -135,6 +136,10 @@ test('a package consumer sees exactly the PurchaseRuntime public API and none of
       onEvent, onPurchaseError, isPayer: () => false
     };
     const purchases = new PurchaseRuntime<Rewards>(options);
+    // ledger mode: the value owner's one-operation apply (sync or async answer)
+    const applyAnswer: PurchaseLedgerApplyResult = 'applied';
+    const ledger: PurchaseLedger<Rewards> = { apply: (entry: PurchaseLedgerEntry<Rewards>) => (entry.token ? Promise.resolve(applyAnswer) : 'not_durable') };
+    const durable = new PurchaseRuntime<Rewards>({ ...options, ledger });
 
     const publicMethods: Record<keyof PurchaseRuntime, true> = {
       purchase: true, restore: true, getPending: true, isPayer: true, getStats: true, dispose: true
@@ -154,7 +159,7 @@ test('a package consumer sees exactly the PurchaseRuntime public API and none of
     const record: PurchaseAnalyticsRecord = purchaseEventToAnalytics({ type: 'started', productId: 'gold_1', source: undefined }, price);
     const offers = null as unknown as OfferRuntime;
     const rewardsOf = (productId: string): Rewards | undefined => offers.offerByProduct(productId)?.rewards;
-    void [minimal, publicMethods, status, list, pending, stats, payer, handler, record, rewardsOf];
+    void [minimal, publicMethods, status, list, pending, stats, payer, handler, record, rewardsOf, durable];
 
     // @ts-expect-error the idempotency claim is internal
     purchases.claim;

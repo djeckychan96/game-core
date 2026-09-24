@@ -24,5 +24,8 @@ export type {
   RestoredPurchase,
   RestoreResult,
   PurchasePending,
-  PurchaseRuntimeStats
+  PurchaseRuntimeStats,
+  PurchaseLedger,
+  PurchaseLedgerEntry,
+  PurchaseLedgerApplyResult
 } from './types';

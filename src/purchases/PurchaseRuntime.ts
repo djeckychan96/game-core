@@ -7,6 +7,8 @@ import type {
   PurchaseEvent,
   PurchaseEventHandler,
   PurchaseGrantContext,
+  PurchaseLedger,
+  PurchaseLedgerApplyResult,
   PurchasePending,
   PurchaseResult,
   PurchaseRuntimeOptions,
@@ -28,6 +30,9 @@ function tokenOf(purchase: PlatformPurchase): string | undefined {
 }
 
 type DeliverOutcome = 'granted' | 'no_grant' | 'grant_threw';
+/** How a ledger-mode delivery ended; only `granted` / `duplicate` may be followed by a consume. */
+type DurableOutcome = 'granted' | 'duplicate' | 'not_durable' | 'no_grant' | 'grant_threw' | 'no_token';
+type LedgerAnswer = { result: PurchaseLedgerApplyResult; error: unknown };
 
 /**
  * The real-money purchase pipeline as a Game Core module: Trail Arrow's `DataUpdateSystem`
@@ -60,6 +65,15 @@ type DeliverOutcome = 'granted' | 'no_grant' | 'grant_threw';
  *   minus the consume, on both paths: direct = claim → grant; restore = known? → `owned`, else
  *   claim → grant. Rule 2 holds unchanged — one token, one grant.
  *
+ * Ledger mode (`options.ledger`, the production-safe path for consumables): a consumable is applied
+ * by the value owner — effect + token in one durable write — and consumed only after it answered
+ * `applied` / `already_applied`, on every path (`restoreGrant` does not order consumables there):
+ * confirmed payment → apply → `granted` → consume (not awaited on the direct path). `not_durable` →
+ * nothing consumed, nothing reported as granted, the receipt waits on the platform for the next
+ * `restore()`. A process death at any point then loses nothing and grants nothing twice — the
+ * receipt is only consumed once the effect is durable, and the owner's apply is idempotent by token.
+ * Without a ledger the pipeline above is best-effort: the registry and the effect are two writes.
+ *
  * No timers live here: SDK timeouts belong to the adapter, the donor's restore waves (3 s / 15 s /
  * 45 s after a failed purchase, a restore at boot) to the host — `PurchaseResult.restoreAdvised`
  * says when.
@@ -73,6 +87,9 @@ export class PurchaseRuntime<TGrant = unknown> {
   private readonly onPurchaseError: PurchaseCallbackErrorHandler;
   private readonly hostIsPayer: (() => boolean) | null;
   private readonly entitlements: ReadonlySet<string>;
+  private readonly ledger: PurchaseLedger<TGrant> | null;
+  /** Ledger applies in flight, by token — a second attempt for the same token joins the first, never a parallel apply. */
+  private readonly applying = new Map<string, Promise<LedgerAnswer>>();
   private pending: PurchasePending | null = null;
   private restoring = false;
   private payer = false;
@@ -97,6 +114,10 @@ export class PurchaseRuntime<TGrant = unknown> {
     }
     if (typeof options.resolveGrant !== 'function') throw new RangeError('PurchaseRuntime: options.resolveGrant is required');
     if (typeof options.grant !== 'function') throw new RangeError('PurchaseRuntime: options.grant is required');
+    if (options.ledger !== undefined && (!options.ledger || typeof options.ledger.apply !== 'function')) {
+      throw new RangeError('PurchaseRuntime: options.ledger must have apply()');
+    }
+    this.ledger = options.ledger ?? null;
     this.payments = options.payments;
     this.grantedStore = options.granted;
     this.resolveGrant = options.resolveGrant;
@@ -159,6 +180,15 @@ export class PurchaseRuntime<TGrant = unknown> {
       }
 
       const context: PurchaseGrantContext = { productId: paidProductId, token, restored: false, source, requestedProductId: productId };
+      if (this.ledger && !this.entitlements.has(paidProductId)) {
+        // ledger mode: durable apply FIRST, the consume only after it (not awaited — it cannot undo a
+        // durable effect, and a restore finishes it). Not durable → nothing consumed, restore later.
+        const durable = await this.deliverDurably(context);
+        if (durable === 'granted' || durable === 'duplicate') void this.consume(answer, context);
+        if (durable === 'granted') return this.result('ok', paidProductId, token);
+        if (durable === 'duplicate') return this.result('duplicate', paidProductId, token);
+        return this.result('error', productId, token, durable, durable === 'not_durable');
+      }
       // claim → grant in one synchronous block, THEN consume, never awaited (production 0.1.31, review
       // 20.09 №10: the old claim → await consume → grant lost a paid purchase when the tab closed or the
       // consume hung — marked, maybe consumed, never granted). The claim already keeps any later
@@ -229,6 +259,18 @@ export class PurchaseRuntime<TGrant = unknown> {
           // granted once — the check and the mark stay one synchronous block
           if (token !== undefined && this.isGranted(token)) owned.push({ productId, token });
           else if (this.claim(context)) grantNow(index, context);
+          return;
+        }
+        if (this.ledger) {
+          // ledger mode, whatever `restoreGrant` says: apply (idempotent — `already_applied` for a token
+          // whose effect is durable) → consume. Not durable → left on the platform for the next pass.
+          consumes.push(
+            this.deliverDurably(context).then((durable) => {
+              if (durable === 'granted') grantedAt.push({ index, purchase: { productId, token } });
+              if (durable === 'granted' || durable === 'duplicate') return this.consume(purchase, context);
+              return undefined;
+            })
+          );
           return;
         }
         if (consumeFirst && !(token !== undefined && this.isGranted(token))) {
@@ -325,9 +367,76 @@ export class PurchaseRuntime<TGrant = unknown> {
     return true;
   }
 
+  /**
+   * Ledger mode: one durable, idempotent application of a consumable through the value owner. Never
+   * rejects. `granted` = this call made it durable (`granted` event); `duplicate` = durable already (a
+   * `duplicate` event, no second grant); everything else = not durable / not deliverable — the caller
+   * must NOT consume.
+   */
+  private async deliverDurably(context: PurchaseGrantContext): Promise<DurableOutcome> {
+    const { productId, token, restored, source } = context;
+    if (token === undefined) {
+      this.report('no_token', productId, token, source, restored, undefined);
+      return 'no_token';
+    }
+    // a token the legacy registry granted before the switch to ledger mode is never applied again
+    if (this.isGranted(token)) return this.duplicate(context, token);
+    let rewards: TGrant | null | undefined;
+    try {
+      rewards = this.resolveGrant(productId, context);
+    } catch (error) {
+      this.report('grant_threw', productId, token, source, restored, error);
+      return 'grant_threw';
+    }
+    if (rewards === null || rewards === undefined) {
+      this.report('no_grant', productId, token, source, restored, undefined);
+      return 'no_grant';
+    }
+    const inFlight = this.applying.get(token);
+    let answer: LedgerAnswer;
+    if (inFlight) {
+      // the same receipt again while its apply runs (a restore racing the direct answer, a list naming it
+      // twice): wait for THAT apply; its `applied` is this attempt's `already_applied`
+      answer = await inFlight;
+      if (answer.result === 'applied') answer = { result: 'already_applied', error: undefined };
+    } else {
+      const attempt = this.applyToLedger({ token, productId, rewards, context });
+      this.applying.set(token, attempt);
+      try {
+        answer = await attempt;
+      } finally {
+        this.applying.delete(token);
+      }
+    }
+    if (answer.result === 'applied') {
+      this.emitGranted(context, rewards);
+      return 'granted';
+    }
+    if (answer.result === 'already_applied') return this.duplicate(context, token);
+    this.report('not_durable', productId, token, source, restored, answer.error);
+    return 'not_durable';
+  }
+
+  /** Any answer that is not a clear `applied` / `already_applied` — a throw, a rejection, garbage — is `not_durable`: fail closed. */
+  private async applyToLedger(entry: Parameters<PurchaseLedger<TGrant>['apply']>[0]): Promise<LedgerAnswer> {
+    try {
+      const result: unknown = await this.ledger!.apply(entry);
+      if (result === 'applied' || result === 'already_applied') return { result, error: undefined };
+      return { result: 'not_durable', error: result === 'not_durable' ? undefined : new TypeError(`PurchaseLedger.apply answered ${String(result)}`) };
+    } catch (error) {
+      return { result: 'not_durable', error };
+    }
+  }
+
+  private duplicate(context: PurchaseGrantContext, token: string): 'duplicate' {
+    this.duplicates++;
+    this.emit({ type: 'duplicate', productId: context.productId, token, restored: context.restored, source: context.source });
+    return 'duplicate';
+  }
+
   /** The grant itself — right after the claim, in the same synchronous block (after-consume restore: after its own consume). */
   private deliver(context: PurchaseGrantContext): DeliverOutcome {
-    const { productId, token, restored, source, requestedProductId } = context;
+    const { productId, token, restored, source } = context;
     let rewards: TGrant | null | undefined;
     try {
       rewards = this.resolveGrant(productId, context);
@@ -346,12 +455,17 @@ export class PurchaseRuntime<TGrant = unknown> {
       this.report('grant_threw', productId, token, source, restored, error);
       return 'grant_threw';
     }
+    this.emitGranted(context, rewards);
+    return 'granted';
+  }
+
+  private emitGranted(context: PurchaseGrantContext, rewards: TGrant): void {
+    const { productId, token, restored, source, requestedProductId } = context;
     this.granted++;
     if (restored) this.restored++;
     const event: PurchaseEvent<TGrant> = { type: 'granted', productId, token, rewards, restored, source, requestedProductId };
     if (this.entitlements.has(productId)) event.kind = 'entitlement';
     this.emit(event);
-    return 'granted';
   }
 
   /** True when the purchase is closed on the platform (or the platform has nothing to close). Never rejects. */

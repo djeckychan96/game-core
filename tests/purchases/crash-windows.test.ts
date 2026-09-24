@@ -1,11 +1,12 @@
 // Purchase durability: what survives a process death at each point of the pipeline, with the CURRENT
 // contract (a sync `grant`, a separate `GrantedPurchaseStore`, the host saving its profile on `granted`).
 //
-// `test` = a window the current contract closes. `test.fails` = an OPEN window, reproduced: the body states
-// the invariant and fails today. They cannot be closed inside PurchaseRuntime alone — the registry and the
-// product state are two independent durable writes owned by the host, so a crash between them loses the
-// item (token first) or grants it twice (product first), whatever order Core picks. Flip them to `test`
-// with the durable-delivery slice (see the design report of 2026-09-24).
+// `test` = a window the LEGACY contract closes. `test.fails` = a window that stays OPEN for the legacy
+// pipeline, reproduced: the body states the invariant and fails. They cannot be closed inside the legacy
+// contract — the registry and the product state are two independent durable writes owned by the host, so
+// a crash between them loses the item (token first) or grants it twice (product first), whatever order
+// Core picks. Ledger mode (`options.ledger`, Purchase Ledger V1) closes each of them: the same scenarios
+// pass in tests/purchases/ledger.test.ts (CASE 1 → 4, CASE 2 → 6, CASE 3 → 8). Legacy = best-effort.
 import { expect, test } from 'vitest';
 import { PurchaseRuntime, createGrantedPurchaseStore } from '../../src/purchases';
 import type { PlatformPurchase, RestoreGrantPolicy } from '../../src/purchases';
@@ -207,7 +208,7 @@ test('no_ads entitlement: a crash before the profile save loses nothing (restore
 
 // ---------------------------------------------------------------- OPEN windows (reproduced)
 
-test.fails('OPEN — CASE 1, token before product: registry durable, the product save still in flight, crash → the paid item is LOST', async () => {
+test.fails('LEGACY OPEN (closed in ledger mode) — CASE 1, token before product: registry durable, the product save still in flight, crash → the paid item is LOST', async () => {
   const device = new Device(); // registry written at once (localStorage), profile saved on `granted`
   expect((await device.process.runtime.purchase('gold_1', 'shop')).status).toBe('ok');
   expect(device.disk.registry).toEqual(['tok-1']); // durable
@@ -220,7 +221,7 @@ test.fails('OPEN — CASE 1, token before product: registry durable, the product
   expect(device.disk.profile.coins).toBe(1000); // today: 0
 });
 
-test.fails('OPEN — CASE 1 on restore (before-consume): marked, the product save in flight, crash → LOST', async () => {
+test.fails('LEGACY OPEN (closed in ledger mode) — CASE 1 on restore (before-consume): marked, the product save in flight, crash → LOST', async () => {
   const device = new Device();
   device.payments.restoreGrant = 'before-consume';
   device.payments.hold('gold_1', 'r-1');
@@ -232,7 +233,7 @@ test.fails('OPEN — CASE 1 on restore (before-consume): marked, the product sav
   expect(device.disk.profile.coins).toBe(1000); // today: 0
 });
 
-test.fails('OPEN — CASE 2, product before token: the product save landed, the registry write did not, crash → granted TWICE', async () => {
+test.fails('LEGACY OPEN (closed in ledger mode) — CASE 2, product before token: the product save landed, the registry write did not, crash → granted TWICE', async () => {
   // the order "grant → await the save → mark" (or any host whose registry write lands after the profile's)
   const device = new Device('queued');
   const release = consumeNeverLands(device.payments); // the receipt is still on the platform at the crash
@@ -248,7 +249,7 @@ test.fails('OPEN — CASE 2, product before token: the product save landed, the 
   expect(device.disk.profile.coins).toBe(1000); // today: 2000
 });
 
-test.fails('OPEN — CASE 3, Yandex after-consume lost ack: the consume reached the platform, its answer timed out → LOST (no crash needed)', async () => {
+test.fails('LEGACY OPEN (closed in ledger mode) — CASE 3, Yandex after-consume lost ack: the consume reached the platform, its answer timed out → LOST (no crash needed)', async () => {
   const device = new Device(); // after-consume
   device.payments.hold('gold_1', 'r-1'); // Core has productId + token BEFORE the consume
   consumeLandsAckLost(device.payments, 'rejects');
@@ -259,7 +260,7 @@ test.fails('OPEN — CASE 3, Yandex after-consume lost ack: the consume reached 
   expect(device.disk.profile.coins).toBe(1000); // today: 0
 });
 
-test.fails('OPEN — CASE 3 with a process death while the landed consume is unanswered → LOST', async () => {
+test.fails('LEGACY OPEN (closed in ledger mode) — CASE 3 with a process death while the landed consume is unanswered → LOST', async () => {
   const device = new Device();
   device.payments.hold('gold_1', 'r-1');
   consumeLandsAckLost(device.payments, 'hangs');

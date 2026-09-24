@@ -167,7 +167,10 @@ export type {
   RestoredPurchase,
   RestoreResult,
   PurchasePending,
-  PurchaseRuntimeStats
+  PurchaseRuntimeStats,
+  PurchaseLedger,
+  PurchaseLedgerEntry,
+  PurchaseLedgerApplyResult
 } from './purchases';
 export {
   AdsRuntime, parseAdsTsv, validateAdsConfig, MemoryAdsStateStore, ADS_STATE_KEYS, ADS_DEFAULT_SEGMENT_ID, ADS_BANNER_PLACEMENT,

@@ -132,7 +132,37 @@ Why the direct path and the restore differ, on purpose: the platform's ok answer
 **Dedup / durability — unchanged.** Seen = listed or answered; claimed = the registry mark (the only durable state Core owns, persisted by the host); delivered = `grant` + `granted` (the host persists the profile on it); consumed = the platform's own state. The claim is still one synchronous "known? + mark" block and the grant follows it in the same block, so no await can separate the mark from the grant any more (except `after-consume`, where nothing is marked before the consume answered). No new double-grant path: the mark still precedes every consume, as before.
 
 **What is still open (not this slice).**
-- `after-consume` restore: a consume that lands on the platform while its answer is lost (tab closed, the adapter's 8 s timeout) loses that one receipt — inherent to consume-first; closing it needs a durable pending-consume record (a journal) or switching Yandex restore to `before-consume` when the registry is known to persist.
+- `after-consume` restore: a consume that lands on the platform while its answer is lost (tab closed, the adapter's 8 s timeout) loses that one receipt — inherent to consume-first. **Closed in ledger mode (§11)**; legacy keeps it.
 - The host's durability gap: the registry mark is usually written synchronously (localStorage), the profile on `granted` asynchronously (cloud); a tab closed in between keeps the mark and loses the item. Same in the donor. NOT closed by "`grant` returns its save promise, mark after it" — that only moves the window: product durable + mark lost → the next restore grants twice. Registry and product state are two independent durable writes; only ONE durable write holding the effect and the applied token (idempotent apply by token, owned by whoever owns the value) plus consume after that write's ack closes both. Reproduced in `tests/purchases/crash-windows.test.ts` (`test.fails` = open window).
 - Without a working registry (private mode) a direct purchase whose consume never lands is granted now AND by the next launch's restore — the same as a failed consume under §5.1.
+
+## 11. Purchase Ledger V1 (2026-09-24) — the production-safe path for consumables
+
+**Why a new path.** `tests/purchases/crash-windows.test.ts` proves the legacy contract cannot be crash-safe: the granted registry and the product state are two independent durable writes of the host, so a crash between them loses the item (registry first — CASE 1) or grants it twice (product first — CASE 2, which is exactly "grant returns its save promise, mark after"); `after-consume` restore also loses a receipt whose consume landed while its answer was lost (CASE 3). Exactly-once of an EFFECT needs the effect and the token in ONE durable write — only the owner of the value can do that. Core orchestrates; the owner applies.
+
+**Contract (additive, opt-in).** `PurchaseRuntimeOptions.ledger?: PurchaseLedger<TGrant>`:
+
+```ts
+type PurchaseLedgerApplyResult = 'applied' | 'already_applied' | 'not_durable';
+interface PurchaseLedgerEntry<TGrant> { token: string; productId: string; rewards: TGrant; context: PurchaseGrantContext }
+interface PurchaseLedger<TGrant> { apply(entry): PurchaseLedgerApplyResult | PromiseLike<PurchaseLedgerApplyResult> }
+```
+
+ONE operation, never `isApplied` + `apply` (a check-then-act pair is a race). Owner obligations (JSDoc of `PurchaseLedger`): (1) atomic — effect + token in one durable write of one record; (2) idempotent by token, for confirmed AND pending tokens; (3) honest — `applied` / `already_applied` only for a token in a CONFIRMED write (a storage `set` that answered true — Yandex since 75a7aea); (4) deterministic — the write carries the whole record, never a blind `+= n`; (5) the record is loaded before `restore()`. An answer that is not `applied` / `already_applied` (a throw, a rejection, garbage) reads as `not_durable` — fail closed.
+
+**Pipeline (ledger mode, consumables).** Direct and restore alike, `restoreGrant` does not order consumables: confirmed payment → token? (none → `no_token`, not consumed) → legacy registry knows it? (→ `duplicate`, consume only — migration: a token granted before the switch is never applied again) → `resolveGrant` (none / throws → `no_grant` / `grant_threw`, NOT consumed — the receipt waits until the config is fixed) → `apply` (at most one in flight per token; a second attempt joins it and reads its `applied` as `already_applied`) → `applied`: `granted` event, then consume (not awaited on the direct path) · `already_applied`: `duplicate` event, consume · `not_durable`: `error{not_durable}`, NOTHING consumed, direct result `error` with `restoreAdvised: true`. Receipts of a restore pass are independent chains; the `RestoreResult` waits for their consumes, no delivery does.
+
+**Crash semantics.** The receipt is consumed only after the effect is durable, and the owner's apply is idempotent — so a death at any point either leaves the receipt on the platform with no durable effect (the next restore applies it once) or leaves a durable effect (the next restore answers `already_applied` and only consumes). The `LEGACY OPEN` windows pass in `tests/purchases/ledger.test.ts` (CASE 1 → test 4, CASE 2 → test 6, CASE 3 → test 8), with the ambiguous ACK (written, answered false) retried safely in one session and after a restart (test 5).
+
+**Ownership.** Core-owned value (a future Wallet pack): the effect and the applied tokens live in one Core record and go out in one `SaveGate.writeCore` — not built in V1, the contract needs no redesign for it. Gameplay-owned value (SoliPix coins): the HOST implements `apply` over its own save (coins + `appliedPurchaseTokens` in the same object); Core cannot verify that atomicity — it is the host's obligation. Recommended owner shape (the test reference): the live record + the set of tokens seen in a confirmed write; apply = confirmed? → `already_applied`; else apply to the live record once (pending), write the whole record, answer by that write; any successful save of the record confirms the tokens it carries.
+
+**Guest.** Capability-based, nothing hard-coded: a guest with a durable local record can run ledger mode; without durable storage every apply is `not_durable` → nothing consumed, nothing reported as granted, the receipt kept until a durable ledger exists (test 15).
+
+**Entitlements.** Not routed through the ledger in V1: never consumed, the receipt listed on every restore, the flag idempotent, `owned` re-asserts it — a crash before the flag's save is healed by the next restore, repeated restores have no events, no consume (tests 13 here and in crash-windows).
+
+**Boundary.** The guarantee is per save lineage (one device's view of the record). Two devices writing the same record concurrently over a storage without versioning / CAS (Yandex `setData` replaces the whole object, read once per session) can overwrite each other — a storage concern, not solved here.
+
+**Legacy.** Without `ledger`: e8fbfc2 exactly — `grant` + registry + `restoreGrant`, **best-effort crash durability** for consumables (the three `LEGACY OPEN` windows). New production consumables should use the ledger. Downgrading ledger → legacy is not supported (the ledger's tokens are not in the registry).
+
+**Events.** `granted` exactly when the owner answered `applied` (the revenue point); `already_applied` → `duplicate` (telemetry, no revenue); `not_durable` → `error{not_durable}`, no `granted`; `consume_failed` may follow a `granted`. Known analytics edge: an effect that became durable through an ambiguous write or another save of the record answers `already_applied` later — delivered, but never reported as `granted` (no revenue event for it).
 
