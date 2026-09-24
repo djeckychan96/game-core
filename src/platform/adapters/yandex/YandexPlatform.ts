@@ -9,12 +9,14 @@
 // `set` answers true only once a `setData` carrying its patch succeeded — the donor answered a call that
 // joined a write in flight ok at once, Core never answers "queued"),
 // the ad lifecycle (audio pause before the show, gameplay restored only if it was running, watchdog,
-// the local rewarded-availability latch), payments with every timeout. Left to the host on purpose: the local
-// mirror, the rollback guard, `save_seq`, cloud identity adoption, the guest-conflict write guard,
-// the granted-token registry (PurchaseRuntime), restore / catalog retry schedules, `registerShown`.
+// the local rewarded-availability latch — re-armed by `onRewarded` and by `online` as in Trail Arrow 0.1.31),
+// payments with every timeout. Left to the host on purpose: the local mirror, the rollback guard, `save_seq`,
+// cloud identity adoption, the guest-conflict write guard, the granted-token registry (PurchaseRuntime),
+// restore / catalog retry schedules, `registerShown`.
 import type { PlatformPurchase, PlatformPurchaseResult } from '../../../purchases/types';
 import { createAdWatchdog } from '../../support/adWatchdog';
 import type { PlatformVisibility } from '../../support/adWatchdog';
+import { globalOnline } from '../../support/online';
 import { defaultPlatformTimers, settleWithin, sleep, withTimeout } from '../../support/withTimeout';
 import type { PlatformTimers } from '../../support/withTimeout';
 import type {
@@ -146,8 +148,14 @@ export class YandexPlatform implements GamePlatform {
   private appReadySent = false;
   /** The state the GAME asked for last — ad-time stop / start is temporary and restores exactly this (donor bug of 08.09). */
   private gameplayActive = false;
-  /** The SDK has no `isAvailable`: true until an `onError` / `onClose(false)` of a rewarded, then false for the session. */
+  /**
+   * The SDK has no `isAvailable`: true until an `onError` / `onClose(false)` of a rewarded, then false until a
+   * recovery signal — a reward the SDK confirms (`onRewarded`) or the network coming back (`online`). Not for the
+   * session (Trail Arrow 0.1.31, bug B17): one failure without network used to hide every rewarded button until a reload.
+   */
   private rewardedAvailable = true;
+  /** Removes the `online` listener; null where there is no such event (Node) or after `dispose()`. */
+  private unsubscribeOnline: (() => void) | null = null;
   private saveInFlight = false;
   private pendingPatch: Record<string, unknown> | null = null;
   /** The sequence number of the last queued set / clear call; a `setData` turn carries every call up to it. */
@@ -245,11 +253,19 @@ export class YandexPlatform implements GamePlatform {
       consume: (purchase) => this.consume(purchase),
       getCatalog: () => this.getCatalog()
     };
+
+    // B17: the network is back → rewarded may be tried again. Availability ONLY — a reward still comes from a show the SDK confirmed.
+    this.unsubscribeOnline =
+      globalOnline()?.subscribe(() => {
+        if (!this.disposed) this.rewardedAvailable = true;
+      }) ?? null;
   }
 
-  /** Stops the background player retry. SDK calls already in flight still settle. */
+  /** Stops the background player retry and removes the `online` listener. SDK calls already in flight still settle. */
   dispose(): void {
     this.disposed = true;
+    this.unsubscribeOnline?.();
+    this.unsubscribeOnline = null;
     if (this.playerRetryTimer !== null) this.timers.clearTimeout(this.playerRetryTimer);
     this.playerRetryTimer = null;
     this.playerRetryActive = false;
@@ -579,6 +595,8 @@ export class YandexPlatform implements GamePlatform {
               onOpen: () => this.hook('pauseAudio'),
               onRewarded: () => {
                 rewarded = true;
+                // the SDK showed and counted a video: rewarded works again (a later onError still switches it off)
+                this.rewardedAvailable = true;
               },
               onClose: (wasShown) => {
                 // wasShown === false: the SDK could not really show it — "unavailable", like onError;

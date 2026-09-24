@@ -79,6 +79,7 @@ const sdk = {
     showRewardedVideo: ({ callbacks }) =>
       queueMicrotask(() => {
         callbacks.onOpen();
+        if (fake.nextAd === 'error') return callbacks.onError(new Error('no_ads'));
         if (fake.nextAd === 'ok') callbacks.onRewarded();
         callbacks.onClose(true);
       })
@@ -169,6 +170,29 @@ assert.deepEqual([rewarded, hearts, ads.getStats().shown], [['dismissed/rewarded
 assert.deepEqual(fake.calls.filter((c) => c.startsWith('GameplayAPI')).slice(0, 2), ['GameplayAPI.stop', 'GameplayAPI.start']); // gameplay ran → restored
 assert.equal(audio.filter((a) => a === 'resume').length, 4);
 step('ads', `inter: ${inter.join(' → ')}; rewarded: ${rewarded.join(' → ')}; hearts=${hearts}; audio resumed ${audio.filter((a) => a === 'resume').length}×`);
+
+// ---- B17: rewarded availability recovers — the built adapter listens to the page's global `online` event.
+// Node has no such event target: one is installed BEFORE the adapter is created, and removed after.
+const net = new EventTarget();
+let onlineListeners = 0;
+globalThis.addEventListener = (type, listener) => void (type === 'online' && onlineListeners++, net.addEventListener(type, listener));
+globalThis.removeEventListener = (type, listener) => void (type === 'online' && onlineListeners--, net.removeEventListener(type, listener));
+const recovering = createYandexPlatform({ init: async () => sdk, visibility: null, timers: { setTimeout: (cb, ms) => setTimeout(cb, Math.min(ms, 5)), clearTimeout: (handle) => clearTimeout(handle) } });
+await recovering.identity.ready();
+const available = () => recovering.ads.isRewardedAvailable();
+const rewardedBy = async (next) => ((fake.nextAd = next), (await recovering.ads.showRewarded('ad_refill_hearts_rewarded')).status);
+const b17 = [onlineListeners, await rewardedBy('error'), available()];
+net.dispatchEvent(new Event('online')); // the network is back: availability only, no show, no reward
+b17.push(available(), await rewardedBy('error'), available(), await rewardedBy('ok'), available());
+recovering.dispose();
+await rewardedBy('error');
+net.dispatchEvent(new Event('online')); // after dispose: no listener left, nothing changes
+b17.push(onlineListeners, available());
+delete globalThis.addEventListener;
+delete globalThis.removeEventListener;
+fake.nextAd = 'ok';
+assert.deepEqual(b17, [1, 'no_fill', false, true, 'no_fill', false, 'rewarded', true, 0, false]);
+step('rewarded recovery', `listener ${b17[0]}; error → ${b17[2]}; online → ${b17[3]}; error → ${b17[5]}; onRewarded → ${b17[7]}; dispose → listeners ${b17[8]}, online → ${b17[9]}`);
 
 // ---- purchases: platform.payments IS PurchaseRuntime's PaymentsAdapter
 const wallet = { coins: 0 };

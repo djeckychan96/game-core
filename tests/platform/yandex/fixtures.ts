@@ -224,6 +224,28 @@ export class FakeVisibility implements PlatformVisibility {
   }
 }
 
+/**
+ * The page's global event target as the browser has it (`online` fires on the global object). Node has
+ * none, so a test installs this one with `vi.stubGlobal` BEFORE it creates the adapter and counts the
+ * listeners the adapter left on it.
+ */
+export class FakeGlobalEvents {
+  private listeners = new Map<string, Set<(event: unknown) => void>>();
+  readonly addEventListener = (type: string, listener: (event: unknown) => void): void => {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type)!.add(listener);
+  };
+  readonly removeEventListener = (type: string, listener: (event: unknown) => void): void => {
+    this.listeners.get(type)?.delete(listener);
+  };
+  emit(type: string): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) listener({ type });
+  }
+  count(type: string): number {
+    return this.listeners.get(type)?.size ?? 0;
+  }
+}
+
 export interface YandexHarness {
   fake: FakeYandex;
   platform: YandexPlatform;

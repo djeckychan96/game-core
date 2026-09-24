@@ -19,7 +19,8 @@ const read = (dir: string): Array<[string, string]> =>
 test('the Yandex entry: root modules only as TYPES, runtime only from itself and adapter support; the SDK global is named in ONE file', () => {
   const files = [...read('adapters/yandex'), ...read('support')];
   expect(files.map(([name]) => name)).toEqual([
-    'adapters/yandex/YandexPlatform.ts', 'adapters/yandex/index.ts', 'adapters/yandex/sdk.ts', 'support/adWatchdog.ts', 'support/withTimeout.ts'
+    'adapters/yandex/YandexPlatform.ts', 'adapters/yandex/index.ts', 'adapters/yandex/sdk.ts', 'support/adWatchdog.ts', 'support/online.ts',
+    'support/withTimeout.ts'
   ]);
   for (const [file, source] of files) {
     expect(/pixi|gsap|localStorage|sessionStorage|\bfetch\b|XMLHttpRequest|Math\.random|import\.meta/i.test(source), `${file} touches a renderer / storage / network`).toBe(false);
