@@ -199,7 +199,9 @@ SoliPix использует свою экономику (owner: gameplay) и с
   host обязан отдавать один `levelEnd` на забег.
 - Purchase, остаток после фикса consume-order: `after-consume` restore теряет receipt, если consume дошёл до
   платформы, а ответ потерян (закрытие вкладки / таймаут 8 с); реестр токенов host пишет синхронно, профиль —
-  асинхронно, закрытие между ними теряет товар. Нужен durable grant ack или journal (отдельный slice).
+  асинхронно, закрытие между ними теряет товар; обратный порядок даёт двойную выдачу. Нужна атомарная
+  идемпотентная выдача (эффект + token в одной durable-записи) и consume после её подтверждения — изменение
+  контракта, отдельный slice. Окна воспроизведены в `tests/purchases/crash-windows.test.ts`.
 - Stable v1 tag и release flow нет.
 - Self-service Quick Start / handoff пока не доказан на новой игре.
 - Две устаревшие, не блокирующие проверки viewport-scale в `smoke:layout` требуют отдельной QA-чистки.
