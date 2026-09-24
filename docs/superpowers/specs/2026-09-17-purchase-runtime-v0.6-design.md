@@ -107,7 +107,32 @@ Platform adapters (Yandex / CleverApps / Samsung), SDK timeouts, the localStorag
 
 - No server-side receipt validation (the donor has none; Yandex `signed: false`).
 - The registry is per device, like the donor's: a consume that keeps failing + a new device re-grants under `before-consume`, never under `after-consume`.
-- Donor order, donor consequences: a throwing `grant` / a missing reward mapping loses the purchase (already marked and consumed); a tab closed during the consume await loses the grant. Hosts must not throw from `grant` for a mapped product. Changing this is a financial-behavior decision for a later, explicitly approved slice.
-- A `consume` that never settles keeps `purchase()` pending (`busy` for the next one) and delays the grant — the adapter must time its SDK calls out (the donor: 8 s).
+- Donor order, donor consequences: a throwing `grant` / a missing reward mapping loses the purchase (already marked and consumed). Hosts must not throw from `grant` for a mapped product. ~~A tab closed during the consume await loses the grant~~ — fixed, §10.
+- ~~A `consume` that never settles keeps `purchase()` pending and delays the grant~~ — fixed, §10; it now holds only the `RestoreResult` of an `after-consume` pass (and `busy` for the next pass), so the adapter must still time its SDK calls out (Yandex: 8 s).
 - Non-donor items that remain, all on the idempotency side: the `duplicate` check on a direct purchase, the live registry re-check, `busy`, a product-less restored receipt is not consumed.
 - Real adapters and the Trail Arrow adapter/proof are the next slices.
+
+## 10. Consume order fix (2026-09-24, approved slice — supersedes §5.1–§5.4 where they differ)
+
+**Defect (P0, Trail Arrow review 20.09 №10, fixed in production 0.1.31).** The order of §5.1 put the consume between the mark and the grant: `claim → await consume → grant`, and a restore pass granted only after ALL its consumes. A tab closed during that await, a consume that never settled, or a consume that settled after another receipt hung, left the token marked (and maybe consumed) but not granted — the registry then kept every later restore from granting it: a paid purchase lost. Reproduced by `tests/purchases/consume-order.test.ts` (11 of its 12 cases fail on d773319: at the consume call the state was `coins=0 marked=true`).
+
+**Invariant.** Once the platform confirmed a payment, no consume — hanging, failing or cut off — may create a state where the payment cannot be restored while the item was not granted; one token is still granted once.
+
+**New orders.**
+
+| Path | Order |
+|---|---|
+| Direct, both platforms (whatever `restoreGrant` says) | ok → claim → grant → `granted` → consume **not awaited** (failure → `consume_failed`) → answer. Production 0.1.31 Yandex `:618-629`, CleverApps `:966-974`. |
+| Restore, `before-consume` (CleverApps) | per receipt: known? → claim → grant → consume (failure ignored). 0.1.31 still grants after the consume and the pass; Core grants at the mark — the mark is what makes a later grant impossible. |
+| Restore, `after-consume` (Yandex) | per receipt: known? → consume → claim → grant as soon as THIS consume answered; the consumes of a pass run together. 0.1.31 keeps consume → mark → grant but grants the whole pass from its answer. |
+| Entitlement | unchanged (never consumed); restored ones are granted in the pass, not after it. |
+
+Why the direct path and the restore differ, on purpose: the platform's ok answer comes once per payment, so granting on it cannot repeat; a held receipt is listed on EVERY pass, so under `after-consume` the thing that happens once is the platform-side consume — that keeps a receipt from being granted on every start when the registry cannot persist (private mode). `restoreGrant` stays a restore-only policy; the direct path has none. Both are pinned: "the order is explicit" in `consume-order.test.ts`, "restore order per receipt" in `runtime.test.ts`.
+
+**Dedup / durability — unchanged.** Seen = listed or answered; claimed = the registry mark (the only durable state Core owns, persisted by the host); delivered = `grant` + `granted` (the host persists the profile on it); consumed = the platform's own state. The claim is still one synchronous "known? + mark" block and the grant follows it in the same block, so no await can separate the mark from the grant any more (except `after-consume`, where nothing is marked before the consume answered). No new double-grant path: the mark still precedes every consume, as before.
+
+**What is still open (not this slice).**
+- `after-consume` restore: a consume that lands on the platform while its answer is lost (tab closed, the adapter's 8 s timeout) loses that one receipt — inherent to consume-first; closing it needs a durable pending-consume record (a journal) or switching Yandex restore to `before-consume` when the registry is known to persist.
+- The host's durability gap: the registry mark is usually written synchronously (localStorage), the profile on `granted` asynchronously (cloud); a tab closed in between keeps the mark and loses the item. Same in the donor. Closing it needs the host to acknowledge a durable grant (e.g. `grant` returning its save promise) before the mark counts — a public API change.
+- Without a working registry (private mode) a direct purchase whose consume never lands is granted now AND by the next launch's restore — the same as a failed consume under §5.1.
+

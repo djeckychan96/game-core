@@ -3,12 +3,15 @@ import { PurchaseRuntime, createGrantedPurchaseStore } from '../../src/purchases
 import type { PurchaseEvent } from '../../src/purchases';
 import { CATALOG, FakePayments, makeHost, type DemoRewards } from './fixtures';
 
+/** Lets the consume that runs after the answer settle. */
+const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
 const errorsOf = (events: PurchaseEvent<DemoRewards>[]) =>
   events.flatMap((event) => (event.type === 'error' ? [event.reason] : []));
 
 // ---------------------------------------------------------------- direct purchase
 
-test('a successful purchase grants exactly once, in the donor order: platform ok → mark → consume → grant → granted event → ok', async () => {
+test('a successful purchase grants exactly once, in the production 0.1.31 order: platform ok → mark → grant → granted event → consume → ok', async () => {
   const host = makeHost();
   const consume = host.payments.consume.bind(host.payments);
   host.payments.consume = (purchase) => {
@@ -22,13 +25,13 @@ test('a successful purchase grants exactly once, in the donor order: platform ok
   expect(host.wallet.coins).toBe(1000);
   expect(host.grants).toEqual(['gold_1:tok-1']);
   expect(host.contexts[0]).toEqual({ productId: 'gold_1', token: 'tok-1', restored: false, source: 'shop', requestedProductId: 'gold_1' });
-  // donor (Yandex :562-567, CleverApps :658-662): markGranted BEFORE the consume attempt, the grant
-  // only after the platform handler answered — i.e. after the consume
+  // production 0.1.31 (review 20.09 №10; Yandex :618-629, CleverApps :966-974): markGranted, then the
+  // consume is NOT awaited — the grant never waits for it (see consume-order.test.ts)
   expect(host.order).toEqual([
     'event:started',
-    'consume:tok-1:marked=true',
     'grant:gold_1', 'marked-during-grant:true',
-    'event:granted', 'marked-at-event:true'
+    'event:granted', 'marked-at-event:true',
+    'consume:tok-1:marked=true'
   ]);
   expect(host.events[1]).toEqual({
     type: 'granted', productId: 'gold_1', token: 'tok-1', rewards: CATALOG['gold_1'], restored: false, source: 'shop', requestedProductId: 'gold_1'
@@ -124,8 +127,9 @@ test('a failed consume does not stop the grant (the payment went through), and n
   const host = makeHost();
   host.payments.consumeFailures = 2;
   const result = await host.runtime.purchase('gold_1');
+  await flush();
   expect(result.status).toBe('ok');
-  expect(host.types()).toEqual(['started', 'consume_failed', 'granted']);
+  expect(host.types()).toEqual(['started', 'granted', 'consume_failed']);
   expect(host.wallet.coins).toBe(1000);
   expect(host.payments.held).toHaveLength(1); // the receipt hangs on the platform
 
@@ -156,7 +160,7 @@ test('a purchase in flight blocks an accidental second request without reaching 
   host.payments.settlePurchase('ok');
   await first;
   expect(host.wallet.coins).toBe(1000);
-  // free again once the first purchase (its consume included) is over
+  // free again once the first purchase answered (its consume does not hold it)
   host.payments.mode = 'ok';
   expect((await host.runtime.purchase('gold_2')).status).toBe('ok');
   expect(host.wallet.coins).toBe(4500);
@@ -309,7 +313,7 @@ test('the payment went through but purchase() answered empty: cancelled now, gra
   expect(host.grants).toEqual(['gold_1:tok-1']);
 });
 
-test('restore order is the donor\'s: Yandex known? → consume → mark → grant, CleverApps known? → mark → consume → grant; grants after the pass', async () => {
+test('restore order per receipt: Yandex known? → consume → mark → grant, CleverApps known? → mark → grant → consume; no receipt waits for another', async () => {
   const run = async (policy: 'after-consume' | 'before-consume') => {
     const order: string[] = [];
     const inner = createGrantedPurchaseStore();
@@ -332,17 +336,19 @@ test('restore order is the donor\'s: Yandex known? → consume → mark → gran
     expect((await runtime.restore()).granted.map((it) => it.token)).toEqual(['a', 'b']);
     return order;
   };
-  // Yandex check.consummations (:603-609): alreadyGranted? → consumePurchase → markGranted; the game grants from the answer
+  // Yandex check.consummations (0.1.31 :684-698): alreadyGranted? → consumePurchase → markGranted → grant. The
+  // consumes are started together and every receipt is granted as soon as ITS consume answered — the donor
+  // granted the whole pass from its answer, so a consumed receipt waited for (and was lost with) the others
   expect(await run('after-consume')).toEqual([
-    'has:a', 'consume:a', 'has:a', 'mark:a',
-    'has:b', 'consume:b', 'has:b', 'mark:b',
-    'grant:a', 'event:granted:a', 'grant:b', 'event:granted:b'
+    'has:a', 'consume:a', 'has:b', 'consume:b',
+    'has:a', 'mark:a', 'grant:a', 'event:granted:a',
+    'has:b', 'mark:b', 'grant:b', 'event:granted:b'
   ]);
-  // CleverApps checkConsummations (:522-531): already? → markGranted → consume (failure ignored); the game grants from the answer
+  // CleverApps checkConsummations (0.1.31 :649-655): already? → markGranted → consume (failure ignored). A
+  // marked receipt is granted at once — the donor granted it after the consume and the pass
   expect(await run('before-consume')).toEqual([
-    'has:a', 'mark:a', 'consume:a',
-    'has:b', 'mark:b', 'consume:b',
-    'grant:a', 'event:granted:a', 'grant:b', 'event:granted:b'
+    'has:a', 'mark:a', 'grant:a', 'event:granted:a', 'consume:a',
+    'has:b', 'mark:b', 'grant:b', 'event:granted:b', 'consume:b'
   ]);
 });
 
@@ -373,7 +379,7 @@ test('after-consume never over-grants even when the registry cannot persist and 
   expect(host.wallet.coins).toBe(1000);
 });
 
-test('before-consume (CleverApps): marked first, the consume failure is ignored, granted; the consume is finished later without a grant', async () => {
+test('before-consume (CleverApps): marked and granted first, the consume failure is ignored; the consume is finished later without a grant', async () => {
   const host = makeHost();
   host.payments.restoreGrant = 'before-consume';
   host.payments.hold('gold_1', 'pay-1');
@@ -382,7 +388,7 @@ test('before-consume (CleverApps): marked first, the consume failure is ignored,
   expect((await host.runtime.restore()).granted).toEqual([{ productId: 'gold_1', token: 'pay-1' }]);
   expect(host.wallet.coins).toBe(1000);
   expect(host.store.tokens()).toEqual(['pay-1']);
-  expect(host.types()).toEqual(['consume_failed', 'granted']);
+  expect(host.types()).toEqual(['granted', 'consume_failed']);
 
   expect(await host.reload().restore()).toEqual({ status: 'ok', found: 1, granted: [] });
   expect(host.wallet.coins).toBe(1000);
@@ -587,19 +593,30 @@ test('dispose: new calls are refused, and a payment answered after it is left on
   expect(host.wallet.coins).toBe(1000);
 });
 
-test('dispose during a restore stops before the next purchase, but never drops one that was already consumed', async () => {
+test('dispose during a restore never drops a receipt whose consume was already started; dispose during the listing touches nothing', async () => {
   const host = makeHost();
   host.payments.hold('gold_1', 'a');
   host.payments.hold('gold_2', 'b');
   const consume = host.payments.consume.bind(host.payments);
   host.payments.consume = async (purchase) => {
     await consume(purchase);
-    host.runtime.dispose(); // arrives while the first consume is in flight
+    host.runtime.dispose(); // arrives while the consumes are in flight — both were started together
   };
   const result = await host.runtime.restore();
-  expect(result).toEqual({ status: 'disposed', found: 2, granted: [{ productId: 'gold_1', token: 'a' }] });
-  expect(host.wallet.coins).toBe(1000); // "a" was consumed → granted; "b" untouched
-  expect(host.payments.held.map((it) => it.token)).toEqual(['b']);
+  expect(result).toEqual({ status: 'disposed', found: 2, granted: [{ productId: 'gold_1', token: 'a' }, { productId: 'gold_2', token: 'b' }] });
+  expect(host.wallet.coins).toBe(4500); // consumed → granted, whatever dispose says
+  expect(host.payments.held).toEqual([]);
+
+  const late = makeHost();
+  late.payments.hold('gold_1', 'c');
+  const list = late.payments.restore.bind(late.payments);
+  late.payments.restore = async () => {
+    const listed = await list();
+    late.runtime.dispose(); // arrives while the platform is listing
+    return listed;
+  };
+  expect(await late.runtime.restore()).toEqual({ status: 'disposed', found: 1, granted: [] });
+  expect([late.wallet.coins, late.store.tokens(), late.payments.consumeCalls.length, late.payments.held.length]).toEqual([0, [], 0, 1]);
 });
 
 test('the constructor refuses a half-wired host', () => {

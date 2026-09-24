@@ -107,7 +107,9 @@ Production UI — **asset-based** Ready UI (стиль Trail Arrow). Больш�
 
 Ads / Purchase правила: NoAds cadence — это policy/config; `no_ads` — entitlement, никогда не consume;
 coin packs — consumable; restore заново подтверждает entitlement; product IDs и секреты платформы в Core
-не хардкодятся.
+не хардкодятся. Оплаченная покупка не теряется из-за consume: прямая покупка — claim → grant → consume
+(consume не ждётся); restore — по каждому receipt отдельно, `after-consume` (Yandex) ждёт только свой consume
+(spec PurchaseRuntime v0.6 §10).
 
 ---
 
@@ -195,6 +197,9 @@ SoliPix использует свою экономику (owner: gameplay) и с
 - `AnalyticsRuntime` в реальной игре не подключён.
 - Contract V1 не имеет run identity: при opt-in `replayReward` дублированный `levelEnd` заплатит ещё раз —
   host обязан отдавать один `levelEnd` на забег.
+- Purchase, остаток после фикса consume-order: `after-consume` restore теряет receipt, если consume дошёл до
+  платформы, а ответ потерян (закрытие вкладки / таймаут 8 с); реестр токенов host пишет синхронно, профиль —
+  асинхронно, закрытие между ними теряет товар. Нужен durable grant ack или journal (отдельный slice).
 - Stable v1 tag и release flow нет.
 - Self-service Quick Start / handoff пока не доказан на новой игре.
 - Две устаревшие, не блокирующие проверки viewport-scale в `smoke:layout` требуют отдельной QA-чистки.

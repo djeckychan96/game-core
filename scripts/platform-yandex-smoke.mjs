@@ -172,8 +172,10 @@ const purchases = new PurchaseRuntime({
   onEvent: (event) => events.push(event.type)
 });
 const direct = await purchases.purchase('starter_pack', 'offer_window');
-assert.deepEqual([direct.status, direct.token, wallet.coins, fake.held.length], ['ok', 'ya-token-1', 500, 0]);
-step('purchase', `starter_pack → ${direct.status} token=${direct.token} coins=${wallet.coins} held=${fake.held.length} (consumePurchase done)`);
+assert.deepEqual([direct.status, direct.token, wallet.coins], ['ok', 'ya-token-1', 500]); // granted with the answer
+await new Promise((r) => setTimeout(r, 10)); // the consume runs after the grant, never awaited by it (spec v0.6 §10)
+assert.equal(fake.held.length, 0);
+step('purchase', `starter_pack → ${direct.status} token=${direct.token} coins=${wallet.coins} held=${fake.held.length} (granted → consumePurchase)`);
 
 fake.purchaseHangs = true; // paid, but purchase() never answers → the adapter's 120 s timeout → cancelled
 const lost = await purchases.purchase('gold_1', 'shop');

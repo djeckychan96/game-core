@@ -119,18 +119,21 @@ function makePurchaseHost(setup?: (fake: FakeYandex) => void) {
   return { ...h, purchases, wallet, types: () => events.map((event) => event.type) };
 }
 
-test('PurchaseRuntime compatibility: purchase → mark → consumePurchase → grant on the real pipeline; a failed consume is finished by restore without a 2nd grant', async () => {
+test('PurchaseRuntime compatibility: purchase → mark → grant → consumePurchase on the real pipeline; a failed consume is finished by restore without a 2nd grant', async () => {
   const host = makePurchaseHost();
   expect(await host.purchases.purchase('gold_1', 'shop')).toMatchObject({ status: 'ok', productId: 'gold_1', token: 'ya-token-1', restoreAdvised: false });
-  expect([host.wallet.coins, host.fake.held.length]).toEqual([1000, 0]);
+  expect(host.wallet.coins).toBe(1000); // granted with the answer — the consume is not awaited (0.1.31)
+  await flush();
+  expect(host.fake.held.length).toBe(0);
   expect(host.fake.calls.filter((call) => /^(purchase|consume)/.test(call))).toEqual(['purchase:gold_1', 'consume:ya-token-1']);
 
   host.fake.consumeFailures = 1; // the network dropped between the payment and the consume
   expect(await host.purchases.purchase('starter_pack', 'offer_window')).toMatchObject({ status: 'ok' });
+  await flush();
   expect([host.wallet.coins, host.fake.held.length]).toEqual([1500, 1]); // granted now, the receipt still hangs
   expect(await host.purchases.restore()).toMatchObject({ status: 'ok', found: 1, granted: [] }); // consumed, NOT granted again
   expect([host.wallet.coins, host.fake.held.length]).toEqual([1500, 0]);
-  expect(host.types()).toEqual(['started', 'granted', 'started', 'consume_failed', 'granted', 'duplicate']);
+  expect(host.types()).toEqual(['started', 'granted', 'started', 'granted', 'consume_failed', 'duplicate']);
 });
 
 test('PurchaseRuntime compatibility: a payment that outlived the 120 s answer is restored once — after-consume: a failed consume keeps the receipt ungranted', async () => {

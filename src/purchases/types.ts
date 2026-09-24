@@ -28,13 +28,19 @@ export interface PlatformPurchaseResult extends PlatformPurchase {
 }
 
 /**
- * What `restore()` does with a purchase it has not granted yet — the donor's two platforms differ:
+ * What `restore()` does with a purchase it has not granted yet — the donor's two platforms differ.
+ * It is a RESTORE policy only: a direct `purchase()` is claim → grant → consume (not awaited) under
+ * both, because the platform's ok answer comes once, while a held receipt is listed on every pass.
  * - `after-consume` (Yandex, the default) — consume → mark → grant: only what was consumed is marked
  *   and granted; a failed consume leaves the purchase for the next `restore()`. Never over-grants,
- *   even when the registry cannot persist (private mode) and the payment service is down.
- * - `before-consume` (CleverApps) — mark → consume → grant: the consume failure is ignored; the
+ *   even when the registry cannot persist (private mode) and the payment service is down. The price:
+ *   a consume that lands on the platform while its answer is lost (tab closed, SDK timeout) loses
+ *   that one receipt.
+ * - `before-consume` (CleverApps) — mark → grant → consume: the consume failure is ignored; the
  *   next `restore()` finishes the consume without a second grant.
- * An adapter without `consume` has nothing to wait for — both read as `before-consume`.
+ * Under both, each receipt of a pass is granted as soon as its own order allows — never after
+ * another receipt's consume. An adapter without `consume` has nothing to wait for — both read as
+ * `before-consume`.
  */
 export type RestoreGrantPolicy = 'after-consume' | 'before-consume';
 
@@ -60,7 +66,11 @@ export interface PaymentsAdapter {
   purchase(productId: string): Promise<PlatformPurchaseResult | null | undefined>;
   /** Paid purchases the platform still holds (unconsumed receipts). */
   restore(): Promise<readonly PlatformPurchase[] | null | undefined>;
-  /** Closes a purchase on the platform so it stops coming back from `restore()`. */
+  /**
+   * Closes a purchase on the platform so it stops coming back from `restore()`. Never awaited before
+   * a grant except by `after-consume` restore (the receipt's own consume); a hang holds only the
+   * `RestoreResult` of that pass, so the adapter should time it out (Yandex: 8 s).
+   */
   consume?(purchase: PlatformPurchase): Promise<unknown>;
   readonly restoreGrant?: RestoreGrantPolicy;
 }
@@ -98,7 +108,8 @@ export type PurchaseErrorReason =
   | 'no_product_id'
   /**
    * `resolveGrant` has no rewards for a paid product (config out of sync with the platform console).
-   * Like in the donor, the purchase is already marked and consumed by then — it is reported, not retried.
+   * Like in the donor, the purchase is already marked (and consumed, or being consumed) — it is
+   * reported, not retried.
    */
   | 'no_grant'
   /** `resolveGrant` / `grant` threw — same consequence as `no_grant`. */
@@ -160,9 +171,10 @@ export interface PurchaseRuntimeOptions<TGrant = unknown> {
   resolveGrant(productId: string, context: PurchaseGrantContext): TGrant | null | undefined;
   /**
    * Gives the rewards — synchronously, in memory; the host persists the profile on the `granted`
-   * event. Called at most once per token, and LAST: the token is already marked and the consume
-   * was attempted (the donor's order), so a throw here loses the purchase — it is reported as
-   * `grant_threw`, never retried. Do not throw for a product `resolveGrant` knows.
+   * event. Called at most once per token, right after the token is marked (after-consume restore:
+   * after the receipt was consumed) and never after a consume of it is awaited, so a throw here
+   * loses the purchase — it is reported as `grant_threw`, never retried. Do not throw for a product
+   * `resolveGrant` knows.
    */
   grant(productId: string, rewards: TGrant, context: PurchaseGrantContext): void;
   onEvent?: PurchaseEventHandler<TGrant>;
