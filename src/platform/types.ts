@@ -58,11 +58,16 @@ export interface PlatformStorage {
    */
   get(keys: readonly string[]): Promise<Record<string, unknown>>;
   /**
-   * Writes the patch. True = the platform took it; false = it refused or failed (CleverApps
-   * `storage.set` → false, a throttled / timed-out Yandex `setData`). A rejection reads as false.
+   * Writes the patch (a PATCH: keys it does not name stay as they are). True = CONFIRMED: a write that
+   * carried this call's patch succeeded on the platform — never "queued" or "accepted locally". An adapter
+   * that batches calls answers each by the batch that carried it; when a later call overwrote one of its
+   * keys inside that batch, true means the confirmed value is not older than this call's. False = this
+   * call got no such confirmation (refused, failed, timed out, or the batch it waited for never ran); the
+   * adapter may keep the patch for a later write, but this call's answer never turns true afterwards.
+   * A rejection reads as false.
    */
   set(patch: Record<string, unknown>): Promise<boolean>;
-  /** Removes the keys (the donor's `user.reset`). */
+  /** Removes the keys (the donor's `user.reset`). Resolves on the same confirmation as `set`, rejects without it. */
   clear(keys: readonly string[]): Promise<void>;
 }
 

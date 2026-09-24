@@ -156,7 +156,7 @@ test('cloud read failure REJECTS: 3 attempts (8 s timeout each, pauses 1 s / 3 s
   await expect(garbage.platform.storage.get(['profile'])).rejects.toThrow(/non-object/);
 });
 
-test('cloud write: setData(whole object, flush=true); one write in flight, later ones collapse into a final write ≥ 3 s apart', async () => {
+test('cloud write: setData(whole object, flush=true); one write in flight, later ones collapse into a final write ≥ 3 s apart and are answered by it', async () => {
   const h = makeYandex();
   const { storage } = h.platform;
   expect(await storage.set({ profile: { level: 1 }, an: { uuid: 'u' }, skipped: undefined })).toBe(true);
@@ -165,11 +165,14 @@ test('cloud write: setData(whole object, flush=true); one write in flight, later
   // a save after every move: the 2nd waits for the rate window, the 3rd and 4th ride along with it
   const second = track(storage.set({ profile: { level: 2 } }));
   await flush();
-  expect(await storage.set({ profile: { level: 3 } })).toBe(true); // answered at once, like the donor
-  expect(await storage.set({ an: { uuid: 'u', n: 2 } })).toBe(true);
+  // not answered at once (the donor did): each waits for the write that carries its patch
+  const third = track(storage.set({ profile: { level: 3 } }));
+  const fourth = track(storage.set({ an: { uuid: 'u', n: 2 } }));
+  await flush();
+  expect([second.state, third.state, fourth.state]).toEqual(['pending', 'pending', 'pending']);
   expect(h.fake.writes).toHaveLength(1);
   await vi.advanceTimersByTimeAsync(YANDEX_TIMEOUTS.saveMinInterval);
-  expect(second.state).toBe('ok');
+  expect([second.value, third.value, fourth.value]).toEqual([true, true, true]);
   expect(h.fake.writes).toHaveLength(2);
   expect(h.fake.writes[1]!.data).toEqual({ profile: { level: 3 }, an: { uuid: 'u', n: 2 } }); // the freshest of each key, one call
   expect(h.fake.cloud).toEqual({ profile: { level: 3 }, an: { uuid: 'u', n: 2 } });

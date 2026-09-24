@@ -78,7 +78,7 @@ describe.each(['replace', 'merge'] as const)('storage.set is a PATCH over a %s s
     expect([reloaded.values, next.readCore('wallet')]).toEqual([{ solipics_state: { ...SAVE, level: 8 } }, { coins: 20 }]);
   });
 
-  test('5 + 6 + 7. overlapping writes lose nothing; a failed setData answers false and never becomes the confirmed state; the next write is deterministic', async () => {
+  test('5 + 6 + 7. overlapping writes lose nothing; a failed setData answers false to the calls it carried and never becomes the confirmed state; the next write is deterministic', async () => {
     const h = make({ keep: 'k' }, (fake) => (fake.setDataMode = 'hold'));
     const { storage } = h.platform;
     await h.platform.identity.ready();
@@ -87,20 +87,22 @@ describe.each(['replace', 'merge'] as const)('storage.set is a PATCH over a %s s
     const first = track(storage.set({ a: 1 }));
     await flush(50);
     expect(h.fake.heldWrites).toHaveLength(1); // one setData in flight
-    // collapsed into the chain in flight: answered at once, like the donor
-    expect(await storage.set({ b: 2 })).toBe(true);
-    expect(await storage.set({ a: 5 })).toBe(true);
+    // collapsed into the chain in flight: answered by the write that carries them (the donor: ok at once)
+    const b = track(storage.set({ b: 2 }));
+    const a5 = track(storage.set({ a: 5 }));
     h.fake.heldWrites[0]!.succeed();
     await flush(20);
     expect(h.fake.cloud).toEqual({ keep: 'k', a: 1 });
+    expect([first.value, b.state, a5.state]).toEqual([true, 'pending', 'pending']);
 
     await vi.advanceTimersByTimeAsync(YANDEX_TIMEOUTS.saveMinInterval);
     expect(h.fake.heldWrites).toHaveLength(2); // the second turn: confirmed object + every collapsed patch
     expect(h.fake.writes[1]!.data).toEqual({ keep: 'k', a: 5, b: 2 });
-    expect(await storage.set({ c: 3 })).toBe(true); // lands while the 2nd turn is in flight
+    const c = track(storage.set({ c: 3 })); // lands while the 2nd turn is in flight
     h.fake.heldWrites[1]!.fail();
     await flush(20);
-    expect([first.state, first.value, h.diagnostics]).toEqual(['ok', false, ['cloud_save_failed']]);
+    // the failed turn's calls AND the one queued behind it: no confirmation; the first keeps its own true
+    expect([first.value, b.value, a5.value, c.value, h.diagnostics]).toEqual([true, false, false, false, ['cloud_save_failed']]);
     expect(h.fake.cloud).toEqual({ keep: 'k', a: 1 }); // the failed turn changed nothing
 
     const retry = track(storage.set({ d: 4 }));

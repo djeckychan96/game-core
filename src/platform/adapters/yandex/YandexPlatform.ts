@@ -5,7 +5,9 @@
 // Ported as is: SDK boot (20 s, one retry, 30 s "SDK is dead" memory), the non-blocking player with
 // guest mode and the background retry (5 × 15 s), the cloud read (8 s × 3 attempts, a total failure
 // REJECTS), the serialized + throttled `setData` (one in flight, ≥ 3 s apart; each call is the whole
-// confirmed object with the patch on top — the SDK replaces the object, `storage.set` stays a PATCH),
+// confirmed object with the patch on top — the SDK replaces the object, `storage.set` stays a PATCH;
+// `set` answers true only once a `setData` carrying its patch succeeded — the donor answered a call that
+// joined a write in flight ok at once, Core never answers "queued"),
 // the ad lifecycle (audio pause before the show, gameplay restored only if it was running, watchdog,
 // the local rewarded-availability latch), payments with every timeout. Left to the host on purpose: the local
 // mirror, the rollback guard, `save_seq`, cloud identity adoption, the guest-conflict write guard,
@@ -111,6 +113,10 @@ export interface YandexPlatformOptions {
 
 type AdType = 'interstitial' | 'rewarded';
 
+/** How one set / clear call ended: its patch was in a `setData` that succeeded, or it got no confirmation. */
+type SaveTurnResult = { ok: true } | { ok: false; error: unknown };
+type SaveWaiter = { seq: number; resolve(result: SaveTurnResult): void };
+
 export class YandexPlatform implements GamePlatform {
   readonly identity: PlatformIdentity;
   readonly environment: PlatformEnvironment;
@@ -143,9 +149,11 @@ export class YandexPlatform implements GamePlatform {
   /** The SDK has no `isAvailable`: true until an `onError` / `onClose(false)` of a rewarded, then false for the session. */
   private rewardedAvailable = true;
   private saveInFlight = false;
-  /** The write chain in flight — what a `clear` that joins it waits for. Meaningful only while `saveInFlight`. */
-  private saveChain: Promise<void> | null = null;
   private pendingPatch: Record<string, unknown> | null = null;
+  /** The sequence number of the last queued set / clear call; a `setData` turn carries every call up to it. */
+  private writeSeq = 0;
+  /** set / clear calls waiting for the `setData` turn that carries their patch. */
+  private saveWaiters: SaveWaiter[] = [];
   /**
    * The player's WHOLE cloud object as last confirmed: the one full `getData()` before the first write,
    * then every successful `setData`. null = not read yet — no write is safe before it is.
@@ -382,6 +390,7 @@ export class YandexPlatform implements GamePlatform {
     return data as Record<string, unknown>;
   }
 
+  /** True only once a `setData` carrying this patch succeeded — never "queued" (see `enqueueWrite`). */
   private async writeCloud(patch: Record<string, unknown>): Promise<boolean> {
     try {
       await this.ensureSdkReady();
@@ -390,14 +399,7 @@ export class YandexPlatform implements GamePlatform {
     }
     const player = this.player;
     if (!player) return false; // a guest: no cloud — the host keeps its mirror
-    this.queuePatch(patch);
-    // already writing: never a parallel setData (the platform's rate limit hangs the calls) — the
-    // chain in flight writes this patch with its final turn; answered ok at once, like the donor
-    if (this.saveInFlight) return true;
-    return this.startSaveChain(player).then(
-      () => true,
-      () => false
-    );
+    return (await this.enqueueWrite(player, patch)).ok;
   }
 
   /** The donor's `user.reset` = `{ key: null }` — a patch like any other, so it never drops the other keys either. */
@@ -407,31 +409,51 @@ export class YandexPlatform implements GamePlatform {
     if (!player) throw new Error(YANDEX_NO_PLAYER);
     const patch: Record<string, unknown> = {};
     for (const key of keys) patch[key] = null; // also replaces a carried value of the key
-    this.queuePatch(patch);
-    // not answered at once like a joining set(): a reset waits for the write that carries it, and REJECTS
-    // with that write's error (the key stays queued for the next write, like any unwritten patch)
-    await (this.saveInFlight && this.saveChain ? this.saveChain : this.startSaveChain(player));
+    // resolves once the write carrying the reset succeeded, REJECTS with the error that left it unconfirmed
+    // (the key stays queued for the next write, like any unwritten patch)
+    const result = await this.enqueueWrite(player, patch);
+    if (!result.ok) throw result.error;
   }
 
-  private queuePatch(patch: Record<string, unknown>): void {
+  /**
+   * Queues one call's patch under the next sequence number and answers with the result of the `setData` turn
+   * that carries it. A turn takes EVERYTHING queued (sequences up to `writeSeq` at that moment), so a call is
+   * settled by exactly one turn: ok when it succeeded; not ok when it failed, or when the chain stopped on an
+   * earlier failure before its turn (the patch stays queued — a later call's write carries it, but this
+   * call's answer is never turned into a success afterwards).
+   */
+  private enqueueWrite(player: YandexPlayer, patch: Record<string, unknown>): Promise<SaveTurnResult> {
+    const seq = ++this.writeSeq;
     const merged: Record<string, unknown> = { ...(this.pendingPatch ?? {}) };
     for (const [key, value] of Object.entries(patch)) if (value !== undefined) merged[key] = value;
     this.pendingPatch = merged;
+    const answer = new Promise<SaveTurnResult>((resolve) => this.saveWaiters.push({ seq, resolve }));
+    // never a parallel setData (the platform's rate limit hangs the calls): a chain in flight carries it
+    if (!this.saveInFlight) {
+      this.saveInFlight = true;
+      void this.runSaveChain(player);
+    }
+    return answer;
   }
 
-  private startSaveChain(player: YandexPlayer): Promise<void> {
-    this.saveInFlight = true;
-    this.saveChain = this.runSaveChain(player);
-    return this.saveChain;
+  private settleWaiters(upToSeq: number, result: SaveTurnResult): void {
+    const waiting: SaveWaiter[] = [];
+    for (const waiter of this.saveWaiters) {
+      if (waiter.seq <= upToSeq) waiter.resolve(result);
+      else waiting.push(waiter);
+    }
+    this.saveWaiters = waiting;
   }
 
   /**
    * One chain of `setData` turns: one call in flight, ≥ 3 s apart, until nothing is queued. `setData`
    * REPLACES the player's whole object (the SDK: `getData` answers the data of the LAST `setData` call), so a
    * turn never sends a bare patch: it sends the confirmed whole object with the queued patch on top, and
-   * that object becomes the confirmed one only once the call succeeded.
+   * that object becomes the confirmed one only once the call succeeded. Never rejects: every outcome reaches
+   * the callers through `saveWaiters`.
    */
   private async runSaveChain(player: YandexPlayer): Promise<void> {
+    let failure: { error: unknown } | null = null;
     try {
       const wait = this.lastSetDataAt + YANDEX_TIMEOUTS.saveMinInterval - this.now();
       if (wait > 0) await sleep(wait, this.timers);
@@ -444,10 +466,12 @@ export class YandexPlatform implements GamePlatform {
             base = this.confirmedCloud = await this.fetchCloud(player);
           } catch (error) {
             this.diagnostic('cloud_save_failed', error);
-            throw error;
+            failure = { error };
+            return;
           }
         }
         const patch: Record<string, unknown> = this.pendingPatch ?? {};
+        const turnSeq = this.writeSeq; // every call queued so far is in this patch, none after it
         this.pendingPatch = null;
         const data: Record<string, unknown> = { ...base, ...patch };
         this.lastSetDataAt = this.now();
@@ -458,13 +482,20 @@ export class YandexPlatform implements GamePlatform {
           // carried into the next write (the donor re-read its whole model instead) — nothing is lost
           this.pendingPatch = { ...patch, ...(this.pendingPatch ?? {}) };
           this.diagnostic('cloud_save_failed', error);
-          throw error;
+          failure = { error };
+          return;
         }
         this.confirmedCloud = data;
+        this.settleWaiters(turnSeq, { ok: true });
         if (this.pendingPatch) await sleep(YANDEX_TIMEOUTS.saveMinInterval, this.timers);
       } while (this.pendingPatch);
+    } catch (error) {
+      failure = { error }; // nothing above throws on purpose — but no caller may be left waiting
     } finally {
       this.saveInFlight = false;
+      // the chain stopped: the failed turn's callers AND the ones queued behind it get no confirmation this
+      // time — their patches stay queued for whatever write comes next
+      if (failure) this.settleWaiters(Number.POSITIVE_INFINITY, { ok: false, error: failure.error });
     }
   }
 

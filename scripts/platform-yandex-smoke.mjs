@@ -31,6 +31,7 @@ const fake = {
   calls: [],
   cloud: { profile: { level: 20, coins: 0 } },
   getDataFailures: 0,
+  setDataFailures: 0,
   held: [],
   seq: 0,
   purchaseHangs: false,
@@ -47,6 +48,7 @@ const player = {
   },
   setData: (data, flush) => {
     fake.calls.push(`setData:flush=${flush}`);
+    if (fake.setDataFailures > 0) return (fake.setDataFailures--, Promise.reject(new Error('rate_limit')));
     fake.cloud = JSON.parse(JSON.stringify(data));
     return Promise.resolve();
   }
@@ -113,12 +115,19 @@ assert.ok(fake.calls.includes('setData:flush=true'));
 // a lone key (the SaveGate Core record) is a PATCH: the replacing setData must not drop the game's save
 assert.equal(await platform.storage.set({ 'game.core': { wallet: 20 } }), true);
 assert.deepEqual(fake.cloud, { profile: { level: 21, coins: 50 }, an: { uuid: 'u-1' }, 'game.core': { wallet: 20 } });
+// honest ACK: two calls collapsed into one setData that fails are BOTH false (the donor answered the joined one
+// true at once); the next write carries their patches and only its own caller gets true
+fake.setDataFailures = 1;
+assert.deepEqual(await Promise.all([platform.storage.set({ 'game.core': { wallet: 21 } }), platform.storage.set({ an: { uuid: 'u-2' } })]), [false, false]);
+assert.deepEqual(fake.cloud['game.core'], { wallet: 20 }); // the failed write confirmed nothing
+assert.equal(await platform.storage.set({ profile: { level: 22, coins: 50 } }), true);
+assert.deepEqual(fake.cloud, { profile: { level: 22, coins: 50 }, an: { uuid: 'u-2' }, 'game.core': { wallet: 21 } });
 fake.getDataFailures = 3;
 const readsBefore = fake.calls.filter((c) => c === 'getData').length;
 await assert.rejects(platform.storage.get(['profile']), /network/);
 assert.equal(fake.calls.filter((c) => c === 'getData').length - readsBefore, 3);
 assert.equal(typeof YANDEX_NO_PLAYER, 'string');
-step('cloud storage', 'getData ok; set(patch) = setData(whole object, flush=true), other keys kept; 3 failed reads → REJECT');
+step('cloud storage', 'getData ok; set(patch) = setData(whole object, flush=true), other keys kept; a failed collapsed write → false ×2, carried; 3 failed reads → REJECT');
 
 // ---- catalog: the platform's READY price strings
 const refreshed = await platform.catalog.refresh();
