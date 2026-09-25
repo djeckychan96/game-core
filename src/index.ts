@@ -326,3 +326,18 @@ export type {
   SoftCurrencySaveGate,
   SoftCurrencyWalletOptions
 } from './economy';
+export { LivesRuntime } from './lives';
+export type {
+  LivesConfig,
+  LivesStatus,
+  LivesProblem,
+  LivesRefusal,
+  LivesAttemptOutcome,
+  LivesChangeKind,
+  LivesResult,
+  LivesChange,
+  LivesListener,
+  LivesSnapshot,
+  LivesSaveGate,
+  LivesRuntimeOptions
+} from './lives';
