@@ -15,6 +15,8 @@ export type {
   ReadyUiOverlayLayout,
   ReadyUiOverlayRegion
 } from './ReadyUiOverlay';
+export { OrientationGuard, createOrientationGuard, ORIENTATION_GUARD_QUERY } from './OrientationGuard';
+export type { OrientationGuardOptions, GameOrientation } from './OrientationGuard';
 export { LevelMapView } from './LevelMapView';
 export type {
   LevelMapViewOptions,

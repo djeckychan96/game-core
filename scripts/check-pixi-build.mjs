@@ -30,7 +30,9 @@ if (/class\s+Application\b/.test(pixiSource) || /WebGLRenderer/.test(pixiSource)
 
 const coreSource = readFileSync(coreBundle, 'utf-8');
 if (/pixi\.js/.test(coreSource)) fail('root bundle references pixi.js');
-if (/LevelMapView|HudView|ResultWindowView|ClickRippleEffect|ReadyUiOverlay/.test(coreSource)) fail('root bundle contains Pixi kit classes');
+if (/LevelMapView|HudView|ResultWindowView|ClickRippleEffect|ReadyUiOverlay|OrientationGuard/.test(coreSource)) fail('root bundle contains Pixi kit classes');
+// the orientation guard decides from a media query (landscape + coarse primary pointer) — never from the user agent
+if (/userAgent/.test(pixiSource)) fail('dist/pixi bundle sniffs the user agent');
 // the overlay host is the one kit module that creates a Pixi Application — host-driven only: no frame loop, timer or observer of its own
 if (/requestAnimationFrame\s*\(|setInterval\s*\(|setTimeout\s*\(|ResizeObserver/.test(pixiSource)) fail('dist/pixi bundle creates a frame loop, a timer or an observer');
 // the offer chain lives in the root entry and stays out of the kit (the window is data-only)
@@ -67,18 +69,18 @@ const expected = [
   'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
   'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'DEFAULT_READY_UI_THEME', 'resolveTheme',
   'createLabel', 'formatAmount', 'formatTimer', 'backOut', 'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE',
-  'createReadyUiOverlay', 'ReadyUiOverlay'
+  'createReadyUiOverlay', 'ReadyUiOverlay', 'createOrientationGuard', 'OrientationGuard', 'ORIENTATION_GUARD_QUERY'
 ];
 for (const name of expected) {
   if (!(name in mod)) fail(`dist/pixi entry lacks export ${name}`);
 }
 
 const types = readFileSync(pixiTypes, 'utf-8');
-for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect', 'createReadyUiOverlay', 'ReadyUiOverlayOptions']) {
+for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect', 'createReadyUiOverlay', 'ReadyUiOverlayOptions', 'createOrientationGuard', 'OrientationGuardOptions']) {
   if (!types.includes(name)) fail(`${pixiExport.types} lacks ${name}`);
 }
 // the kit's declarations import the foundation types relatively; they must ship next to them
-for (const rel of ['dist/pixi/index.d.ts', 'dist/pixi/ui/types.d.ts', 'dist/pixi/motion/types.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts', 'dist/pixi/pixi/fx/ClickRippleEffect.d.ts', 'dist/pixi/pixi/ReadyUiOverlay.d.ts']) {
+for (const rel of ['dist/pixi/index.d.ts', 'dist/pixi/ui/types.d.ts', 'dist/pixi/motion/types.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts', 'dist/pixi/pixi/fx/ClickRippleEffect.d.ts', 'dist/pixi/pixi/ReadyUiOverlay.d.ts', 'dist/pixi/pixi/OrientationGuard.d.ts']) {
   if (!existsSync(resolve(rootDir, rel))) fail(`missing declaration ${rel}`);
 }
 
