@@ -1,13 +1,17 @@
-// LivesRuntime V1 — the lives of a game whose lives belong to Core: the count, the cap, the regeneration
-// and the level-attempt spend live in the SaveGate Core record `lives`, never in a game key. Generic
+// LivesRuntime V1.1 — the lives of a game whose lives belong to Core: the count, the cap, the regeneration
+// and the open level attempt live in the SaveGate Core record `lives`, never in a game key. Generic
 // semantics of Trail Arrow 0.1.31 (ClientLogicSystem / HeartsRefillSystem); every number is the host's
 // config. It only COUNTS: windows, ads, purchases, prices, free-level or unlimited-lives rules and the
 // HUD timer text stay outside. No timer, no global: time comes from the injected clock (epoch ms).
 import type { SaveGate, SaveReadStatus, SaveWriteResult } from '../save/SaveGate';
 
-/** The runtime's record in the SaveGate Core namespace: `<profile.id>.core` → `{ lives: { v, lives, regenStart } }`. */
+/** The runtime's record in the SaveGate Core namespace: `<profile.id>.core` → `{ lives: { v, lives, regenStart, attempt? } }`. */
 const RECORD = 'lives';
-/** Any change of the record's shape bumps it; V1 treats another version as unknown data (unavailable, never overwritten). */
+/**
+ * Any change of the record's shape bumps it; another version is unknown data (unavailable, never overwritten).
+ * V1.1 stays 1: `attempt` is an optional field whose absence means "closed" — exactly what a record written
+ * before it holds — so every stored V1 record reads unchanged.
+ */
 const FORMAT = 1;
 
 /** The game's lives rules — product numbers, passed by the host (Trail Arrow: 5 / 1800 / true). */
@@ -43,7 +47,7 @@ export type LivesRefusal =
   | 'disposed'
   /** startAttempt() with 0 lives. */
   | 'no_lives'
-  /** endAttempt() without a running attempt (a repeated level end). */
+  /** endAttempt() without a running attempt (a repeated level end); resumeAttempt() without a stored open one. */
   | 'no_attempt'
   /** refill() at the cap — the host charges nothing. */
   | 'full'
@@ -94,7 +98,7 @@ export interface LivesSnapshot {
   writable: boolean;
   /** A new attempt can be paid now: writable and at least one life. */
   canStart: boolean;
-  /** An attempt was started and not ended in this session. */
+  /** This session started or resumed an attempt that has not ended (a stored one not resumed yet is not counted). */
   attemptOpen: boolean;
   /** Epoch ms of the next regenerated life; null at the cap or while unknown. */
   nextLifeAt: number | null;
@@ -120,6 +124,8 @@ interface LivesRecord {
   lives: number;
   /** Epoch ms the running regeneration period started; null at the cap. */
   regenStart: number | null;
+  /** V1.1: true while a paid attempt is open (written with its spend, removed with its end); absent = closed. */
+  attempt?: boolean;
 }
 
 const CONFIG_KEYS = ['maxLives', 'startLives', 'regenSeconds', 'refundOnWin'];
@@ -133,7 +139,8 @@ const isLivesRecord = (value: unknown): value is LivesRecord => {
   return (
     record.v === FORMAT &&
     isCount(record.lives) &&
-    (record.regenStart === null || (typeof record.regenStart === 'number' && Number.isFinite(record.regenStart) && record.regenStart >= 0))
+    (record.regenStart === null || (typeof record.regenStart === 'number' && Number.isFinite(record.regenStart) && record.regenStart >= 0)) &&
+    (record.attempt === undefined || typeof record.attempt === 'boolean')
   );
 };
 
@@ -156,15 +163,17 @@ function checkConfig(config: LivesConfig): void {
  *   await lives.load();                          // with gate.load(); never rejects
  *   gate.open();
  *   if (!lives.snapshot().canStart) livesWindow.show(…);  // 0 lives: the host's window
- *   lives.startAttempt();                        // at the game's spend moment (level entry, first move …)
- *   lives.endAttempt(result.win ? 'win' : 'fail');   // levelEnd; 'exit' for a left level
+ *   lives.startAttempt();                        // a NEW run, at the game's spend moment (level entry, first move …)
+ *   lives.resumeAttempt();                       // the gameplay RESTORED its unfinished run (after a reload): no spend
+ *   lives.endAttempt(result.win ? 'win' : 'fail');   // levelEnd; 'exit' for a given-up level
  *   lives.grant(1, 'rewarded');                  // after the ad / purchase / offer confirmed it
  *   const s = lives.tick();                      // the host's HUD second → hud.setLives(s.lives, formatTimer(Math.ceil(ms / 1000)))
  *
  * Time is applied on every call from the stored stamp (whole periods become lives, the remainder stays),
  * so a closed game regenerates the same way as a running one. A change is synchronous in memory, then ONE
  * `gate.writeCore('lives', record)` of the whole record; a failed write keeps the memory and is carried by
- * the next write (or `save()`).
+ * the next write (or `save()`). One logical attempt = one life: the open attempt is part of that record, so
+ * its spend and its end (with the refund) are each one durable write, and a reload resumes it instead of paying.
  */
 export class LivesRuntime {
   readonly maxLives: number;
@@ -179,7 +188,10 @@ export class LivesRuntime {
   private problem: LivesProblem | null = null;
   private lives: number | null = null;
   private regenStart: number | null = null;
+  /** This session owns the open attempt (startAttempt / resumeAttempt). */
   private attemptOpen = false;
+  /** A durable open attempt from an earlier session, not resumed (yet): resumeAttempt adopts it, startAttempt abandons it. */
+  private attemptPending = false;
   /** Time changed the state (settle) since the last write: tick() writes it. */
   private unsaved = false;
   private disposed = false;
@@ -244,10 +256,11 @@ export class LivesRuntime {
   }
 
   /**
-   * Pays one life for a new level attempt, at the moment the game chooses (Trail Arrow: the level entry).
-   * One attempt runs at a time: a repeated start is answered ok without a second spend; a restart is
-   * endAttempt() + startAttempt(). 0 lives → `no_lives`. The running attempt is session memory: after a
-   * reload the next attempt pays again.
+   * Pays one life for a NEW level attempt, at the moment the game chooses (Trail Arrow: the level entry), and
+   * opens it durably — the spend and the open attempt are one write. One attempt runs at a time: a repeated
+   * start in the session is answered ok without a second spend; a restart is endAttempt() + startAttempt().
+   * A stored open attempt that was not resumed is abandoned here (no refund) and the new one is paid.
+   * 0 lives → `no_lives`.
    */
   startAttempt(): LivesResult {
     const refusal = this.prepare();
@@ -259,18 +272,41 @@ export class LivesRuntime {
       const now = this.now();
       this.regenStart = Number.isFinite(now) ? now : null; // a broken clock: the period starts at the next finite reading
     }
+    this.attemptPending = false;
     this.attemptOpen = true;
     return this.change('spend', -1);
   }
 
-  /** Ends the running attempt: a win refunds its life under `refundOnWin` (up to the cap); a fail or an exit returns nothing. A second end → `no_attempt`. */
+  /**
+   * Continues the stored open attempt WITHOUT a spend — call it when the gameplay restored its unfinished run
+   * (SoliPix `onLevelChanged({ restored: true })`). Nothing is written (the record already says open).
+   * Idempotent; `no_attempt` when no attempt is open (never paid, already ended, or its write never landed):
+   * the host then starts a new one.
+   */
+  resumeAttempt(): LivesResult {
+    const refusal = this.prepare();
+    if (refusal) return this.refuse(refusal);
+    if (this.attemptOpen) return this.unchanged();
+    if (!this.attemptPending) return this.refuse('no_attempt');
+    this.attemptPending = false;
+    this.attemptOpen = true;
+    return this.unchanged();
+  }
+
+  /**
+   * Ends the attempt this session started or resumed, durably — the close (and a win's refund under
+   * `refundOnWin`, up to the cap) is one write; a fail or an exit returns nothing. A second end, or an end
+   * without start / resume → `no_attempt`. A run the gameplay only suspends (kept to be resumed) is not ended.
+   */
   endAttempt(outcome: LivesAttemptOutcome): LivesResult {
     if (!OUTCOMES.includes(outcome)) throw new TypeError(`LivesRuntime.endAttempt(): outcome must be one of ${OUTCOMES.join(' / ')}`);
     const refusal = this.prepare();
     if (refusal) return this.refuse(refusal);
     if (!this.attemptOpen) return this.refuse('no_attempt');
     this.attemptOpen = false;
-    if (outcome !== 'win' || !this.refundOnWin || (this.lives as number) >= this.maxLives) return this.unchanged();
+    if (outcome !== 'win' || !this.refundOnWin || (this.lives as number) >= this.maxLives) {
+      return { ok: true, reason: null, lives: this.lives, delta: 0, saved: this.write() };
+    }
     return this.change('refund', 1);
   }
 
@@ -322,6 +358,7 @@ export class LivesRuntime {
     } else if (core === 'loaded' && isLivesRecord(record)) {
       this.lives = Math.min(record.lives, this.maxLives);
       this.regenStart = record.regenStart;
+      this.attemptPending = record.attempt === true;
       this.status = 'ready';
     } else {
       // failed (or never settled): the stored count is unknown — no default, no write
@@ -406,6 +443,7 @@ export class LivesRuntime {
   private write(): Promise<SaveWriteResult> {
     this.unsaved = false;
     const record: LivesRecord = { v: FORMAT, lives: this.lives as number, regenStart: this.regenStart };
+    if (this.attemptOpen || this.attemptPending) record.attempt = true; // closed = absent, the pre-V1.1 shape
     return this.gate.writeCore(RECORD, record);
   }
 }

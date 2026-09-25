@@ -175,7 +175,7 @@ describe('LivesRuntime — load', () => {
     first.lives.endAttempt('fail');
     c.advance(60_000);
     first.lives.startAttempt();
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 3, regenStart: T0 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 3, regenStart: T0, attempt: true });
     c.advance(600_000);
     const second = await session(fake, { c });
     expect(second.loaded).toMatchObject({ lives: 3, attemptOpen: false, nextLifeAt: T0 + PERIOD, nextLifeInMs: PERIOD - 660_000 });
@@ -192,7 +192,7 @@ describe('LivesRuntime — attempts', () => {
     expect(result).toMatchObject({ ok: true, reason: null, lives: 4, delta: -1 });
     expect(await result.saved).toEqual({ ok: true, reason: null });
     expect(writes(fake)).toEqual([`set:${CORE_KEY}`]);
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0, attempt: true });
     expect(events).toEqual([{ kind: 'spend', delta: -1, lives: 4, maxLives: 5 }]);
     expect(lives.snapshot()).toMatchObject({ lives: 4, attemptOpen: true, nextLifeInMs: PERIOD });
   });
@@ -201,7 +201,7 @@ describe('LivesRuntime — attempts', () => {
     const fake = fakeStorage(stored(3, T0 - 1_000_000));
     const { lives } = await session(fake);
     lives.startAttempt();
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 2, regenStart: T0 - 1_000_000 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 2, regenStart: T0 - 1_000_000, attempt: true });
     expect(lives.snapshot().nextLifeInMs).toBe(PERIOD - 1_000_000);
   });
 
@@ -224,7 +224,7 @@ describe('LivesRuntime — attempts', () => {
     expect(win).toMatchObject({ ok: true, lives: 5, delta: 1 });
     expect(livesRecord(fake)).toEqual({ v: 1, lives: 5, regenStart: null }); // back at the cap: no period runs
     lives.startAttempt();
-    expect(lives.endAttempt('fail')).toMatchObject({ ok: true, lives: 4, delta: 0, saved: null });
+    expect(lives.endAttempt('fail')).toMatchObject({ ok: true, lives: 4, delta: 0 }); // V1.1: the close is written (see R3)
     lives.startAttempt();
     expect(lives.endAttempt('exit')).toMatchObject({ ok: true, lives: 3, delta: 0 });
 
@@ -255,7 +255,7 @@ describe('LivesRuntime — attempts', () => {
     expect(lives.endAttempt('fail').reason).toBe('no_attempt');
   });
 
-  test('the open attempt is session memory: after a reload a new attempt pays again (no free re-entry)', async () => {
+  test('after a reload a NEW attempt (startAttempt, not resumeAttempt) pays again — no free re-entry', async () => {
     const fake = fakeStorage();
     const c = clock();
     const first = await session(fake, { c });
@@ -317,7 +317,7 @@ describe('LivesRuntime — regeneration by timestamps', () => {
     c.advance(200_000);
     expect(lives.snapshot()).toMatchObject({ lives: 4, nextLifeInMs: PERIOD - 200_000 });
     lives.startAttempt(); // a spend below the cap keeps the carried period
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 3, regenStart: T0 + PERIOD });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 3, regenStart: T0 + PERIOD, attempt: true });
   });
 
   test('9. several periods offline are counted on load, deterministically, with the remainder carried', async () => {
@@ -339,7 +339,7 @@ describe('LivesRuntime — regeneration by timestamps', () => {
     expect(lives.snapshot()).toMatchObject({ lives: 5, full: true });
     lives.startAttempt();
     expect(lives.snapshot()).toMatchObject({ lives: 4, nextLifeAt: c.t + PERIOD, nextLifeInMs: PERIOD });
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: c.t });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: c.t, attempt: true });
 
     // a very long offline from zero: capped, no overflow
     const year = await session(fakeStorage(stored(0, T0)), { c: clock(T0 + 365 * 24 * 3600 * 1000) });
@@ -423,7 +423,7 @@ describe('LivesRuntime — writes, listeners, dispose', () => {
     fake.setMode = 'ok';
     const retry = lives.save();
     expect(await retry.saved).toEqual({ ok: true, reason: null });
-    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0, attempt: true });
   });
 
   test('16. listeners: subscription order, unsubscribe, a throwing listener lands in onListenerError; dispose drops them and refuses changes', async () => {
@@ -507,8 +507,236 @@ describe('LivesRuntime — Ready UI and neighbours', () => {
     await wallet.trySpend(5).saved;
     expect(fake.data[CORE_KEY]).toEqual({
       wallet: { v: 1, balance: 115, rewardedLevels: [] },
-      lives: { v: 1, lives: 4, regenStart: T0 }
+      lives: { v: 1, lives: 4, regenStart: T0, attempt: true }
     });
     expect(Object.keys(fake.data)).toEqual([CORE_KEY]); // no second namespace, no game key touched
+  });
+});
+
+// V1.1 — one logical attempt = one life: the open attempt is durable (`attempt: true` in the same record,
+// written with the spend) and a gameplay that restored its unfinished run resumes it instead of paying again.
+describe('LivesRuntime — durable attempt resume (V1.1)', () => {
+  /** A process death: the runtime and its gate are gone, a new session loads the same storage. */
+  const reload = (fake: Fake, c: ReturnType<typeof clock>) => session(fake, { c });
+
+  test('R1. start → reload → resume: no second spend, the attempt is open again, resume writes nothing', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    const first = await session(fake, { c });
+    const start = first.lives.startAttempt();
+    expect(start).toMatchObject({ ok: true, lives: 4, delta: -1 });
+    expect(await start.saved).toEqual({ ok: true, reason: null }); // spend + open: ONE durable write
+    expect(writes(fake)).toEqual([`set:${CORE_KEY}`]);
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0, attempt: true });
+
+    const second = await reload(fake, c);
+    expect(second.loaded).toMatchObject({ lives: 4, attemptOpen: false }); // durable, not yet claimed by this session
+    expect(second.lives.resumeAttempt()).toEqual({ ok: true, reason: null, lives: 4, delta: 0, saved: null });
+    expect(second.lives.snapshot()).toMatchObject({ lives: 4, attemptOpen: true });
+    expect(writes(fake)).toHaveLength(1);
+  });
+
+  test('R2. resume → win refunds once and closes the attempt in the same durable write', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    (await session(fake, { c })).lives.startAttempt();
+    const { lives } = await reload(fake, c);
+    lives.resumeAttempt();
+    const win = lives.endAttempt('win');
+    expect(win).toMatchObject({ ok: true, lives: 5, delta: 1 });
+    expect(await win.saved).toEqual({ ok: true, reason: null });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 5, regenStart: null });
+    expect(lives.endAttempt('win')).toMatchObject({ ok: false, reason: 'no_attempt', lives: 5 });
+    expect((await reload(fake, c)).lives.resumeAttempt()).toMatchObject({ ok: false, reason: 'no_attempt', lives: 5 });
+  });
+
+  test('R3 / R4. resume → fail or exit: no refund, the close is durable', async () => {
+    for (const outcome of ['fail', 'exit'] as const) {
+      const fake = fakeStorage();
+      const c = clock();
+      (await session(fake, { c })).lives.startAttempt();
+      const { lives } = await reload(fake, c);
+      expect(lives.resumeAttempt().ok).toBe(true);
+      const end = lives.endAttempt(outcome);
+      expect(end).toMatchObject({ ok: true, lives: 4, delta: 0 });
+      expect(await end.saved).toEqual({ ok: true, reason: null });
+      expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0 });
+      expect((await reload(fake, c)).lives.resumeAttempt().reason).toBe('no_attempt');
+    }
+  });
+
+  test('R5. a restart costs exactly one new life — in the session (end + start) and after a reload (start instead of resume)', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    const { lives } = await session(fake, { c });
+    lives.startAttempt();
+    expect(lives.endAttempt('exit')).toMatchObject({ ok: true, delta: 0 });
+    expect(lives.startAttempt()).toMatchObject({ ok: true, lives: 3, delta: -1 });
+
+    // after a reload the gameplay did NOT restore the run (a fresh board): the durable attempt is abandoned,
+    // startAttempt closes it (no refund) and pays the new one — one write, the record stays open for the new run
+    const second = await reload(fake, c);
+    const before = writes(fake).length;
+    expect(second.lives.startAttempt()).toMatchObject({ ok: true, lives: 2, delta: -1 });
+    expect(writes(fake).length).toBe(before + 1);
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 2, regenStart: T0, attempt: true });
+    expect(second.lives.resumeAttempt()).toMatchObject({ ok: true, delta: 0 }); // the NEW attempt is the open one
+    expect(second.lives.endAttempt('win')).toMatchObject({ ok: true, lives: 3, delta: 1 });
+  });
+
+  test('R6. repeated resume is idempotent; start after resume is the same attempt (no spend)', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    (await session(fake, { c })).lives.startAttempt();
+    const { lives } = await reload(fake, c);
+    const events: LivesChange[] = [];
+    lives.onChange((change) => events.push(change));
+    for (let i = 0; i < 3; i++) expect(lives.resumeAttempt()).toEqual({ ok: true, reason: null, lives: 4, delta: 0, saved: null });
+    expect(lives.startAttempt()).toEqual({ ok: true, reason: null, lives: 4, delta: 0, saved: null });
+    expect(events).toEqual([]);
+    expect(writes(fake)).toHaveLength(1); // only the first session's spend
+  });
+
+  test('R7. repeated end is idempotent: one refund, one close write', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    (await session(fake, { c })).lives.startAttempt();
+    const { lives } = await reload(fake, c);
+    lives.resumeAttempt();
+    expect(lives.endAttempt('win')).toMatchObject({ ok: true, delta: 1 });
+    const after = writes(fake).length;
+    for (const outcome of ['win', 'fail', 'exit'] as const) {
+      expect(lives.endAttempt(outcome)).toEqual({ ok: false, reason: 'no_attempt', lives: 5, delta: 0, saved: null });
+    }
+    expect(writes(fake).length).toBe(after);
+  });
+
+  test('R8. crash after a durable start: every later session can resume it, none pays again, until it ends', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    await (await session(fake, { c })).lives.startAttempt().saved;
+    for (let i = 0; i < 3; i++) {
+      c.advance(1000);
+      const s = await reload(fake, c); // crash again before any end
+      expect(s.lives.resumeAttempt()).toMatchObject({ ok: true, lives: 4, delta: 0 });
+    }
+    const last = await reload(fake, c);
+    last.lives.resumeAttempt();
+    expect(last.lives.endAttempt('fail')).toMatchObject({ ok: true, lives: 4 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0 });
+  });
+
+  test('R9. crash after a durable end: nothing to resume, the next attempt pays normally', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    const first = await session(fake, { c });
+    first.lives.startAttempt();
+    await first.lives.endAttempt('fail').saved;
+    const { lives } = await reload(fake, c);
+    expect(lives.resumeAttempt()).toMatchObject({ ok: false, reason: 'no_attempt', lives: 4 });
+    expect(lives.startAttempt()).toMatchObject({ ok: true, lives: 3, delta: -1 });
+  });
+
+  test('R10. an old V1 record without attempt state loads as closed; a malformed attempt field is an invalid record', async () => {
+    const old = fakeStorage(stored(3, T0));
+    const { lives, loaded } = await session(old);
+    expect(loaded).toMatchObject({ status: 'ready', lives: 3, attemptOpen: false });
+    expect(lives.resumeAttempt()).toMatchObject({ ok: false, reason: 'no_attempt', lives: 3 });
+    expect(lives.startAttempt()).toMatchObject({ ok: true, lives: 2, delta: -1 });
+    expect(livesRecord(old)).toEqual({ v: 1, lives: 2, regenStart: T0, attempt: true });
+
+    for (const attempt of ['yes', 1, null, {}]) {
+      const fake = fakeStorage({ [CORE_KEY]: { lives: { v: 1, lives: 3, regenStart: T0, attempt } } });
+      const s = await session(fake);
+      expect(s.loaded).toMatchObject({ status: 'unavailable', problem: 'invalid_record' });
+      expect(s.lives.resumeAttempt().reason).toBe('unavailable');
+      expect(writes(fake)).toEqual([]);
+    }
+    // refusals before load / before open
+    const gate = new SaveGate({ storage: fakeStorage().storage, profile: PROFILE });
+    expect(new LivesRuntime({ gate, config: CONFIG }).resumeAttempt().reason).toBe('not_loaded');
+    const closed = await session(fakeStorage(), { open: false });
+    expect(closed.lives.resumeAttempt().reason).toBe('not_open');
+  });
+
+  test('R11. zero lives: the last life\'s attempt resumes at 0 (resuming costs nothing); after its end a new one is refused', async () => {
+    const fake = fakeStorage(stored(1, T0));
+    const c = clock();
+    (await session(fake, { c })).lives.startAttempt();
+    const { lives } = await reload(fake, c);
+    expect(lives.snapshot()).toMatchObject({ lives: 0, canStart: false });
+    expect(lives.resumeAttempt()).toMatchObject({ ok: true, lives: 0, delta: 0 });
+    lives.endAttempt('fail');
+    expect(lives.startAttempt()).toMatchObject({ ok: false, reason: 'no_lives', lives: 0 });
+
+    // a durable attempt left open at 0 lives is abandoned by a new start only when a life is there to pay it
+    const open = fakeStorage({ [CORE_KEY]: { lives: { v: 1, lives: 0, regenStart: T0, attempt: true } } });
+    const s = await session(open, { c: clock() });
+    expect(s.lives.startAttempt()).toMatchObject({ ok: false, reason: 'no_lives' });
+    expect(s.lives.resumeAttempt()).toMatchObject({ ok: true, lives: 0 });
+  });
+
+  test('R12. regeneration runs while an attempt is open, across a reload; the win refund is capped', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    (await session(fake, { c })).lives.startAttempt(); // 5 → 4, the period starts at T0
+    c.advance(PERIOD / 2);
+    const mid = await reload(fake, c);
+    mid.lives.resumeAttempt();
+    c.advance(PERIOD / 2);
+    mid.lives.tick(); // the regenerated life is written WITH the open attempt
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 5, regenStart: null, attempt: true });
+
+    const { lives } = await reload(fake, c);
+    expect(lives.resumeAttempt()).toMatchObject({ ok: true, lives: 5 });
+    const win = lives.endAttempt('win');
+    expect(win).toMatchObject({ ok: true, lives: 5, delta: 0 });
+    expect(await win.saved).toEqual({ ok: true, reason: null }); // the close is written even without a refund
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 5, regenStart: null });
+  });
+
+  test('R13. a start whose write failed is not durable: after a reload there is nothing to resume and the new start pays once', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    const first = await session(fake, { c });
+    fake.setMode = 'false';
+    const start = first.lives.startAttempt();
+    expect(start).toMatchObject({ ok: true, lives: 4 }); // the session plays on…
+    expect(await start.saved).toEqual({ ok: false, reason: 'storage_refused' }); // …but the attempt is NOT durable
+    expect(livesRecord(fake)).toBeUndefined();
+
+    fake.setMode = 'ok';
+    const { lives } = await reload(fake, c);
+    expect(lives.resumeAttempt()).toMatchObject({ ok: false, reason: 'no_attempt', lives: 5 });
+    expect(lives.startAttempt()).toMatchObject({ ok: true, lives: 4, delta: -1 }); // one durable spend in total
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0, attempt: true });
+  });
+
+  test('R14. an end whose write failed: the reload sees the attempt still open (resume → end again); save() carries the close', async () => {
+    const fake = fakeStorage();
+    const c = clock();
+    const first = await session(fake, { c });
+    await first.lives.startAttempt().saved;
+    fake.setMode = 'reject';
+    const end = first.lives.endAttempt('win');
+    expect(end).toMatchObject({ ok: true, lives: 5, delta: 1 });
+    expect(await end.saved).toMatchObject({ ok: false, reason: 'storage_rejected' });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 4, regenStart: T0, attempt: true }); // the last durable state
+
+    fake.setMode = 'ok';
+    const crashed = await reload(fake, c); // crash before any retry: the run is still resumable, ends once
+    expect(crashed.lives.resumeAttempt()).toMatchObject({ ok: true, lives: 4 });
+    expect(crashed.lives.endAttempt('win')).toMatchObject({ ok: true, lives: 5, delta: 1 });
+    expect(livesRecord(fake)).toEqual({ v: 1, lives: 5, regenStart: null });
+
+    // or, without the crash: save() retries the whole closed record
+    const other = fakeStorage();
+    const s = await session(other, { c });
+    s.lives.startAttempt();
+    other.setMode = 'false';
+    s.lives.endAttempt('fail');
+    other.setMode = 'ok';
+    expect(await s.lives.save().saved).toEqual({ ok: true, reason: null });
+    expect(livesRecord(other)).toEqual({ v: 1, lives: 4, regenStart: T0 });
   });
 });
