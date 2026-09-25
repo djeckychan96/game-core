@@ -341,3 +341,16 @@ export type {
   LivesSaveGate,
   LivesRuntimeOptions
 } from './lives';
+export { ContinueOfferRuntime } from './continue';
+export type {
+  ContinueOfferConfig,
+  ContinueOfferStatus,
+  ContinueOfferProblem,
+  ContinueOfferRefusal,
+  ContinueOfferResolution,
+  ContinueQuote,
+  ContinueOfferResult,
+  ContinueOfferSnapshot,
+  ContinueOfferSaveGate,
+  ContinueOfferRuntimeOptions
+} from './continue';
