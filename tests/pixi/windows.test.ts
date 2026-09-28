@@ -6,6 +6,7 @@ import { ShopWindowView, type ShopItem } from '../../src/pixi/ShopWindowView';
 import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
 import { NoAdsWindowView } from '../../src/pixi/NoAdsWindowView';
 import { StarterPackWindowView } from '../../src/pixi/StarterPackWindowView';
+import { ConfirmWindowView } from '../../src/pixi/ConfirmWindowView';
 import type { UiButton } from '../../src/pixi/UiButton';
 import type { Container, Rectangle, Text } from 'pixi.js';
 
@@ -706,5 +707,81 @@ describe('NoAdsWindowView / StarterPackWindowView', () => {
     expect(view.state).toBe('hidden');
     view.destroy();
     expect(kit.uiErrors).toEqual([]);
+  });
+});
+
+describe('ConfirmWindowView (donor ConfirmWindow: exit with a life lost)', () => {
+  function create(kit: ReturnType<typeof createKit>, log: string[]): ConfirmWindowView {
+    return new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, id: 'exit-confirm',
+      title: 'ВЫ УВЕРЕНЫ?', body: 'Вы потеряете 1 жизнь', confirmLabel: 'ВЫХОД',
+      onConfirm: () => log.push('confirm'), onDismiss: (reason) => log.push(`cancel:${reason}`) });
+  }
+
+  it('renders the donor structure: baked broken-heart panel 968 × 1006, header / body / one button / × at donor coordinates', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.show();
+    advance(kit.core, 400);
+    expect(view.state).toBe('shown');
+    const panel = field<Container>(view, 'panel');
+    const art = panel.children[0] as unknown as { texture: unknown; width: number; height: number };
+    expect(art.texture).toBe(kit.textures.confirmPanel);
+    expect([art.width, art.height]).toEqual([968, 1006]);
+    expect(field<Text>(view, 'title').text).toBe('ВЫ УВЕРЕНЫ?');
+    expect(field<Text>(view, 'title').position).toMatchObject({ x: 6, y: -417 });
+    expect(field<Text>(view, 'body').text).toBe('Вы потеряете 1 жизнь');
+    expect(field<Text>(view, 'body').position).toMatchObject({ x: 16, y: 157 });
+    const button = field<UiButton>(view, 'confirmButton');
+    expect(button.labelText?.text).toBe('ВЫХОД');
+    expect(button.background.texture).toBe(kit.textures.confirmButton);
+    expect([button.background.width, button.background.height, button.y]).toEqual([600, 206, 334]);
+    expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 418, y: -413 });
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('the button runs onConfirm after the close; the × and the backdrop cancel (onDismiss), never onConfirm', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(view, 'confirmButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm']);
+    expect(view.state).toBe('hidden');
+
+    view.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(view, 'closeButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm', 'cancel:button']);
+
+    view.show();
+    advance(kit.core, 400);
+    const backdrop = field<Container>(view, 'backdrop');
+    backdrop.emit('pointertap', { target: backdrop } as never);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm', 'cancel:button', 'cancel:background']);
+    expect(view.state).toBe('hidden');
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+  });
+
+  it('390 × 844: the donor fit (0.92 of the width) — the whole panel on screen, centred', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.resize(390, 844);
+    view.show();
+    advance(kit.core, 400);
+    const box = field<Container>(view, 'panel').getBounds();
+    expect(box.width).toBeCloseTo(390 * 0.92, 0);
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+    expect(box.y).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(844);
+    expect(box.x + box.width / 2).toBeCloseTo(195, 0);
+    expect(box.y + box.height / 2).toBeCloseTo(422, 0);
+    view.destroy();
   });
 });

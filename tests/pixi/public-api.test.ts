@@ -10,7 +10,7 @@ const rootDir = resolve(__dirname, '../..');
 describe('game-core/pixi public entry', () => {
   it('exports the Ready UI kit', () => {
     for (const name of [
-      'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView',
+      'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView', 'ConfirmWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
       'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
       'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
@@ -56,6 +56,17 @@ describe('game-core/pixi public entry', () => {
     }
     expect(existsSync(resolve(assetsDir, pixiEntry.READY_UI_FONT_FILE))).toBe(true);
     expect(Object.keys(pixiEntry.createReadyUiTextures(pixiEntry.DEFAULT_READY_UI_THEME as never)).length).toBe(Object.keys(pixiEntry.READY_UI_ASSET_FILES).length);
+  });
+
+  it('ships the donor ConfirmWindow art at its donor size (lossless crops of Trail Arrow confirm.r2209: back.png / btn-confirm.png)', () => {
+    const size = (file: string) => {
+      const b = readFileSync(resolve(rootDir, 'assets/pixi-ui', file));
+      expect(b.toString('ascii', 12, 16)).toBe('VP8L');
+      const bits = b.readUInt32LE(21);
+      return [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1];
+    };
+    expect(size(pixiEntry.READY_UI_ASSET_FILES.confirmPanel)).toEqual([968, 1006]);
+    expect(size(pixiEntry.READY_UI_ASSET_FILES.confirmButton)).toEqual([600, 206]);
   });
 
   it('formats counters and timers like the donor HUD', () => {

@@ -155,6 +155,26 @@ describe('HudView', () => {
     hud.destroy();
   });
 
+  it('stars omitted (a game without a star balance): no star badge, lives + coins keep the row, nothing overlaps the gear', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, coins: 80, lives: 5, maxLives: 5, shadow: false, onCoinsTap: () => {}, onLivesTap: () => {}, onSettingsTap: () => {} });
+    const parts = hud as unknown as { stars: unknown; row: { children: unknown[]; x: number; getBounds(): { x: number; y: number; width: number; height: number } }; coins: { x: number }; gear: { getBounds(): { x: number } } };
+    expect(parts.stars).toBeNull();
+    expect(hud.starAnchor).toBeNull();
+    expect(parts.row.children.length).toBe(2); // lives + coins only: no empty third slot
+    expect(parts.coins.x).toBe(290);
+    hud.setStars(12); // harmless no-op for the view
+    expect(parts.row.children.length).toBe(2);
+    for (const [w, h] of [[390, 844], [1280, 720]]) {
+      hud.resize(w, h, { insets: { top: 47 } });
+      const row = parts.row.getBounds();
+      expect(row.x).toBeGreaterThan(0);
+      expect(row.x + row.width).toBeLessThan(parts.gear.getBounds().x);
+      expect(hud.barHeight).toBeGreaterThan(row.y + row.height);
+    }
+    hud.destroy();
+  });
+
   it('barHeight is the bottom edge of the badge row plus the donor margin (what a map / board must reserve)', () => {
     const kit = createKit();
     const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, shadow: false, onCoinsTap: () => {}, onLivesTap: () => {} });

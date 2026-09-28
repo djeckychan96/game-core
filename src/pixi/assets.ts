@@ -37,6 +37,7 @@ export const READY_UI_ASSET_FILES = {
   btnYellow: 'button/btn_yellow.webp',
   btnYellowWide: 'button/btn_yellow_wide.webp',
   btnClose: 'button/btn_close.webp',
+  confirmButton: 'button/btn_confirm.webp',
   // icons
   coinBig: 'icons/coin_big.webp',
   coinSmall: 'icons/coin_small.webp',
@@ -47,6 +48,8 @@ export const READY_UI_ASSET_FILES = {
   victoryRibbon: 'window/victory_ribbon.webp',
   panelPurple: 'window/panel_purple.webp',
   panelInner: 'window/panel_inner.webp',
+  /** Donor ConfirmWindow panel: the broken heart and its "-1" are part of the art. */
+  confirmPanel: 'window/confirm_panel.webp',
   // shop
   shopHeader: 'shop/header_bg.webp',
   shopCard: 'shop/card.webp',

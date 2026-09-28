@@ -37,6 +37,8 @@ export { ResultWindowView } from './ResultWindowView';
 export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindowView';
 export { LivesWindowView } from './LivesWindowView';
 export type { LivesWindowParams, LivesWindowViewOptions } from './LivesWindowView';
+export { ConfirmWindowView } from './ConfirmWindowView';
+export type { ConfirmWindowViewOptions } from './ConfirmWindowView';
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
 export { SettingsWindowView } from './SettingsWindowView';
