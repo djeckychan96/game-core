@@ -29,7 +29,7 @@ for (const file of [qaBundle, qaTypes, ...Object.values(others)]) if (!existsSyn
 
 const qa = readFileSync(qaBundle, 'utf-8');
 // the markers the isolation check greps for must really be in the QA bundle (a positive control)
-export const QA_MARKERS = ['GameCoreQA', 'data-game-core-qa', 'Game Core QA'];
+export const QA_MARKERS = ['GameCoreQA', 'data-game-core-qa', 'Game Core QA', 'qa-lives-seam'];
 for (const marker of QA_MARKERS) if (!qa.includes(marker)) fail(`the QA bundle lacks its marker "${marker}"`);
 if (/^\s*import\s/m.test(qa)) fail('the QA bundle has a runtime import — it must be self-contained');
 if (/pixi\.js|PlatformRuntime|PurchaseRuntime|AdsRuntime|AnalyticsRuntime|OfferRuntime|SaveGate\b|LivesRuntime|ContinueOfferRuntime|SoftCurrencyWallet/.test(qa.replace(/\/\*[\s\S]*?\*\//g, ''))) {
@@ -48,7 +48,8 @@ for (const [label, file] of Object.entries(others)) {
 const mod = await import(pathToFileURL(qaBundle).href);
 const expected = [
   'installGameCoreQA', 'QA_GLOBAL_NAME', 'QaRuntime', 'QaPanelView', 'QA_PANEL_ATTRIBUTE', 'QA_RESET_KINDS', 'QA_RESET_LABELS', 'QA_TIME_SCALES', 'QA_SAMPLE_WINDOW_MS',
-  'NetworkFaultProfile', 'NetworkFaultError', 'withNetworkFaults', 'isNetworkFault', 'NETWORK_FAULT_MODES', 'DEFAULT_QA_LATENCY_MS', 'toQaJson'
+  'NetworkFaultProfile', 'NetworkFaultError', 'withNetworkFaults', 'isNetworkFault', 'NETWORK_FAULT_MODES', 'DEFAULT_QA_LATENCY_MS', 'toQaJson',
+  'setQaLives', 'createLivesQaCapability', 'QA_LIVES_SOURCE'
 ];
 for (const name of expected) if (!(name in mod)) fail(`the QA entry lacks export ${name}`);
 const surplus = Object.keys(mod).filter((name) => !expected.includes(name));

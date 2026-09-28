@@ -14,6 +14,8 @@ export { QaPanelView, QA_PANEL_ATTRIBUTE } from './QaPanelView';
 export { NetworkFaultProfile, NetworkFaultError, withNetworkFaults, isNetworkFault, NETWORK_FAULT_MODES, DEFAULT_QA_LATENCY_MS } from './NetworkFaultProfile';
 export type { NetworkFaultKind, NetworkFaultProfileOptions } from './NetworkFaultProfile';
 export { toQaJson } from './redact';
+export { setQaLives, createLivesQaCapability, QA_LIVES_SOURCE } from './livesSeam';
+export type { QaLivesTarget, QaLivesSetResult } from './livesSeam';
 export type * from './types';
 
 /** The default global an automation / a tester's console reads. */
