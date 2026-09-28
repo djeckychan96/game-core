@@ -1,13 +1,18 @@
-// ContinueOfferRuntime V1 — the price policy of "continue the lost level" offers; what the continue gives back
+// ContinueOfferRuntime V1.1 — the price policy of "continue the lost level" offers; what the continue gives back
 // (its resource and amount) is the gameplay's and never named here. Generic semantics of Trail Arrow 0.1.31 `ContinuePrice.ts`:
 // a price ladder per level that climbs on every REAL opening of the offer (not on a purchase), the last step
 // repeating; an optional first free continue once per profile. Its state is the SaveGate Core record
 // `continueOffer`. It only QUOTES: it never charges coins, shows an ad, grants a game resource or opens a window.
+// V1.1: the open offer is durable in the same record — one logical offer = one price step, also across a reload.
 import type { SaveGate, SaveReadStatus, SaveWriteResult } from '../save/SaveGate';
 
-/** The runtime's record in the SaveGate Core namespace: `<profile.id>.core` → `{ continueOffer: { v, freeUsed, levelKey, offerCount } }`. */
+/** The runtime's record in the SaveGate Core namespace: `<profile.id>.core` → `{ continueOffer: { v, freeUsed, levelKey, offerCount, open? } }`. */
 const RECORD = 'continueOffer';
-/** Any change of the record's shape bumps it; another version is unknown data (unavailable, never overwritten). */
+/**
+ * Any change of the record's shape bumps it; another version is unknown data (unavailable, never overwritten).
+ * V1.1 stays 1: `open` is an optional field whose absence means "no open offer" — exactly what a record written
+ * before it holds (V1 kept the open offer in memory) — so every stored V1 record reads unchanged.
+ */
 const FORMAT = 1;
 
 /** The game's continue prices — product numbers, passed by the host (Trail Arrow: [900, 1900, 2900] + firstFree). */
@@ -39,8 +44,10 @@ export type ContinueOfferRefusal =
   | 'disposed'
   /** beginOffer(): not an integer level ≥ 1 or a non-empty string. */
   | 'invalid_level'
-  /** resolveOffer() without an open offer (a repeated resolve). */
-  | 'no_offer';
+  /** resolveOffer() without an open offer (a repeated resolve); resumeOffer() with no stored or open offer. */
+  | 'no_offer'
+  /** resumeOffer(): the open (or stored) offer belongs to another level — nothing changed, it stays as it was. */
+  | 'other_level';
 
 /** How the open offer ended: the run went on (a free, paid or rewarded continue — the host delivered it) or the player declined. */
 export type ContinueOfferResolution = 'continued' | 'declined';
@@ -61,14 +68,15 @@ export interface ContinueOfferResult {
   ok: boolean;
   /** null when ok. A refusal changes nothing and writes nothing. */
   reason: ContinueOfferRefusal | null;
-  /** beginOffer: the open offer's price; resolveOffer: the offer that was resolved; null for a refusal. */
+  /** beginOffer / resumeOffer: the open offer's price; resolveOffer: the offer that was resolved; null for a refusal. */
   quote: ContinueQuote | null;
-  /** beginOffer: true when this answered the offer already open for this level (no new step, nothing written). */
+  /** beginOffer: true when this answered the offer already open for this level (no new step, nothing written); resumeOffer: always true. */
   reopened: boolean;
   /**
-   * The SaveGate write that makes this state durable (never rejects): the step taken by a priced offer (also
-   * handed again by a reopen), the free continue used by `resolveOffer('continued')`. null when nothing had to
-   * be written (a free quote, a resolve that changes no stored state). The quote itself is valid at once.
+   * The SaveGate write that makes this state durable (never rejects): a new offer opened (its step, if priced,
+   * and the open offer — also handed again by a reopen in the same session), an offer closed by resolveOffer()
+   * (with the free continue it used up). null when nothing had to be written (a resumed offer: the record
+   * already holds it). The quote itself is valid at once.
    */
   saved: Promise<SaveWriteResult> | null;
 }
@@ -85,7 +93,7 @@ export interface ContinueOfferSnapshot {
   levelKey: string | null;
   /** Priced offers opened on `levelKey` so far; null while unknown. */
   offerCount: number | null;
-  /** The offer opened and not resolved yet (this session), else null. */
+  /** The offer opened or resumed in this session and not resolved yet, else null (a stored one not resumed is not counted). */
   offer: ContinueQuote | null;
 }
 
@@ -106,12 +114,23 @@ interface ContinueOfferRecord {
   levelKey: string | null;
   /** Priced offers opened on it (Trail Arrow CONTINUE_COUNT). */
   offerCount: number;
+  /** V1.1: the offer opened and not resolved yet (written with its opening, removed with its resolve); absent = none. */
+  open?: ContinueQuote;
 }
 
 const CONFIG_KEYS = ['priceSteps', 'firstFree'];
 const RESOLUTIONS: readonly ContinueOfferResolution[] = ['continued', 'declined'];
 
 const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+
+/** A stored open offer: the free one is price 0 / step 0, a priced one has both ≥ 1. */
+const isQuote = (value: unknown): value is ContinueQuote => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const quote = value as Record<string, unknown>;
+  if (typeof quote.levelKey !== 'string' || quote.levelKey === '' || typeof quote.free !== 'boolean') return false;
+  if (!isCount(quote.price) || !isCount(quote.step)) return false;
+  return quote.free ? quote.price === 0 && quote.step === 0 : quote.price >= 1 && quote.step >= 1;
+};
 
 const isContinueRecord = (value: unknown): value is ContinueOfferRecord => {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
@@ -120,7 +139,8 @@ const isContinueRecord = (value: unknown): value is ContinueOfferRecord => {
     record.v === FORMAT &&
     typeof record.freeUsed === 'boolean' &&
     (record.levelKey === null || (typeof record.levelKey === 'string' && record.levelKey !== '')) &&
-    isCount(record.offerCount)
+    isCount(record.offerCount) &&
+    (record.open === undefined || isQuote(record.open))
   );
 };
 
@@ -151,6 +171,7 @@ function checkConfig(config: ContinueOfferConfig): void {
  *   gate.open();
  *   const { quote } = offers.beginOffer(level);   // the run is lost: a REAL opening → the price to show
  *   offers.beginOffer(level);                     // the same offer again (back from the shop, a failed buy): same quote
+ *   offers.resumeOffer(level);                    // the gameplay RESTORED this lost run (after a reload): the stored quote
  *   // the host charges quote.price / plays the rewarded ad / takes the free one, gives the game resource back, then:
  *   offers.resolveOffer('continued');             // or 'declined' (the run ends lost)
  *
@@ -158,8 +179,14 @@ function checkConfig(config: ContinueOfferConfig): void {
  * offer OPENS, so a paid, a rewarded and a declined offer all use it; the last step repeats. One level is
  * remembered: an offer on another level starts its ladder from the first step (nothing else resets it — a win,
  * a restart or a relaunch keeps the level's count). The free continue takes no step and is used up only by
- * `resolveOffer('continued')`. A step is ONE `gate.writeCore('continueOffer', record)` of the whole record;
+ * `resolveOffer('continued')`. Every write is ONE `gate.writeCore('continueOffer', record)` of the whole record;
  * a failed write keeps the memory and is carried by the next write (or `save()`).
+ *
+ * One logical offer = one price step: the open offer is part of that record — its opening (with its step) is one
+ * write, its resolve (with the free continue used) is one write — so a run the gameplay restored after a reload
+ * is answered by `resumeOffer()` with the same quote, never a new step. A stored offer that was not resumed is
+ * abandoned by the next `beginOffer()` (a new logical offer: its step stays taken). No attempt id: the host
+ * knows whether the lost run is the restored one or a new one.
  */
 export class ContinueOfferRuntime {
   private readonly gate: ContinueOfferSaveGate;
@@ -170,10 +197,12 @@ export class ContinueOfferRuntime {
   private freeUsed = false;
   private levelKey: string | null = null;
   private offerCount = 0;
-  /** The offer opened in this session and not resolved; a reload forgets it (as Trail Arrow's `helpers.continuePrice`). */
+  /** The offer this session opened or resumed and did not resolve. */
   private open: ContinueQuote | null = null;
-  /** The write of the open offer's step (null for a free one): a reopen hands it again. */
+  /** The write that opened it (null for a resumed one — the record already held it): a reopen hands it again. */
   private openSaved: Promise<SaveWriteResult> | null = null;
+  /** A durable open offer of an earlier session, not resumed (yet): resumeOffer adopts it, beginOffer abandons it. */
+  private pending: ContinueQuote | null = null;
   private disposed = false;
   private loading: Promise<ContinueOfferSnapshot> | null = null;
 
@@ -216,23 +245,48 @@ export class ContinueOfferRuntime {
   }
 
   /**
-   * Opens the continue offer of a lost run on `level` (a number level or the game's string id) and answers its
-   * quote. A NEW offer: the free one while it is available (nothing written), else the next step of the level's
-   * ladder, taken and written now. The offer already open for the same level is answered again (`reopened`, no
-   * step, no write) — back from the shop, after a failed purchase. An open offer of another level is dropped.
+   * Opens the continue offer of a NEW lost run on `level` (a number level or the game's string id) and answers
+   * its quote: the free one while it is available, else the next step of the level's ladder, taken now — the
+   * step and the open offer are one write. The offer this session already opened or resumed for the same level
+   * is answered again (`reopened`, no step, no write) — back from the shop, after a failed purchase. An open
+   * offer of another level, and a stored offer of an earlier session that was not resumed, are abandoned.
    */
   beginOffer(level: string | number): ContinueOfferResult {
     const key = toLevelKey(level);
     if (key === null) return this.refuse('invalid_level');
     const refusal = this.refusal();
     if (refusal) return this.refuse(refusal);
-    if (this.open && this.open.levelKey === key) return { ok: true, reason: null, quote: { ...this.open }, reopened: true, saved: this.openSaved };
-    if (this.firstFree && !this.freeUsed) return this.opened({ levelKey: key, free: true, price: 0, step: 0 }, null);
+    if (this.open && this.open.levelKey === key) return this.reopen();
+    this.pending = null;
+    if (this.firstFree && !this.freeUsed) return this.opened({ levelKey: key, free: true, price: 0, step: 0 });
     this.offerCount = this.levelKey === key ? this.offerCount + 1 : 1;
     this.levelKey = key;
     const step = this.offerCount;
     const price = this.priceSteps[Math.min(step, this.priceSteps.length) - 1] as number; // the last step repeats
-    return this.opened({ levelKey: key, free: false, price, step }, this.write());
+    return this.opened({ levelKey: key, free: false, price, step });
+  }
+
+  /**
+   * Continues the stored open offer of `level` WITHOUT a new step — call it when the gameplay restored its lost
+   * run (SoliPix `onLevelChanged({ restored: true })` with no moves left): the same quote, no step, nothing
+   * written (the record already holds it). Idempotent; answers the offer this session opened for the level too.
+   * `no_offer` when none is open or stored (never opened, resolved, or its write never landed): the host then
+   * begins a new one. `other_level` when the open or stored offer is another level's: nothing changes.
+   */
+  resumeOffer(level: string | number): ContinueOfferResult {
+    const key = toLevelKey(level);
+    if (key === null) return this.refuse('invalid_level');
+    const refusal = this.refusal();
+    if (refusal) return this.refuse(refusal);
+    const offer = this.open ?? this.pending;
+    if (!offer) return this.refuse('no_offer');
+    if (offer.levelKey !== key) return this.refuse('other_level');
+    if (!this.open) {
+      this.open = offer;
+      this.openSaved = null;
+      this.pending = null;
+    }
+    return this.reopen();
   }
 
   /** The open offer's quote (a copy), or null. */
@@ -241,10 +295,11 @@ export class ContinueOfferRuntime {
   }
 
   /**
-   * Closes the open offer. Call `'continued'` only AFTER the host delivered the continue (took the price, the ad
-   * rewarded, gave the resource back): for the free offer that is what uses the free continue up (one write).
-   * A priced step was taken when the offer opened, so `'continued'` / `'declined'` of a priced offer write
-   * nothing; a declined free offer stays available. A second resolve → `no_offer`.
+   * Closes the offer this session opened or resumed, durably — one write (a stored offer not resumed is not
+   * closed: `no_offer`). Call `'continued'` only AFTER the host delivered the continue (took the price, the ad
+   * rewarded, gave the resource back): for the free offer that is what uses the free continue up (in the same
+   * write). A priced step was taken when the offer opened; a declined free offer stays available. A second
+   * resolve → `no_offer`.
    */
   resolveOffer(resolution: ContinueOfferResolution): ContinueOfferResult {
     if (!RESOLUTIONS.includes(resolution)) throw new TypeError(`ContinueOfferRuntime.resolveOffer(): resolution must be one of ${RESOLUTIONS.join(' / ')}`);
@@ -254,9 +309,8 @@ export class ContinueOfferRuntime {
     if (!quote) return this.refuse('no_offer');
     this.open = null;
     this.openSaved = null;
-    if (!quote.free || resolution !== 'continued') return { ok: true, reason: null, quote, reopened: false, saved: null };
-    this.freeUsed = true;
-    return { ok: true, reason: null, quote, reopened: false, saved: this.write() };
+    if (quote.free && resolution === 'continued') this.freeUsed = true;
+    return { ok: true, reason: null, quote: { ...quote }, reopened: false, saved: this.write() };
   }
 
   /** Writes the current record (a retry after a failed write). */
@@ -280,6 +334,7 @@ export class ContinueOfferRuntime {
       this.freeUsed = record.freeUsed;
       this.levelKey = record.levelKey;
       this.offerCount = record.offerCount;
+      this.pending = record.open ? { ...record.open } : null;
       this.status = 'ready';
     } else {
       // failed (or never settled): the ladder and the free continue are unknown — no default, no write
@@ -296,19 +351,25 @@ export class ContinueOfferRuntime {
     return this.gate.snapshot().phase === 'open' ? null : 'not_open';
   }
 
-  private opened(quote: ContinueQuote, saved: Promise<SaveWriteResult> | null): ContinueOfferResult {
+  private opened(quote: ContinueQuote): ContinueOfferResult {
     this.open = quote;
-    this.openSaved = saved;
-    return { ok: true, reason: null, quote: { ...quote }, reopened: false, saved };
+    this.openSaved = this.write();
+    return { ok: true, reason: null, quote: { ...quote }, reopened: false, saved: this.openSaved };
+  }
+
+  private reopen(): ContinueOfferResult {
+    return { ok: true, reason: null, quote: this.currentQuote(), reopened: true, saved: this.openSaved };
   }
 
   private refuse(reason: ContinueOfferRefusal): ContinueOfferResult {
     return { ok: false, reason, quote: null, reopened: false, saved: null };
   }
 
-  /** One writeCore of the whole record. A failed write is not retried here: the next step, free use or save() carries it. */
+  /** One writeCore of the whole record. A failed write is not retried here: the next opening, resolve or save() carries it. */
   private write(): Promise<SaveWriteResult> {
     const record: ContinueOfferRecord = { v: FORMAT, freeUsed: this.freeUsed, levelKey: this.levelKey, offerCount: this.offerCount };
+    const open = this.open ?? this.pending;
+    if (open) record.open = { ...open }; // none = absent, the V1 shape
     return this.gate.writeCore(RECORD, record);
   }
 }
