@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Game Core · QA Panel demo</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #10131c; font-family: system-ui, sans-serif; }
+      /* The "game": a DOM stand-in with its own frame loop. It owns every value the QA panel shows. */
+      #game { position: relative; width: 100vw; height: 100dvh; overflow: hidden; background: linear-gradient(#1d3b6b, #0f1f3d); }
+      #runner { position: absolute; top: 60%; width: 40px; height: 40px; border-radius: 8px; background: #f4c542; }
+      #hud { position: absolute; left: 12px; right: 12px; bottom: 16px; color: #d6e5ff; font: 13px/1.5 ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <div id="game"><div id="runner"></div><div id="hud"></div></div>
+    <script type="module" src="./qaDemo.ts"></script>
+  </body>
+</html>

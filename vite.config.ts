@@ -35,8 +35,9 @@ function readIsDirty(): boolean {
       // Vite bundles this very config file into a transient sibling temp file
       // (vite.config.ts.timestamp-*.mjs) while evaluating it and deletes it right after —
       // ignore that self-inflicted untracked artifact so a genuinely clean tree isn't
-      // misreported as dirty just because this code happened to run.
-      .filter((line) => !/vite\.config\.ts\.timestamp-.*\.mjs$/.test(line.trim()));
+      // misreported as dirty just because this code happened to run. vite.qa.config.ts imports
+      // this config for the same build info, so its temp file (vite.qa.config.ts.timestamp-*) counts too.
+      .filter((line) => !/vite(\.[\w-]+)?\.config\.ts\.timestamp-.*\.mjs$/.test(line.trim()));
     return lines.length > 0;
   } catch {
     return false;

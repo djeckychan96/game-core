@@ -20,6 +20,10 @@
       "types": "./dist/platform/yandex/platform/adapters/yandex/index.d.ts",
       "import": "./dist/platform/yandex/game-core-platform-yandex.es.js"
     },
+    "./qa": {
+      "types": "./dist/qa/qa/index.d.ts",
+      "import": "./dist/qa/game-core-qa.es.js"
+    },
     "./assets/*": "./assets/*"
   },
   "files": [
@@ -28,10 +32,11 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs",
+    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && npm run build:qa && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs && node scripts/check-qa-build.mjs",
     "build:core": "vite build",
     "build:pixi": "vite build --config vite.pixi.config.ts",
     "build:platform-yandex": "vite build --config vite.platform-yandex.config.ts",
+    "build:qa": "vite build --config vite.qa.config.ts",
     "showcase": "vite --config vite.showcase.config.ts",
     "showcase:build": "vite build --config vite.showcase.config.ts",
     "showcase:shots": "node scripts/showcase-screenshots.mjs",
@@ -41,6 +46,8 @@
     "showcase:ads": "node scripts/ads-demo-check.mjs",
     "showcase:overlay": "node scripts/overlay-demo-check.mjs",
     "showcase:orientation": "node scripts/orientation-guard-check.mjs",
+    "showcase:qa": "node scripts/qa-panel-check.mjs",
+    "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",

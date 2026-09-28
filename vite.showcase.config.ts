@@ -15,6 +15,7 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: 'game-core/pixi', replacement: resolve(rootDir, 'src/pixi/index.ts') },
+      { find: 'game-core/qa', replacement: resolve(rootDir, 'src/qa/index.ts') },
       { find: 'game-core', replacement: resolve(rootDir, 'src/index.ts') }
     ]
   },
