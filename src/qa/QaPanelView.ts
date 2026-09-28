@@ -10,9 +10,9 @@ export const QA_PANEL_ATTRIBUTE = 'data-game-core-qa';
 
 const STYLE = `
 .gcqa{position:fixed;top:0;right:0;z-index:2147483000;box-sizing:border-box;width:min(420px,100vw);max-height:100%;overflow:auto;
- -webkit-overflow-scrolling:touch;padding:calc(8px + env(safe-area-inset-top)) 10px 10px;background:#0e1016;color:#e6e8ee;
+ -webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:calc(8px + env(safe-area-inset-top)) 10px 10px;background:#0e1016;color:#e6e8ee;
  font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;text-align:left;touch-action:pan-y;user-select:text;-webkit-user-select:text}
-.gcqa *{box-sizing:border-box;font:inherit}
+.gcqa *{box-sizing:border-box;font:inherit;touch-action:pan-y}
 .gcqa-head{display:flex;align-items:center;gap:6px;margin-bottom:6px}
 .gcqa-title{flex:1;font-weight:700;font-size:13px;color:#fff}
 .gcqa-sec{border-top:1px solid #2c3140;padding:6px 0}
@@ -33,6 +33,12 @@ const STYLE = `
 .gcqa textarea{width:100%;height:120px;background:#0b0d12;color:#e6e8ee;border:1px solid #3a4152}
 `;
 
+// Touch scrolling (V1.1): `touch-action` is NOT inherited, and games commonly ship `* { touch-action: none }` (SoliPix does, to
+// kill zoom) — a universal rule that sets `none` on EVERY panel child. A finger lands on a child, the browser intersects
+// the touch-action of the target and its ancestors up to the scroller (the panel) → `none` → it never pans; the wheel
+// ignores touch-action, hence "scrolls on desktop, not on a phone". So every panel element states `pan-y` itself
+// (`.gcqa *` outranks `*`), and `overscroll-behavior: contain` keeps the scroll from chaining to the page.
+// A game's `touchmove` preventDefault on body / document (bubble phase) never runs: the panel stops the event first.
 // events the panel keeps to itself, so a game listening on window / document never sees a tap or a key meant for the panel
 const SWALLOWED = ['pointerdown', 'pointerup', 'pointermove', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'touchmove', 'wheel', 'keydown', 'keyup'];
 
@@ -145,7 +151,9 @@ export class QaPanelView {
         this.button('Copy diagnostics', 'copy', () => void this.copy()),
         this.button('×', 'close', () => this.runtime.close())),
       meta,
-      this.section('metrics-sec', 'Metrics', metrics),
+      this.section('metrics-sec', 'Metrics', metrics,
+        this.row(this.el('span', { class: 'gcqa-label' }, 'Mini metrics (stays over the game when the panel is closed)'),
+          this.button(state.metricsOverlay ? 'ON' : 'OFF', 'panel-metrics', () => this.exec('panel.metrics.set', { value: !state.metricsOverlay }), { on: state.metricsOverlay }))),
       this.renderControls(state, caps),
       this.renderResets(caps),
       this.renderNetwork(state, networkLine),

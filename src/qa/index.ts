@@ -4,6 +4,7 @@
 // `game-core/pixi`, and nothing here installs itself. The host imports it behind its own build-time flag
 // (`if (__QA_BUILD__) { const { installGameCoreQA } = await import('game-core/qa'); … }`), so a production
 // build has no QA module, no `GameCoreQA` global and no QA command — `npm run qa:isolation` proves it.
+import { QaMetricsOverlayView } from './QaMetricsOverlayView';
 import { QaPanelView } from './QaPanelView';
 import { QaRuntime } from './QaRuntime';
 import type { GameCoreQaOptions, QaCapability, QaCapabilityInfo, QaResult, QaState } from './types';
@@ -11,6 +12,7 @@ import type { GameCoreQaOptions, QaCapability, QaCapabilityInfo, QaResult, QaSta
 export { QaRuntime, QA_RESET_KINDS, QA_RESET_LABELS, QA_TIME_SCALES, QA_SAMPLE_WINDOW_MS } from './QaRuntime';
 export type { QaChange, QaListener } from './QaRuntime';
 export { QaPanelView, QA_PANEL_ATTRIBUTE } from './QaPanelView';
+export { QaMetricsOverlayView, QA_METRICS_ATTRIBUTE, formatMiniMetrics } from './QaMetricsOverlayView';
 export { NetworkFaultProfile, NetworkFaultError, withNetworkFaults, isNetworkFault, NETWORK_FAULT_MODES, DEFAULT_QA_LATENCY_MS } from './NetworkFaultProfile';
 export type { NetworkFaultKind, NetworkFaultProfileOptions } from './NetworkFaultProfile';
 export { toQaJson } from './redact';
@@ -56,6 +58,7 @@ export function installGameCoreQA(options: GameCoreQaOptions = {}): GameCoreQA {
   const container = (options.container ?? host.document?.body ?? null) as (HTMLElement & { ownerDocument?: Document | null }) | null;
   const doc = container?.ownerDocument ?? null;
   const view = container && doc ? new QaPanelView(runtime, container, doc) : null;
+  const mini = container && doc ? new QaMetricsOverlayView(runtime, container, doc) : null;
   let disposed = false;
   const api: GameCoreQA = {
     apiVersion: 1,
@@ -75,6 +78,7 @@ export function installGameCoreQA(options: GameCoreQaOptions = {}): GameCoreQA {
       if (disposed) return;
       disposed = true;
       view?.dispose();
+      mini?.dispose();
       runtime.dispose();
       if (globalName !== false && host[globalName] === api) delete host[globalName];
     }

@@ -183,6 +183,8 @@ export type NetworkFaultMode = 'normal' | 'offline' | 'latency';
 export interface QaState {
   ready: boolean;
   open: boolean;
+  /** The compact metrics overlay (FPS / frame / memory) is shown — `panel.metrics.set { value }`; it stays when the panel closes. */
+  metricsOverlay: boolean;
   meta: {
     game: { name: string | null; version: string | null; commit: string | null };
     core: { version: string; commit: string; dirty: boolean };

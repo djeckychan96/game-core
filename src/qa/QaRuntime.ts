@@ -40,7 +40,7 @@ const MAX_TIME_SCALE = 16;
 const ID = /^[a-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*$/;
 const RESERVED = /^(reset|network|timeScale|panel)(\.|$)/;
 
-export type QaChange = 'sample' | 'command' | 'registry' | 'open' | 'close' | 'ready';
+export type QaChange = 'sample' | 'command' | 'registry' | 'open' | 'close' | 'ready' | 'metrics';
 export type QaListener = (change: QaChange) => void;
 
 const fail = (command: string, code: QaErrorCode, message: string): QaResult => ({ ok: false, command, error: { code, message } });
@@ -112,6 +112,8 @@ export class QaRuntime {
   private readonly resets: Partial<Record<QaResetKind, (params: QaParams) => unknown>>;
   private isReady = false;
   private isOpen = false;
+  /** The compact metrics overlay (V1.1): independent of the panel, off by default. */
+  private metricsOverlay = false;
   private disposed = false;
   private windowMs = 0;
   private windowFrames = 0;
@@ -169,6 +171,10 @@ export class QaRuntime {
     return this.isOpen;
   }
 
+  get metricsShown(): boolean {
+    return this.metricsOverlay;
+  }
+
   subscribe(listener: QaListener): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -177,6 +183,10 @@ export class QaRuntime {
   dispose(): void {
     if (this.disposed) return;
     this.close();
+    if (this.metricsOverlay) {
+      this.metricsOverlay = false;
+      this.emit('metrics');
+    }
     this.disposed = true;
     this.listeners.clear();
   }
@@ -244,6 +254,14 @@ export class QaRuntime {
   private async execute(id: string, params: QaParams): Promise<QaResult> {
     if (id === 'network.set' || id === 'network.failNext') return this.runNetwork(id, params);
     if (id === 'timeScale.set') return this.runTimeScale(id, params);
+    if (id === 'panel.metrics.set') {
+      if (typeof params.value !== 'boolean') return fail(id, 'invalid_params', 'value must be a boolean');
+      if (params.value !== this.metricsOverlay) {
+        this.metricsOverlay = params.value;
+        this.emit('metrics');
+      }
+      return { ok: true, command: id, value: this.metricsOverlay };
+    }
     if (id.startsWith('reset.')) {
       const kind = id.slice(6) as QaResetKind;
       if (!QA_RESET_KINDS.includes(kind)) return fail(id, 'unknown_command', `unknown command ${id}`);
@@ -339,6 +357,11 @@ export class QaRuntime {
     this.emit('sample');
   }
 
+  /** The live numbers of the ONE sampler (`frame(ms)`) — the panel and the mini overlay both read this. */
+  getMetrics(): QaMetrics {
+    return this.metrics();
+  }
+
   private metrics(): QaMetrics {
     let memory: QaMetrics['memory'] = null;
     try {
@@ -405,6 +428,7 @@ export class QaRuntime {
     return {
       ready: this.isReady,
       open: this.isOpen,
+      metricsOverlay: this.metricsOverlay,
       meta: {
         game: { name: safeText(game.name), version: safeText(game.version), commit: safeText(game.commit) },
         core: { version: safeText(build.version) ?? 'unknown', commit: safeText(build.commit) ?? 'unknown', dirty: build.dirty === true },

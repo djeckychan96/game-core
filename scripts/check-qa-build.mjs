@@ -49,7 +49,7 @@ const mod = await import(pathToFileURL(qaBundle).href);
 const expected = [
   'installGameCoreQA', 'QA_GLOBAL_NAME', 'QaRuntime', 'QaPanelView', 'QA_PANEL_ATTRIBUTE', 'QA_RESET_KINDS', 'QA_RESET_LABELS', 'QA_TIME_SCALES', 'QA_SAMPLE_WINDOW_MS',
   'NetworkFaultProfile', 'NetworkFaultError', 'withNetworkFaults', 'isNetworkFault', 'NETWORK_FAULT_MODES', 'DEFAULT_QA_LATENCY_MS', 'toQaJson',
-  'setQaLives', 'createLivesQaCapability', 'QA_LIVES_SOURCE'
+  'setQaLives', 'createLivesQaCapability', 'QA_LIVES_SOURCE', 'QaMetricsOverlayView', 'QA_METRICS_ATTRIBUTE', 'formatMiniMetrics'
 ];
 for (const name of expected) if (!(name in mod)) fail(`the QA entry lacks export ${name}`);
 const surplus = Object.keys(mod).filter((name) => !expected.includes(name));

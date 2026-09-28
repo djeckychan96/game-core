@@ -472,9 +472,9 @@ describe('NetworkFaultProfile (Core/platform calls only)', () => {
 describe('public entry', () => {
   it('exports the documented QA API only', () => {
     expect(Object.keys(qaEntry).sort()).toEqual([
-      'DEFAULT_QA_LATENCY_MS', 'NETWORK_FAULT_MODES', 'NetworkFaultError', 'NetworkFaultProfile', 'QA_GLOBAL_NAME', 'QA_LIVES_SOURCE', 'QA_PANEL_ATTRIBUTE', 'QA_RESET_KINDS',
-      'QA_RESET_LABELS', 'QA_SAMPLE_WINDOW_MS', 'QA_TIME_SCALES', 'QaPanelView', 'QaRuntime', 'createLivesQaCapability', 'installGameCoreQA', 'isNetworkFault', 'setQaLives', 'toQaJson',
-      'withNetworkFaults'
+      'DEFAULT_QA_LATENCY_MS', 'NETWORK_FAULT_MODES', 'NetworkFaultError', 'NetworkFaultProfile', 'QA_GLOBAL_NAME', 'QA_LIVES_SOURCE', 'QA_METRICS_ATTRIBUTE', 'QA_PANEL_ATTRIBUTE', 'QA_RESET_KINDS',
+      'QA_RESET_LABELS', 'QA_SAMPLE_WINDOW_MS', 'QA_TIME_SCALES', 'QaMetricsOverlayView', 'QaPanelView', 'QaRuntime', 'createLivesQaCapability', 'formatMiniMetrics', 'installGameCoreQA', 'isNetworkFault',
+      'setQaLives', 'toQaJson', 'withNetworkFaults'
     ]);
   });
 });
