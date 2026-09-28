@@ -97,7 +97,7 @@ describe('ResultWindowView', () => {
     expect(field<UiButton>(view, 'nextButton').position).toMatchObject({ x: -230, y: 310 });
     expect(field<UiButton>(view, 'retryButton').position).toMatchObject({ x: 230, y: 310 });
     expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 445, y: -369 });
-    expect(field<Text>(view, 'rewardAmount').y).toBe(101);
+    expect(field<Text>(view, 'rewardAmount').y).toBe(119); // Trail Arrow's fix of the donor 101 (overlapped the coin)
     view.close('background');
     advance(kit.core, 200);
     expect(dismissed).toEqual(['background']);
@@ -108,18 +108,22 @@ describe('ResultWindowView', () => {
     view.destroy();
   });
 
-  it('fits its measured bounds into 0.88 × 0.84 of the safe area, origin at the center', () => {
+  it('fits the victory frame (star crown … CTA row) into 0.88 × 0.84 of the safe area, frame centered', () => {
     const kit = createKit();
     const view = new ResultWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onNext: () => {} });
     view.show(RESULT);
     advance(kit.core, 500);
     view.resize(320, 568, { insets: { top: 20, bottom: 20 } });
     const panel = field<Container>(view, 'panel');
-    const bounds = panel.getLocalBounds();
-    expect(panel.scale.x * bounds.width).toBeLessThanOrEqual(320 * 0.88 + 0.01);
-    expect(panel.scale.x * bounds.height).toBeLessThanOrEqual(528 * 0.84 + 0.01);
+    // ribbon 1019 wide; top star 144 at y −468 … CTA row 207 at y 310
+    const frame = { x: -509.5, y: -540, width: 1019, height: 953.5 };
+    expect(panel.scale.x).toBeCloseTo(Math.min((320 * 0.88) / frame.width, (528 * 0.84) / frame.height), 6);
     expect(panel.x).toBeCloseTo(160, 1);
-    expect(panel.y).toBeCloseTo(20 + 528 / 2, 1);
+    expect(panel.y + (frame.y + frame.height / 2) * panel.scale.y).toBeCloseTo(20 + 528 / 2, 1);
+    // the visible content (hidden stars excluded) sits inside the frame
+    const bounds = panel.getLocalBounds();
+    expect(bounds.y).toBeGreaterThanOrEqual(frame.y);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(frame.y + frame.height + 0.01);
     view.destroy();
   });
 });
@@ -368,6 +372,97 @@ describe('ResultWindowView outcome: fail', () => {
     view.destroy();
     expect(kit.ui.getStats().buttons).toBe(0);
     expect(kit.ui.getStats().windows).toBe(0);
+  });
+});
+
+describe('ResultWindowView responsive frame: one scale for win and fail', () => {
+  const WIN3: ResultWindowParams = { level: 19, stars: 3, rewardCoins: 100 };
+  const FAIL: ResultWindowParams = { level: 7, rewardCoins: 0, outcome: 'fail' };
+  type Box = { left: number; top: number; right: number; bottom: number; height: number; scale: number };
+
+  function create(kit: ReturnType<typeof createKit>): ResultWindowView {
+    return new ResultWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, onNext: () => {}, onRetry: () => {}, onExit: () => {} });
+  }
+
+  /** Screen box (px) of every visible panel child — the stars included once they popped in. */
+  function screenBox(view: ResultWindowView): Box {
+    const panel = field<Container>(view, 'panel');
+    const s = panel.scale.x;
+    const box = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+    for (const c of panel.children) {
+      if (!c.visible) continue;
+      box.left = Math.min(box.left, panel.x + (c.x - c.width / 2) * s);
+      box.right = Math.max(box.right, panel.x + (c.x + c.width / 2) * s);
+      box.top = Math.min(box.top, panel.y + (c.y - c.height / 2) * s);
+      box.bottom = Math.max(box.bottom, panel.y + (c.y + c.height / 2) * s);
+    }
+    return { ...box, height: box.bottom - box.top, scale: s };
+  }
+
+  function measure(kit: ReturnType<typeof createKit>, view: ResultWindowView, params: ResultWindowParams, w: number, h: number, insets?: { top: number; bottom: number }): Box {
+    view.resize(w, h, insets ? { insets } : {});
+    view.show(params);
+    advance(kit.core, 2000); // entrance + star pops settled
+    expect(view.state).toBe('shown');
+    const box = screenBox(view);
+    view.close('programmatic');
+    advance(kit.core, 200);
+    return box;
+  }
+
+  it('desktop 1280×800: fail reuses the win scale instead of zooming its shorter content', () => {
+    const kit = createKit();
+    const view = create(kit);
+    const win = measure(kit, view, WIN3, 1280, 800);
+    const fail = measure(kit, view, FAIL, 1280, 800);
+    expect(fail.scale).toBeCloseTo(win.scale, 6);
+    expect(fail.height).toBeLessThan(win.height);
+    expect(win.height).toBeLessThanOrEqual(800 * 0.84 + 0.01);
+    view.destroy();
+  });
+
+  it('desktop 1280×800: the star crown, the × and the CTA rows stay inside the viewport, the win centered as one frame', () => {
+    const kit = createKit();
+    const view = create(kit);
+    for (const params of [WIN3, FAIL]) {
+      const box = measure(kit, view, params, 1280, 800);
+      expect(box.top).toBeGreaterThanOrEqual(0);
+      expect(box.bottom).toBeLessThanOrEqual(800);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(1280);
+      // equal margins above the crown and under the buttons
+      expect(Math.abs(box.top - (800 - box.bottom))).toBeLessThan(1);
+    }
+    view.destroy();
+  });
+
+  it('mobile 390×844: both outcomes keep the ribbon-width fit and stay on screen', () => {
+    const kit = createKit();
+    const view = create(kit);
+    for (const params of [WIN3, FAIL]) {
+      const box = measure(kit, view, params, 390, 844);
+      expect(box.scale).toBeCloseTo((390 * 0.88) / 1019, 6);
+      expect(box.top).toBeGreaterThanOrEqual(0);
+      expect(box.bottom).toBeLessThanOrEqual(844);
+      expect(box.left).toBeGreaterThanOrEqual(0);
+      expect(box.right).toBeLessThanOrEqual(390);
+    }
+    view.destroy();
+  });
+
+  it('safe-area insets bound both outcomes on phone and desktop', () => {
+    const kit = createKit();
+    const view = create(kit);
+    for (const [w, h, insets] of [[390, 844, { top: 47, bottom: 34 }], [1280, 800, { top: 60, bottom: 40 }]] as const) {
+      const win = measure(kit, view, WIN3, w, h, insets);
+      const fail = measure(kit, view, FAIL, w, h, insets);
+      expect(fail.scale).toBeCloseTo(win.scale, 6);
+      for (const box of [win, fail]) {
+        expect(box.top).toBeGreaterThanOrEqual(insets.top);
+        expect(box.bottom).toBeLessThanOrEqual(h - insets.bottom);
+      }
+    }
+    view.destroy();
   });
 });
 

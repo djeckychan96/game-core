@@ -1,4 +1,4 @@
-import { Sprite, type Text } from 'pixi.js';
+import { type Container, Rectangle, Sprite, type Text } from 'pixi.js';
 import type { WindowHiddenReason } from '../index';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
 import type { UiButton } from './UiButton';
@@ -48,6 +48,8 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
  * 0.94 backdrop and the 440 ms back.out(1.9) pop. Optional stars crown the ribbon.
  * Fail: the same ribbon and ×, then RETRY (green, primary) and EXIT (yellow, smaller) stacked
  * right under it — no stars, no reward space — with the shorter box centered in the safe area.
+ * Both outcomes share one scale: the fit uses the full victory frame (star crown … CTA row), not
+ * the currently visible content, so a short fail is never zoomed up and the crown never clips.
  * Next/Retry/Exit are close() continuations, so a cancelled window never triggers navigation;
  * the × and the backdrop run only `onDismiss(reason)`, never a retry or an exit.
  */
@@ -66,6 +68,8 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private readonly onRetry: ((params: ResultWindowParams) => void) | null;
   private readonly onExit: ((params: ResultWindowParams) => void) | null;
   private params: ResultWindowParams | null = null;
+  /** Design-unit box of the whole victory composition; the fit box of both outcomes. */
+  private frame: Rectangle | null = null;
 
   constructor(options: ResultWindowViewOptions) {
     super({
@@ -110,7 +114,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.rewardCaption.y = -139;
     this.rewardCoin = this.sprite(t.coinBig, 196, 210);
     this.rewardAmount = createLabel(this.theme, '0', { fontSize: 88, stroke: 9 });
-    this.rewardAmount.y = 101;
+    this.rewardAmount.y = 119; // donor 101 overlapped the coin; Trail Arrow's fix moved it 18 lower
     this.panel.addChild(this.rewardCaption, this.rewardCoin, this.rewardAmount);
 
     this.nextButton = this.createButton('next', t.btnGreen, options.nextLabel ?? 'CONTINUE', () => this.finish('next'));
@@ -124,6 +128,10 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.exitButton.position.set(0, 170);
     this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
     this.placeClose();
+    // the stars are hidden until they pop, so they are counted here, not measured at fit time
+    const framed: Container[] = [ribbon, ...this.stars, this.rewardCoin, this.nextButton, this.retryButton];
+    if (this.closeButton) framed.push(this.closeButton);
+    this.frame = centeredBox(framed);
   }
 
   protected applyParams(params: ResultWindowParams): void {
@@ -146,13 +154,24 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     for (const star of this.stars) star.visible = false;
   }
 
-  /** A fail is shorter than a win: center its measured box, not the victory origin. */
+  /** Fit box: the victory frame for both outcomes, so the scale never depends on what is visible. */
+  protected override panelBounds(): Rectangle {
+    return this.frame?.clone() ?? super.panelBounds();
+  }
+
+  /**
+   * One scale for win and fail (the frame fit); each outcome then centers its own composition:
+   * the win its whole frame (crown included), the shorter fail its measured box. The tap area
+   * stays the visible content, so the backdrop around a fail still dismisses.
+   */
   protected override layoutPanel(): void {
     super.layoutPanel();
-    if (this.params?.outcome !== 'fail') return;
-    const bounds = this.panelBounds();
+    if (!this.frame) return;
+    const visible = super.panelBounds();
+    const box = this.params?.outcome === 'fail' ? visible : this.frame;
     const safe = this.safeArea();
-    this.setIdle(safe.x + safe.width / 2, safe.y + safe.height / 2 - (bounds.y + bounds.height / 2) * this.fitScale, this.fitScale);
+    this.panel.hitArea = visible;
+    this.setIdle(safe.x + safe.width / 2, safe.y + safe.height / 2 - (box.y + box.height / 2) * this.fitScale, this.fitScale);
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
@@ -190,6 +209,21 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
       else this.onExit?.(params);
     });
   }
+}
+
+/** Union of center-anchored nodes in panel units; read from sizes, so hidden nodes count too. */
+function centeredBox(nodes: Container[]): Rectangle {
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const node of nodes) {
+    left = Math.min(left, node.x - node.width / 2);
+    right = Math.max(right, node.x + node.width / 2);
+    top = Math.min(top, node.y - node.height / 2);
+    bottom = Math.max(bottom, node.y + node.height / 2);
+  }
+  return new Rectangle(left, top, right - left, bottom - top);
 }
 
 /** Hidden buttons are also disabled, so no path can tap them. */
