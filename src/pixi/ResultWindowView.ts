@@ -2,6 +2,7 @@ import { type Container, Rectangle, Sprite, type Text } from 'pixi.js';
 import type { WindowHiddenReason } from '../index';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName } from './assets';
 import { WinConfettiEffect, type WinConfettiConfig } from './fx/WinConfettiEffect';
+import { WinStarsEffect } from './fx/WinStarsEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth, formatAmount } from './text';
@@ -21,7 +22,10 @@ export interface ResultWindowParams {
    * yellow EXIT (`onExit`). Callbacks receive these params, so they can read the outcome.
    */
   outcome?: 'win' | 'fail';
-  /** 0..3 stars, popped in over the ribbon one by one; 0 / undefined draws no stars. Ignored on fail. */
+  /**
+   * 0..3 stars crowning the ribbon, coming in one by one after the entrance (never more than earned); 0 / undefined
+   * draws no stars. Ignored on fail.
+   */
   stars?: number;
   /** Coins earned (shown under the big coin). Ignored on fail (pass 0). */
   rewardCoins: number;
@@ -77,7 +81,10 @@ function modalOptions(options: ResultWindowViewOptions): ModalWindowOptions {
  * Level result window. Win: the donor's LevelComplete geometry — no panel, the red ribbon at
  * y −317 with `LEVEL n` / `COMPLETED!`, `REWARDS` caption, the big coin with the amount under it,
  * green CONTINUE at (−230, 310) and a yellow secondary at (230, 310), × at (445, −369); slate
- * 0.94 backdrop and the 440 ms back.out(1.9) pop. Optional stars crown the ribbon.
+ * 0.94 backdrop and the 440 ms back.out(1.9) pop. The earned stars crown the ribbon: once the entrance has landed
+ * they come in left to right, 0.35 s apart — each drops from above onto its place, large, and settles with a small
+ * spring; at touchdown a short flash, coloured rays and sparks go off behind / around it (the flash and the rays need
+ * WIN_CONFETTI_TEXTURES in `textures`; without them the stars still fly in, spring and glow).
  * Fail: the same ribbon and ×, then RETRY (green, primary) and EXIT (yellow, smaller) stacked
  * right under it — no stars, no reward space — with the shorter box centered in the safe area.
  * Both outcomes share one scale: the fit uses the full victory frame (star crown … CTA row), not
@@ -91,6 +98,10 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private readonly titleText: Text;
   private readonly subtitleText: Text;
   private readonly stars: Sprite[] = [];
+  /** The stars' rest boxes (panel units): what the WIN tap area adds for the earned ones. */
+  private readonly starBoxes: Rectangle[] = [];
+  /** The stars' entrance: flight, spring and the landing flash / rays / sparks around them. */
+  private readonly starsFx: WinStarsEffect;
   private readonly rewardCaption: Text;
   private readonly rewardCoin: Sprite;
   private readonly rewardAmount: Text;
@@ -118,11 +129,13 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     ribbon.y = -317;
     this.panel.addChildAt(ribbon, 0);
 
-    // stars crown the ribbon (not in the donor window; hidden unless params.stars > 0)
+    // stars crown the ribbon (not in the donor window; hidden unless params.stars > 0): 2× the first crown, the middle
+    // one 20 % larger and raised like Vlad's WIN; all of them clear of the title (its top ≈ −413) and of the ×. All three
+    // stand upright (the kit's starGoldL / starGoldR are the level map's tilted side stars)
     const starSpecs = [
-      { x: -170, y: -430, size: 120, tex: t.starGoldL },
-      { x: 0, y: -468, size: 144, tex: t.starGold },
-      { x: 170, y: -430, size: 120, tex: t.starGoldR }
+      { x: -272, y: -540, size: 240, tex: t.starGold },
+      { x: 0, y: -600, size: 288, tex: t.starGold },
+      { x: 272, y: -540, size: 240, tex: t.starGold }
     ];
     for (const spec of starSpecs) {
       const star = new Sprite(spec.tex);
@@ -130,9 +143,15 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
       star.scale.set(spec.size / Math.max(1, spec.tex.width));
       star.position.set(spec.x, spec.y);
       star.visible = false;
-      this.panel.addChild(star);
+      // never measured: the tap area takes the rest box of an earned star, not whatever transform it has mid-flight
+      star.measurable = false;
       this.stars.push(star);
+      this.starBoxes.push(new Rectangle(spec.x - spec.size / 2, spec.y - spec.size / 2, spec.size, spec.size));
     }
+    // their landing flash, rays and halo behind them, the sparks over them; eventMode none, excluded from bounds
+    const landing = t.fxGlowSoft && t.fxSparkStar ? { glow: t.fxGlowSoft, spark: t.fxSparkStar } : null;
+    this.starsFx = new WinStarsEffect({ motion: this.motion, scope: this.fxScope, stars: this.stars, textures: landing });
+    this.panel.addChild(this.starsFx, ...this.stars, this.starsFx.front);
 
     this.titleText = createLabel(this.theme, 'LEVEL 1', { fontSize: 60, stroke: 9 });
     this.titleText.y = -373;
@@ -188,7 +207,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.nextButton.x = showRetry ? -230 : 0;
     setShown(this.failRetryButton, fail);
     setShown(this.exitButton, fail && this.onExit !== null);
-    for (const star of this.stars) star.visible = false;
+    this.starsFx.reset();
     // applyParams runs once per show (the controller's onShow): a WIN starts the confetti from t = 0
     if (fail) this.confetti?.cancel();
     else this.confetti?.play();
@@ -202,7 +221,9 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   /**
    * One scale for win and fail (the frame fit); each outcome then centers its own composition:
    * the win its whole frame (crown included), the shorter fail its measured box. The tap area
-   * stays the visible content, so the backdrop around a fail still dismisses.
+   * stays the visible content plus the earned stars at rest (layout runs while they are still
+   * hidden, and a tap on a landed star must not reach the backdrop), so the backdrop around a
+   * fail — or above a crown with fewer stars — still dismisses.
    */
   protected override layoutPanel(): void {
     super.layoutPanel();
@@ -210,7 +231,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     const visible = super.panelBounds();
     const box = this.params?.outcome === 'fail' ? visible : this.frame;
     const safe = this.safeArea();
-    this.panel.hitArea = visible;
+    this.panel.hitArea = new TapArea(visible, this.starBoxes.slice(0, this.earnedStars()));
     this.setIdle(safe.x + safe.width / 2, safe.y + safe.height / 2 - (box.y + box.height / 2) * this.fitScale, this.fitScale);
   }
 
@@ -219,25 +240,17 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   }
 
   protected override onShown(): void {
-    const earned = this.params?.outcome === 'fail' ? 0 : Math.max(0, Math.min(3, Math.round(this.params?.stars ?? 0)));
-    for (let i = 0; i < earned; i++) {
-      const star = this.stars[i];
-      if (!star) continue;
-      const finalScale = star.scale.x;
-      const k = { v: 0 };
-      this.motion.tween({
-        scope: this.fxScope,
-        delayMs: 120 + i * 160,
-        durationMs: 380,
-        ease: 'backOut',
-        bindings: [{ get: () => k.v, set: (v: number) => { k.v = v; star.visible = true; star.scale.set(finalScale * Math.max(0.001, v)); }, from: 0, to: 1 }],
-        onCancel: () => { star.scale.set(finalScale); }
-      });
-    }
+    // the entrance has landed: the earned stars come in (one run in the fx scope, cancelled on every path to hidden)
+    this.starsFx.play(this.earnedStars());
+  }
+
+  /** Stars of the current show: 0 on a fail, else params.stars rounded into 0..3. */
+  private earnedStars(): number {
+    return this.params?.outcome === 'fail' ? 0 : Math.max(0, Math.min(3, Math.round(this.params?.stars ?? 0)));
   }
 
   protected override onHiddenView(_reason: WindowHiddenReason): void {
-    for (const star of this.stars) star.visible = false;
+    this.starsFx.reset(); // no star, flash or spark stays after a close
     this.confetti?.cancel(); // the fx scope cancel already stopped the run; this keeps the stop independent of it
   }
 
@@ -265,6 +278,25 @@ function centeredBox(nodes: Container[]): Rectangle {
     bottom = Math.max(bottom, node.y + node.height / 2);
   }
   return new Rectangle(left, top, right - left, bottom - top);
+}
+
+/**
+ * The WIN tap area: the visible content's box (its x / y / width / height, as before) plus the rest boxes of the earned
+ * stars — each one on its own, so the empty place of an unearned star is still backdrop.
+ */
+class TapArea extends Rectangle {
+  private readonly extra: readonly Rectangle[];
+
+  constructor(box: Rectangle, extra: readonly Rectangle[]) {
+    super(box.x, box.y, box.width, box.height);
+    this.extra = extra;
+  }
+
+  override contains(x: number, y: number): boolean {
+    if (super.contains(x, y)) return true;
+    for (const box of this.extra) if (box.contains(x, y)) return true;
+    return false;
+  }
 }
 
 /** Hidden buttons are also disabled, so no path can tap them. */

@@ -1,9 +1,11 @@
 // WIN confetti proof page: the Core ResultWindowView WIN alone, confetti on, driven by the host ticker like a game.
+// Also the WIN star entrance: "WIN 1★ / 2★" replay it with fewer earned stars ("Replay WIN" = 3).
 // Open it on a phone over the LAN (`npm run showcase -- --host 0.0.0.0` → http://<mac-ip>:5180/confetti.html).
 // Target of `npm run showcase:confetti` (scripts/confetti-check.mjs). Query:
 //   ?confetti=0            the Result as every existing game gets it: no confetti, no fx textures requested
 //   ?tier=desktop|mobile|lowPerf   density tier (default: mobile on a touch device, desktop otherwise — host policy)
 //   ?seed=N                seeded random (repeatable captures); default Math.random
+//   ?fireworks=0           the fx art loaded, the fireworks off: the star entrance alone (its flash, rays and sparks)
 import { Application } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import { ResultWindowView, WIN_CONFETTI_TEXTURES, loadReadyUiAssets, type ResultWindowParams } from 'game-core/pixi';
@@ -16,6 +18,7 @@ const tier: Tier = tierParam === 'desktop' || tierParam === 'mobile' || tierPara
   ? tierParam
   : matchMedia('(pointer: coarse)').matches ? 'mobile' : 'desktop';
 const seedParam = params.get('seed');
+const fireworksOn = params.get('fireworks') !== '0';
 
 /** mulberry32: a repeatable random for captures. */
 function seeded(seed: number): () => number {
@@ -43,12 +46,13 @@ core.registerRuntime('motion', motion);
 const textures = await loadReadyUiAssets(confettiOn ? { baseUrl: './pixi-ui/', include: WIN_CONFETTI_TEXTURES } : { baseUrl: './pixi-ui/' });
 const events: string[] = [];
 const WIN: ResultWindowParams = { level: 12, stars: 3, rewardCoins: 50 };
+const winWith = (stars: number): ResultWindowParams => ({ ...WIN, stars });
 const FAIL: ResultWindowParams = { level: 12, outcome: 'fail', rewardCoins: 0 };
 let next: ResultWindowParams | null = null;
 
 const view = new ResultWindowView({
   ui, motion, textures,
-  confetti: confettiOn ? { tier, ...(seedParam !== null ? { random: seeded(Number(seedParam) || 1) } : {}) } : false,
+  confetti: confettiOn && fireworksOn ? { tier, ...(seedParam !== null ? { random: seeded(Number(seedParam) || 1) } : {}) } : false,
   onNext: () => events.push('next'),
   onRetry: () => events.push('retry'),
   onExit: () => events.push('exit'),
@@ -60,6 +64,15 @@ type Stats = { created: number; active: number; pooled: number; peakActive: numb
 const effect = (view as unknown as { confetti: { getStats(): Stats; durationMs: number } | null }).confetti;
 const NO_FX: Stats = { created: 0, active: 0, pooled: 0, peakActive: 0, maxParticles: 0, running: false, plays: 0, completed: 0, cancelled: 0, elapsedMs: 0 };
 const stats = (): Stats => effect?.getStats() ?? NO_FX;
+type StarStats = { created: number; active: number; running: boolean; elapsedMs: number; durationMs: number; earned: number; plays: number; completed: number; cancelled: number };
+const starsFx = (view as unknown as { starsFx: { getStats(): StarStats } }).starsFx;
+type Box = { x: number; y: number; width: number; height: number };
+const boundsOf = (name: string): Box | Box[] | null => {
+  const node = (view as unknown as Record<string, { getBounds(): Box; visible: boolean } | Array<{ getBounds(): Box; visible: boolean }>>)[name];
+  if (!node) return null;
+  const box = (n: { getBounds(): Box; visible: boolean }): Box => { const b = n.getBounds(); return { x: b.x, y: b.y, width: b.width, height: b.height }; };
+  return Array.isArray(node) ? node.filter((n) => n.visible).map(box) : box(node);
+};
 
 /** Show `params` now, or close the open Result first and show it right after (a close continuation, no timer). */
 function open(p: ResultWindowParams): void {
@@ -82,6 +95,9 @@ const bar = document.getElementById('bar')!;
 const statsEl = document.getElementById('stats')!;
 document.getElementById('replay')!.addEventListener('click', () => open(WIN));
 document.getElementById('fail')!.addEventListener('click', () => open(FAIL));
+for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>('button[data-stars]'))) {
+  b.addEventListener('click', () => open(winWith(Number(b.dataset.stars))));
+}
 const link = (over: Record<string, string | null>): string => {
   const q = new URLSearchParams(location.search);
   for (const [k, v] of Object.entries(over)) {
@@ -160,7 +176,11 @@ const tapPoint = (name: 'nextButton' | 'retryButton' | 'closeButton') => {
     walk(app.stage as unknown as { children: unknown[] });
     return count;
   },
-  showWin: () => open(WIN),
+  showWin: (stars = 3) => open(winWith(stars)),
+  /** The WIN star entrance (flight, spring, landing flash / rays / sparks). */
+  stars: () => starsFx.getStats(),
+  /** Screen boxes (CSS px) of the visible stars and of what they must not cover. */
+  boxes: () => Object.fromEntries(['stars', 'titleText', 'subtitleText', 'rewardCaption', 'rewardCoin', 'rewardAmount', 'nextButton', 'retryButton', 'closeButton'].map((n) => [n, boundsOf(n)])),
   showFail: () => open(FAIL),
   hold: (on: boolean) => { held = on; renderStats(); },
   /** Proof hook: advances the host clock by hand (used while held; the effect's frame is a function of its time). */

@@ -37,7 +37,7 @@ describe('ResultWindowView', () => {
     expect(view.state).toBe('entering');
     advance(kit.core, 300);
     expect(view.state).toBe('shown');
-    // earned stars pop in through MotionRuntime after the entrance
+    // the earned stars come in through MotionRuntime after the entrance
     expect(kit.motion.getStats().activeMotions).toBeGreaterThan(0);
     advance(kit.core, 1500);
     expect(kit.motion.getStats().activeMotions).toBe(0);
@@ -116,8 +116,8 @@ describe('ResultWindowView', () => {
     advance(kit.core, 500);
     view.resize(320, 568, { insets: { top: 20, bottom: 20 } });
     const panel = field<Container>(view, 'panel');
-    // ribbon 1019 wide; top star 144 at y −468 … CTA row 207 at y 310
-    const frame = { x: -509.5, y: -540, width: 1019, height: 953.5 };
+    // ribbon 1019 wide; top star 288 at y −600 … CTA row 207 at y 310
+    const frame = { x: -509.5, y: -744, width: 1019, height: 1157.5 };
     expect(panel.scale.x).toBeCloseTo(Math.min((320 * 0.88) / frame.width, (528 * 0.84) / frame.height), 6);
     expect(panel.x).toBeCloseTo(160, 1);
     expect(panel.y + (frame.y + frame.height / 2) * panel.scale.y).toBeCloseTo(20 + 528 / 2, 1);
@@ -403,7 +403,7 @@ describe('ResultWindowView responsive frame: one scale for win and fail', () => 
   function measure(kit: ReturnType<typeof createKit>, view: ResultWindowView, params: ResultWindowParams, w: number, h: number, insets?: { top: number; bottom: number }): Box {
     view.resize(w, h, insets ? { insets } : {});
     view.show(params);
-    advance(kit.core, 2000); // entrance + star pops settled
+    advance(kit.core, 2500); // entrance + star entrance settled
     expect(view.state).toBe('shown');
     const box = screenBox(view);
     view.close('programmatic');
