@@ -35,8 +35,8 @@ export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
 export { ResultWindowView, WIN_CONFETTI_TEXTURES } from './ResultWindowView';
 export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindowView';
-export { LivesWindowView } from './LivesWindowView';
-export type { LivesWindowParams, LivesWindowViewOptions } from './LivesWindowView';
+export { LivesWindowView, LIVES_FIGMA_TEXTURES } from './LivesWindowView';
+export type { LivesWindowParams, LivesWindowViewOptions, LivesWindowVariant } from './LivesWindowView';
 export { ConfirmWindowView, CONFIRM_EXIT_FIGMA_TEXTURES } from './ConfirmWindowView';
 export type { ConfirmWindowViewOptions, ConfirmWindowVariant } from './ConfirmWindowView';
 export { ShopWindowView } from './ShopWindowView';

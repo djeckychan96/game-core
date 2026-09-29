@@ -13,7 +13,7 @@ describe('game-core/pixi public entry', () => {
     for (const name of [
       'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView', 'ConfirmWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
-      'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES', 'WIN_CONFETTI_TEXTURES',
+      'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES', 'WIN_CONFETTI_TEXTURES', 'LIVES_FIGMA_TEXTURES',
       'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
       'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
     ]) {
@@ -70,7 +70,10 @@ describe('game-core/pixi public entry', () => {
     const required = Object.keys(pixiEntry.READY_UI_ASSET_FILES);
     expect(required.length).toBe(71);
     for (const name of Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES)) expect(required).not.toContain(name);
-    expect(Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES).sort()).toEqual(['brokenHeart', 'buttonGreen', 'fxGlowSoft', 'fxSparkStar', 'messageGlow', 'windowBase', 'windowClose']);
+    expect(Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES).sort()).toEqual([
+      'brokenHeart', 'buttonGreen', 'buttonHighlight', 'buttonOrange', 'fxGlowSoft', 'fxSparkStar', 'iconAd', 'iconCoin', 'iconHeart',
+      'livesHeart', 'messageGlow', 'panelInset', 'windowBase', 'windowClose'
+    ]);
   });
 
   it('ships the Figma confirm-exit textures lossless at their @Nx density, 9-slice textures = caps + an 8-unit centre', () => {
@@ -133,6 +136,13 @@ describe('game-core/pixi public entry', () => {
       expect(Object.keys(confetti).length).toBe(71 + 2);
       expect(confetti.fxSparkStar).toBeInstanceOf(Texture);
 
+      // the Figma Lives window asks for its own ten (the shared shell / close / green surface included), nothing else
+      requested.length = 0;
+      const lives = await pixiEntry.loadReadyUiAssets({ baseUrl: '/core-pack/', include: pixiEntry.LIVES_FIGMA_TEXTURES });
+      expect(optionalRequests().sort()).toEqual(filesOf(pixiEntry.LIVES_FIGMA_TEXTURES));
+      expect(Object.keys(lives).length).toBe(71 + 10);
+      expect(lives.buttonOrange).toBeInstanceOf(Texture);
+
       // requested but absent: a clear rejection naming the file (only on this path)
       missing = new Set(['/old-skin/window/window_base@2x.webp']);
       await expect(pixiEntry.loadReadyUiAssets({ baseUrl: '/old-skin/', include: pixiEntry.CONFIRM_EXIT_FIGMA_TEXTURES }))
@@ -140,6 +150,39 @@ describe('game-core/pixi public entry', () => {
     } finally {
       load.mockRestore();
       get.mockRestore();
+    }
+  });
+
+  it('ships the Figma Lives textures lossless at @2x; its 9-slices (orange surface, inner panel) = caps + an 8-unit centre', () => {
+    const webp = (file: string) => {
+      const b = readFileSync(resolve(rootDir, 'assets/pixi-ui', file));
+      expect(b.toString('ascii', 12, 16)).toBe('VP8L');
+      const bits = b.readUInt32LE(21);
+      return [((bits & 0x3fff) + 1) / 2, (((bits >> 14) & 0x3fff) + 1) / 2]; // every Lives file is @2x
+    };
+    const files = pixiEntry.READY_UI_OPTIONAL_ASSET_FILES;
+    // figma.json sizes (SVG export boxes, units)
+    expect(webp(files.buttonHighlight)).toEqual([307, 172]);
+    expect(webp(files.livesHeart)).toEqual([326, 298]);
+    expect(webp(files.iconCoin)).toEqual([100, 100]);
+    expect(webp(files.iconHeart)).toEqual([154, 154]);
+    expect(webp(files.iconAd)).toEqual([128, 134]);
+    for (const key of ['buttonOrange', 'panelInset'] as const) {
+      const caps = pixiEntry.READY_UI_NINE_SLICES[key];
+      expect(webp(files[key]), key).toEqual([caps.left + 8 + caps.right, caps.top + 8 + caps.bottom]);
+    }
+    // measured on the raster: orange has the green surface's geometry; the plain panel gets its radius + the gutter
+    expect(pixiEntry.READY_UI_NINE_SLICES.buttonOrange).toEqual(pixiEntry.READY_UI_NINE_SLICES.buttonGreen);
+    expect(pixiEntry.READY_UI_NINE_SLICES.panelInset).toEqual({ left: 58, top: 58, right: 58, bottom: 58 });
+  });
+
+  it('the Figma Lives sources carry no text: the count, countdown, price and labels are runtime', () => {
+    const figma = JSON.parse(readFileSync(resolve(rootDir, 'docs/figma/lives/figma.json'), 'utf-8'));
+    for (const asset of figma.assets) {
+      for (const layer of asset.layers) {
+        const svg = readFileSync(resolve(rootDir, 'docs/figma/lives', layer.svg), 'utf-8');
+        expect(svg, layer.svg).not.toMatch(/<text|<tspan|<image|font-family/);
+      }
     }
   });
 

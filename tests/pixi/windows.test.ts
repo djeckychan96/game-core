@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { advance, createKit, pointer } from './setup';
 import { ResultWindowView, type ResultWindowParams } from '../../src/pixi/ResultWindowView';
-import { LivesWindowView } from '../../src/pixi/LivesWindowView';
+import { LIVES_FIGMA_TEXTURES, LivesWindowView, type LivesWindowParams, type LivesWindowViewOptions } from '../../src/pixi/LivesWindowView';
+import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
+import { formatAmount } from '../../src/pixi/text';
 import { ShopWindowView, type ShopItem } from '../../src/pixi/ShopWindowView';
 import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
 import { NoAdsWindowView } from '../../src/pixi/NoAdsWindowView';
 import { StarterPackWindowView } from '../../src/pixi/StarterPackWindowView';
 import { CONFIRM_EXIT_FIGMA_TEXTURES, ConfirmWindowView } from '../../src/pixi/ConfirmWindowView';
 import type { UiButton } from '../../src/pixi/UiButton';
-import { CanvasTextMetrics, NineSliceSprite, type Container, type Rectangle, type Sprite, type Text } from 'pixi.js';
+import { CanvasTextMetrics, NineSliceSprite, Texture, TextureSource, type Container, type Rectangle, type Sprite, type Text } from 'pixi.js';
 
 function field<T>(view: object, name: string): T {
   const value = (view as Record<string, unknown>)[name];
@@ -497,6 +499,228 @@ describe('LivesWindowView', () => {
     expect(ads).toEqual([5]);
     view.destroy();
     expect(kit.ui.getStats().buttons).toBe(0);
+  });
+});
+
+describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figma/lives)", () => {
+  // Figma screen units → panel units: the Figma variant's panel origin is the screen centre (540, 1172)
+  const X = (x: number) => x - 540;
+  const Y = (y: number) => y - 1172;
+  // tests/pixi/setup.ts fakes the font: advance 0.56 em per char, line box ascent 0.9 em + descent 0.25 em
+  const baseline = (boxY: number, boxH: number, size: number, originY = 1172) => boxY - originY + (boxH - 1.15 * size) / 2 + 0.9 * size;
+  const PARAMS: LivesWindowParams = { lives: 3, maxLives: 5, timerText: '17:42', refillPrice: 900 };
+  const within = (actual: number, expected: number, what?: string) => expect(actual, what).toBeCloseTo(expected, 6);
+
+  /** One texture per key, so a layer is identified by the texture it draws. */
+  function distinctTextures(kit: ReturnType<typeof createKit>): ReadyUiTextures {
+    const out = {} as Record<string, Texture>;
+    for (const key of Object.keys(kit.textures)) out[key] = new Texture({ source: new TextureSource({ width: 2, height: 2, label: key }) });
+    return out as ReadyUiTextures;
+  }
+  function create(kit: ReturnType<typeof createKit>, log: string[], textures: ReadyUiTextures, extra: Partial<LivesWindowViewOptions> = {}): LivesWindowView {
+    return new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures, variant: 'figma', id: 'lives',
+      onRefill: (p) => log.push(`refill:${p.lives}`), onWatchAd: (p) => log.push(`ad:${p.lives}`), onDismiss: (r) => log.push(`dismiss:${r}`), ...extra });
+  }
+  /** The glyph run of a Figma label: [left, right] and its baseline, in the label's parent units. */
+  function run(label: Text): { left: number; right: number; center: number; baseline: number } {
+    const b = label.getLocalBounds(); // 4 stroke + run + 4 stroke + 4 shadow wide; baseline 4 + glyph ascent below the top
+    const glyphAscent = CanvasTextMetrics.measureText(label.text, label.style).fontProperties.ascent;
+    const left = label.x + (b.x + 4) * label.scale.x;
+    const right = label.x + (b.x + b.width - 8) * label.scale.x;
+    return { left, right, center: (left + right) / 2, baseline: label.y + (b.y + 4 + glyphAscent) * label.scale.y };
+  }
+  const drawing = (parent: Container, texture: Texture | undefined) => parent.children.find((c) => (c as Sprite).texture === texture) as Sprite | NineSliceSprite;
+
+  it('builds the Figma layers: 9-slice shell / inner panel / button surfaces, art at its export boxes, runtime text in its boxes', () => {
+    const kit = createKit();
+    const textures = distinctTextures(kit);
+    const view = create(kit, [], textures);
+    view.show(PARAMS);
+    advance(kit.core, 400);
+    const panel = field<Container>(view, 'panel');
+
+    const shell = drawing(panel, textures.windowBase) as NineSliceSprite;
+    expect(shell).toBeInstanceOf(NineSliceSprite);
+    expect([shell.leftWidth, shell.topHeight, shell.rightWidth, shell.bottomHeight]).toEqual([92, 187, 92, 110]);
+    const s = shell.getLocalBounds(); // ui/window/base 960 × 1059 at (60, 642) + the 4 / 4 / 4 / 8 bleed
+    expect([shell.x + s.x, shell.y + s.y, s.width, s.height]).toEqual([X(56), Y(638), 968, 1071]);
+    const inset = drawing(panel, textures.panelInset) as NineSliceSprite;
+    expect(inset).toBeInstanceOf(NineSliceSprite);
+    expect([inset.leftWidth, inset.topHeight, inset.rightWidth, inset.bottomHeight]).toEqual([58, 58, 58, 58]);
+    const i = inset.getLocalBounds();
+    expect([inset.x + i.x, inset.y + i.y, i.width, i.height]).toEqual([X(90), Y(934), 900, 382]);
+    const heart = drawing(panel, textures.livesHeart) as Sprite;
+    expect([heart.x, heart.y, heart.width, heart.height]).toEqual([X(152), Y(981), 326, 298]);
+    const close = field<UiButton>(view, 'closeButton');
+    expect(close.background.texture).toBe(textures.windowClose);
+    expect([close.x, close.y, close.background.width, close.background.height]).toEqual([X(923 + 25.5), Y(703 + 25.5), 51, 51]);
+
+    const refill = field<UiButton>(view, 'refillButton');
+    expect(refill.background).toBeInstanceOf(NineSliceSprite);
+    expect(refill.background.texture).toBe(textures.buttonGreen);
+    expect([refill.x, refill.y, refill.background.width, refill.background.height]).toEqual([X(90 + 185.5), Y(1432 + 103.5), 371, 207]);
+    const ad = field<UiButton>(view, 'adButton');
+    expect(ad.background).toBeInstanceOf(NineSliceSprite);
+    expect(ad.background.texture).toBe(textures.buttonOrange);
+    expect([ad.x, ad.y, ad.background.width, ad.background.height]).toEqual([X(483 + 253.5), Y(1432 + 103.5), 507, 207]);
+    // inside the ad button (origin = its centre 736.5, 1535.5), in the Figma order: highlight, GET, heart icon, +1, clapper
+    const bx = (x: number) => x - 736.5;
+    const by = (y: number) => y - 1535.5;
+    const highlight = drawing(ad, textures.buttonHighlight) as Sprite;
+    expect([highlight.x, highlight.y, highlight.width, highlight.height]).toEqual([bx(491), by(1437), 307, 172]);
+    const rewardIcon = drawing(ad, textures.iconHeart) as Sprite;
+    expect([rewardIcon.x, rewardIcon.y, rewardIcon.width, rewardIcon.height]).toEqual([bx(819), by(1448), 154, 154]);
+    const adIcon = drawing(ad, textures.iconAd) as Sprite;
+    expect([adIcon.x, adIcon.y, adIcon.width, adIcon.height]).toEqual([bx(511), by(1448), 128, 134]);
+    const adTexts = ad.children.filter((c) => (c as Text).text !== undefined) as Text[];
+    expect(adTexts.map((t) => t.text)).toEqual(['GET', '+1']);
+    expect(ad.children.indexOf(highlight)).toBeLessThan(ad.children.indexOf(adTexts[0]!));
+    expect(ad.children.indexOf(adIcon)).toBe(ad.children.length - 1);
+
+    // runtime text: centred / left runs, the font's line box centred in the Figma box
+    const title = run(field<Text>(view, 'title'));
+    within(title.center, X(540), 'title');
+    within(title.baseline, baseline(676, 104, 80), 'title');
+    const next = run(field<Text>(view, 'nextLabel'));
+    within(next.center, X(531 + 221), 'next');
+    within(next.baseline, baseline(1052, 60, 50), 'next');
+    const count = run(field<Text>(view, 'countText'));
+    expect(field<Text>(view, 'countText').text).toBe('3');
+    within(count.center, X(272 + 42), 'count');
+    within(count.baseline, baseline(1036, 180, 150), 'count');
+    const timer = run(field<Text>(view, 'timerText'));
+    within(timer.center, X(531 + 221), 'timer');
+    within(timer.baseline, baseline(1115, 84, 70), 'timer');
+    const refillLabel = run(refill.children.find((c) => (c as Text).text === 'REFILL NOW!') as Text);
+    within(refillLabel.center, 112 + 165.5 - 275.5, 'refill label');
+    within(refillLabel.baseline, baseline(1438, 84, 50, 1535.5), 'refill label');
+    const get = run(adTexts[0]!);
+    within(get.center, bx(620 + 233.199 / 2), 'GET');
+    within(get.baseline, baseline(1445, 159, 60, 1535.5), 'GET');
+    const plusOne = run(adTexts[1]!);
+    within(plusOne.left, bx(859), '+1');
+    within(plusOne.baseline, baseline(1483, 72, 60, 1535.5), '+1');
+    // Frame 381: "900", a 1-unit gap and the 100 × 100 coin, one row centred on REFILL, centred in its 100 height
+    const price = run(field<Text>(view, 'priceText'));
+    const coin = field<Sprite>(view, 'priceCoin');
+    expect(coin.texture).toBe(textures.iconCoin);
+    expect([coin.width, coin.height, coin.y]).toEqual([100, 100, 1508 - 1535.5]);
+    within(coin.x, price.right + 1, 'coin follows the price');
+    within(price.left + (coin.x + 100), 0, 'row centred on the button');
+    within(price.baseline, baseline(1508, 100, 64, 1535.5), 'price');
+
+    for (const layer of [shell, inset, heart, field<Text>(view, 'title'), field<Text>(view, 'countText'), field<Text>(view, 'nextLabel'), field<Text>(view, 'timerText')]) {
+      expect(layer.eventMode).toBe('none');
+    }
+    expect(panel.children[panel.children.length - 1]).toBe(close);
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('keeps the donor behaviour: count, countdown / MAX, price, REFILL disabled when full, ad offer, continuations after the close', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log, kit.textures);
+    view.show(PARAMS);
+    advance(kit.core, 400);
+    expect(view.state).toBe('shown');
+    expect([field<Text>(view, 'countText').text, field<Text>(view, 'timerText').text, field<Text>(view, 'priceText').text]).toEqual(['3', '17:42', '900']);
+    view.setTimer('9:05');
+    expect(field<Text>(view, 'timerText').text).toBe('9:05');
+    within(run(field<Text>(view, 'timerText')).center, X(752), 'timer stays centred');
+    tap(field<UiButton>(view, 'refillButton'), kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['refill:3']);
+    expect(view.state).toBe('hidden');
+
+    view.show({ lives: 5, maxLives: 5, refillPrice: 12450 });
+    advance(kit.core, 400);
+    expect(field<Text>(view, 'timerText').text).toBe('MAX');
+    expect(field<Text>(view, 'priceText').text).toBe(formatAmount(12450)); // thin-space thousands, as the donor
+    const price = run(field<Text>(view, 'priceText'));
+    within(price.left + field<Sprite>(view, 'priceCoin').x + 100, 0, 'a longer price stays centred with its coin');
+    expect(field<UiButton>(view, 'refillButton').enabled).toBe(false);
+    view.setTimer('00:01'); // ignored at full lives, like the donor
+    expect(field<Text>(view, 'timerText').text).toBe('MAX');
+    tap(field<UiButton>(view, 'adButton'), kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['refill:3', 'ad:5']);
+
+    view.show({ ...PARAMS, adOffer: false });
+    advance(kit.core, 400);
+    expect(field<UiButton>(view, 'adButton').visible).toBe(false);
+    expect(field<UiButton>(view, 'refillButton').x).toBe(0); // REFILL alone: centred
+    tap(field<UiButton>(view, 'closeButton'), kit);
+    advance(kit.core, 200);
+    view.show(PARAMS);
+    advance(kit.core, 400);
+    expect(field<UiButton>(view, 'refillButton').x).toBe(X(275.5));
+    const backdrop = field<Container>(view, 'backdrop');
+    backdrop.emit('pointertap', { target: backdrop } as never);
+    advance(kit.core, 200);
+    expect(log).toEqual(['refill:3', 'ad:5', 'dismiss:button', 'dismiss:background']);
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+
+    const noAds = new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, variant: 'figma', onRefill: () => {} });
+    noAds.show(PARAMS);
+    expect(field<UiButton>(noAds, 'adButton').visible).toBe(false);
+    noAds.destroy();
+  });
+
+  it('defaults to the Figma copy and dim; options set every label', () => {
+    const kit = createKit();
+    const view = create(kit, [], kit.textures);
+    const texts = (v: LivesWindowView) => [
+      field<Text>(v, 'title').text, field<Text>(v, 'nextLabel').text,
+      ...(field<UiButton>(v, 'refillButton').children.filter((c) => (c as Text).text !== undefined) as Text[]).map((t) => t.text).slice(0, 1),
+      ...(field<UiButton>(v, 'adButton').children.filter((c) => (c as Text).text !== undefined) as Text[]).map((t) => t.text)
+    ];
+    expect(texts(view)).toEqual(['REFILL HEARTS!', 'NEXT HEART IN', 'REFILL NOW!', 'GET', '+1']);
+    expect([field<number>(view, 'backdropColor'), field<number>(view, 'backdropAlpha')]).toEqual([0x080b0d, 0.8]);
+    view.destroy();
+    const ru = create(kit, [], kit.textures, { title: 'ПОПОЛНИТЬ ЖИЗНИ!', nextLifeLabel: 'СЛЕДУЮЩАЯ ЧЕРЕЗ', refillLabel: 'ПОПОЛНИТЬ!', adLabel: 'ВЗЯТЬ', adRewardLabel: '+2' });
+    expect(texts(ru)).toEqual(['ПОПОЛНИТЬ ЖИЗНИ!', 'СЛЕДУЮЩАЯ ЧЕРЕЗ', 'ПОПОЛНИТЬ!', 'ВЗЯТЬ', '+2']);
+    const title = run(field<Text>(ru, 'title'));
+    expect(title.right - title.left).toBeLessThanOrEqual(690 + 1e-6); // a long title shrinks into its 690 box
+    ru.destroy();
+  });
+
+  it('fits like the Figma frame: the 960 × 1059 window keeps its place in the contain-fitted 1080 × 2344 screen', () => {
+    for (const [w, h] of [[390, 844], [1280, 800], [1080, 2344]] as const) {
+      const kit = createKit();
+      const view = create(kit, [], kit.textures);
+      view.resize(w, h);
+      view.show(PARAMS);
+      advance(kit.core, 400);
+      const k = Math.min(w / 1080, h / 2344);
+      const shell = (drawing(field<Container>(view, 'panel'), kit.textures.windowBase) as NineSliceSprite).getBounds();
+      expect(shell.width, `${w}×${h}`).toBeCloseTo(968 * k, 6);
+      expect(shell.height, `${w}×${h}`).toBeCloseTo(1071 * k, 6);
+      expect(shell.x + 4 * k, `${w}×${h}`).toBeCloseTo(w / 2 + X(60) * k, 6);
+      expect(shell.y + 4 * k, `${w}×${h}`).toBeCloseTo(h / 2 + Y(642) * k, 6);
+      view.destroy();
+    }
+  });
+
+  it('requested without its art (not in `include`): a clear error before anything registers', () => {
+    const kit = createKit();
+    const { buttonOrange: _drop, ...textures } = kit.textures;
+    expect(() => create(kit, [], textures)).toThrow(/variant 'figma': no buttonOrange \(button\/button_orange@2x\.webp\).*include: LIVES_FIGMA_TEXTURES/);
+    expect(kit.ui.getStats().windows).toBe(0);
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('the default stays the donor window and needs only the required pack', () => {
+    const kit = createKit();
+    const required = { ...kit.textures };
+    for (const name of Object.keys(READY_UI_OPTIONAL_ASSET_FILES) as ReadyUiOptionalTextureName[]) delete required[name];
+    const view = new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: required, onRefill: () => {} });
+    expect(view.variant).toBe('donor');
+    expect(LIVES_FIGMA_TEXTURES.every((name) => !(name in required))).toBe(true);
+    view.show(PARAMS);
+    expect(field<Text>(view, 'countText').text).toBe('3/5');
+    view.destroy();
   });
 });
 

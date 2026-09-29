@@ -93,7 +93,7 @@ export const READY_UI_ASSET_FILES = {
 /**
  * Kit textures outside the required pack: nothing requests them unless a host lists them in
  * `loadReadyUiAssets({ include })` for the feature that draws them (e.g. CONFIRM_EXIT_FIGMA_TEXTURES for the
- * Figma confirm-exit window, WIN_CONFETTI_TEXTURES for the Result WIN confetti). Core's own pack ships them. The Figma confirm-exit art (docs/figma/confirm-exit,
+ * Figma confirm-exit window, LIVES_FIGMA_TEXTURES for the Figma Lives window, WIN_CONFETTI_TEXTURES for the Result WIN confetti). Core's own pack ships them. The Figma confirm-exit art (docs/figma/confirm-exit,
  * rendered by `node scripts/figma-assets.mjs`): no text inside any of them.
  */
 export const READY_UI_OPTIONAL_ASSET_FILES = {
@@ -110,7 +110,22 @@ export const READY_UI_OPTIONAL_ASSET_FILES = {
   /** Trail Arrow's LevelComplete firework spark (128², additive): the Result WIN confetti. */
   fxSparkStar: 'fx/spark_star.webp',
   /** Trail Arrow's soft core glow (128², additive): the flash at the centre of each confetti burst. */
-  fxGlowSoft: 'fx/glow_soft.webp'
+  fxGlowSoft: 'fx/glow_soft.webp',
+  // Figma Lives (docs/figma/lives, `node scripts/figma-assets.mjs docs/figma/lives`): no text inside
+  /** Figma `ui/button/surface` style=orange: 9-slice; caps in READY_UI_NINE_SLICES. */
+  buttonOrange: 'button/button_orange@2x.webp',
+  /** The button's gold `surface/highlight` gradient (307 × 172), drawn over a surface's face. */
+  buttonHighlight: 'button/button_highlight@2x.webp',
+  /** A window's flat inner panel (Lives `section/next-life`): 9-slice; caps in READY_UI_NINE_SLICES. */
+  panelInset: 'window/panel_inset@2x.webp',
+  /** The Lives heart: the broken heart's art without the crack (the count is runtime text). */
+  livesHeart: 'icons/lives_heart@2x.webp',
+  /** Coin icon of a price (100 × 100). */
+  iconCoin: 'icons/icon_coin@2x.webp',
+  /** Heart icon of a reward (154 × 154; its "+1" is runtime text). */
+  iconHeart: 'icons/icon_heart@2x.webp',
+  /** Rewarded-ad clapper icon (128 × 134, the flattened `icon/reward` of the Lives screen). */
+  iconAd: 'icons/icon_ad@2x.webp'
 } as const;
 
 export type ReadyUiTextureName = keyof typeof READY_UI_ASSET_FILES;
@@ -127,7 +142,11 @@ export const READY_UI_NINE_SLICES = {
   /** Figma @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
   windowBase: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } },
   /** Figma @stretch 51 is short of the rounded corners and the shadow (they end at 59 / 61 / 59 / 81) + gutter 8. */
-  buttonGreen: { left: 67, top: 69, right: 67, bottom: 89 }
+  buttonGreen: { left: 67, top: 69, right: 67, bottom: 89 },
+  /** Same geometry as green (measured 59 / 61 / 59 / 81 on the Lives 507 × 207 surface) + gutter 8. */
+  buttonOrange: { left: 67, top: 69, right: 67, bottom: 89 },
+  /** No @stretch in Figma (a plain 900 × 382 rectangle): its 50 corners measured + gutter 8. */
+  panelInset: { left: 58, top: 58, right: 58, bottom: 58 }
 } as const satisfies Partial<Record<ReadyUiOptionalTextureName, NineSliceSpec>>;
 
 /** The kit's font file, also under `assets/pixi-ui/`. Registered as the theme's font family. */

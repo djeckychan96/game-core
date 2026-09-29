@@ -1,0 +1,57 @@
+{
+  "about": "Figma source of truth for the Game Core Lives window (LivesWindowView variant 'figma'). Read 2026-09-30 through the Figma MCP (4 calls: 2 read-only use_figma dumps/exports, 1 use_figma export of the ad icon, 1 download_assets of the modal). Screen coordinates are Figma units inside the 1080 x 2344 screen frame = Ready UI design units.",
+  "source": {
+    "fileKey": "CNcGCBj8IvUXrPd01FbChm",
+    "page": "HAMSTER PIXEL FLOW АКТУАЛЬНОЕ ",
+    "screen": { "id": "85:8944", "name": "screen/lives", "size": [1080, 2344] },
+    "reference": { "node": "95:22202", "file": "reference/modal-95-22202@1x.png", "size": [968, 1071], "origin": [56, 638], "sha256": "dfde8f09c89b43a17ec5411daa76e41d2d5e756a4ffe18978de5682823da7f8f" }
+  },
+  "screenChildren": [
+    { "id": "85:9387", "name": "overlay/dim", "box": [0, 0, 1080, 2344], "fill": "#080b0d", "opacity": 0.8 },
+    { "id": "95:22202", "name": "modal/lives", "type": "GROUP", "box": [60, 642, 960, 1059], "render": [56, 638, 968, 1071] }
+  ],
+  "modal": {
+    "window": { "id": "85:9689", "name": "ui/window/base", "box": [60, 642, 960, 1059], "note": "same shell as confirm-exit (surface/body, surface/header identical): windowBase 9-slice at 960 x 1059" },
+    "title": { "id": "I85:9689;73:5211", "name": "slot/title", "box": [195, 676, 690, 104], "text": "REFILL HEARTS!", "fontSize": 80, "align": "CENTER/CENTER NONE" },
+    "close": { "id": "I85:9689;73:5212", "name": "action/close", "box": [923, 703, 50.519, 50.52], "note": "windowClose, as in confirm-exit" },
+    "inset": { "id": "85:9691", "name": "section/next-life/Rectangle 65858", "box": [90, 934, 900, 382], "fill": "#a2a0f4", "cornerRadius": 50, "svg": "svg/panel-inset.svg", "note": "plain rounded rectangle, no @stretch in Figma" },
+    "heart": { "id": "85:9696", "name": "section/next-life/Group 412/Group 377", "box": [162, 991, 305.395, 268], "render": [152, 981, 325.396, 298], "svg": "svg/lives-heart.svg", "note": "the confirm-exit heart without the crack; the count text (Group 378) is a sibling, exported separately as runtime text" },
+    "count": { "id": "85:9705", "name": "section/next-life/Group 412/Group 378/1", "box": [272, 1036, 84, 180], "text": "1", "fontSize": 150, "align": "LEFT/CENTER WIDTH_AND_HEIGHT", "core": "centred on the Figma box centre (314, 1126): same place for '1', stays centred for other counts and for the kit font's narrower '1'" },
+    "nextLabel": { "id": "85:9693", "name": "section/next-life/Group 379/NEXT HEART IN", "box": [531, 1052, 442, 60], "text": "NEXT HEART IN", "fontSize": 50, "align": "CENTER/CENTER NONE" },
+    "timer": { "id": "85:9694", "name": "section/next-life/Group 379/24:15", "box": [531, 1115, 442, 84], "text": "24:15", "fontSize": 70, "align": "CENTER/CENTER HEIGHT" },
+    "refill": {
+      "id": "85:9706", "name": "action/refill-coins", "box": [90, 1432, 371, 207],
+      "surface": { "id": "85:9707", "component": "ui/button/surface style=green", "note": "same geometry as the confirm-exit green surface: buttonGreen 9-slice at 371 x 207" },
+      "label": { "id": "85:9708", "name": "REFILL NOW!", "box": [112, 1438, 331, 84], "fontSize": 50, "align": "CENTER/CENTER NONE" },
+      "priceRow": { "id": "85:9709", "name": "Frame 381", "box": [171, 1508, 209, 100], "layout": "HORIZONTAL, counter CENTER, gap 1, centred on the button",
+        "price": { "id": "85:9710", "name": "900", "box": [171, 1519.5, 108, 77], "fontSize": 64, "align": "CENTER/CENTER WIDTH_AND_HEIGHT" },
+        "coin": { "id": "85:9711", "name": "icon_coin_128", "box": [280, 1508, 100, 100], "svg": "svg/icon-coin.svg" } }
+    },
+    "ad": {
+      "id": "85:9726", "name": "action/rewarded-life", "box": [483, 1432, 507, 207],
+      "surface": { "id": "85:9728", "component": "ui/button/surface style=orange", "svg": "svg/button-surface-orange.svg" },
+      "highlight": { "id": "85:9729", "name": "Rectangle 65898", "box": [491, 1437, 307, 172], "fill": "linear #ffff17 0 → 0.7 (0 → 0.702)", "cornerRadius": [51, 0, 0, 51], "svg": "svg/button-highlight.svg", "note": "the button base's surface/highlight, drawn over the orange face" },
+      "label": { "id": "85:9730", "name": "GET", "box": [620, 1445, 233.199, 159], "fontSize": 60, "align": "CENTER/CENTER NONE" },
+      "rewardIcon": { "id": "85:9731", "name": "icon_heart_128", "box": [819, 1448, 154, 154], "svg": "svg/icon-heart.svg" },
+      "rewardLabel": { "id": "85:9740", "name": "+1", "box": [859, 1483, 68, 72], "fontSize": 60, "align": "LEFT/CENTER WIDTH_AND_HEIGHT" },
+      "adIcon": { "id": "85:9741", "name": "Group 385", "box": [511, 1448, 124.529, 128.313], "render": [511, 1448, 127.312, 133.975], "svg": "svg/icon-ad.svg", "note": "a flattened copy of icon/reward (374:5364), rotated 8.39°" }
+    }
+  },
+  "textStyle": { "font": "Fira Sans / Black (900)", "fill": "#ffffff", "stroke": { "color": "#000000", "weight": 4, "align": "OUTSIDE", "join": "ROUND" }, "dropShadow": { "offset": [0, 4], "blur": 0, "color": "#000000" }, "lineHeight": "AUTO", "letterSpacing": 0 },
+  "reused": ["windowBase", "windowClose", "buttonGreen"],
+  "assets": [
+    { "key": "buttonOrange", "file": "button/button_orange@2x.webp", "scale": 2,
+      "layers": [{ "svg": "svg/button-surface-orange.svg", "at": [0, 0] }],
+      "size": [507, 207], "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+      "nineSlice": { "figma": { "left": 51, "top": 51, "right": 51, "bottom": 51 }, "gutter": 8, "strip": 8 } },
+    { "key": "panelInset", "file": "window/panel_inset@2x.webp", "scale": 2,
+      "layers": [{ "svg": "svg/panel-inset.svg", "at": [0, 0] }],
+      "size": [900, 382], "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+      "nineSlice": { "figma": { "left": 0, "top": 0, "right": 0, "bottom": 0 }, "gutter": 8, "strip": 8 } },
+    { "key": "buttonHighlight", "file": "button/button_highlight@2x.webp", "scale": 2, "layers": [{ "svg": "svg/button-highlight.svg", "at": [0, 0] }], "size": [307, 172] },
+    { "key": "livesHeart", "file": "icons/lives_heart@2x.webp", "scale": 2, "layers": [{ "svg": "svg/lives-heart.svg", "at": [0, 0] }], "size": [326, 298] },
+    { "key": "iconCoin", "file": "icons/icon_coin@2x.webp", "scale": 2, "layers": [{ "svg": "svg/icon-coin.svg", "at": [0, 0] }], "size": [100, 100] },
+    { "key": "iconHeart", "file": "icons/icon_heart@2x.webp", "scale": 2, "layers": [{ "svg": "svg/icon-heart.svg", "at": [0, 0] }], "size": [154, 154] },
+    { "key": "iconAd", "file": "icons/icon_ad@2x.webp", "scale": 2, "layers": [{ "svg": "svg/icon-ad.svg", "at": [0, 0] }], "size": [128, 134] }
+  ]
+}
