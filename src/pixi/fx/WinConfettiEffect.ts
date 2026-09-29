@@ -16,7 +16,7 @@ export const WIN_CONFETTI_TIERS: Readonly<Record<WinConfettiTier, { bursts: numb
 /**
  * Look and timing of the WIN fireworks, in the Result window's design units (a portrait phone is ≈ 1150 of them wide
  * under the Result frame fit). A few large single-colour volleys go off around the window, alternating sides: each one
- * a white flash, a soft colour bloom, a sphere of streaks flying out, then small twinkling glitter falling and fading.
+ * a bright flash, a soft colour bloom, a sphere of streaks flying out, then small twinkling glitter falling and fading.
  */
 export interface WinConfettiConfig {
   /** Picks `bursts` / `sparksPerBurst` when they are not given. Default `mobile`. */
@@ -74,15 +74,16 @@ const DEFAULTS: Omit<WinConfettiConfig, 'bursts' | 'sparksPerBurst'> = {
 export const WIN_CONFETTI_MAX_PARTICLES = 512;
 
 /** Particle kinds; a pool slot keeps its kind (and texture) for the effect's lifetime. */
-const FLASH = 0; // white glow at the volley centre, the first FLASH_SHARE of its life
+const FLASH = 0; // bright glow at the volley centre (white towards its colour), the first FLASH_SHARE of its life
 const BLOOM = 1; // soft glow in the volley colour behind the streaks
 const STREAK = 2; // stretched glow along its flight direction, shrinking into a falling dot
 const GLITTER = 3; // small twinkling spark star that fades in after the flash and falls
 
 const FLASH_SHARE = 0.15; // 210 ms of a 1400 ms volley: shorter than the 300 ms interval
-const FLASH_SIZE = 2.3; // flash sprite diameter at its end / volley radius
-const BLOOM_SIZE = 1.8; // bloom sprite diameter at its end / volley radius
-const BLOOM_ALPHA = 0.8; // along (1 − t)⁴: lights the launch, gone by mid-life
+const FLASH_SIZE = 2.5; // flash sprite diameter at its end / volley radius
+const FLASH_TINT = 0.3; // the flash is white moved this far towards the volley colour
+const BLOOM_SIZE = 1.95; // bloom sprite diameter at its end / volley radius
+const BLOOM_ALPHA = 0.9; // along (1 − t)⁴: lights the launch, gone by mid-life
 const DRAG = 5.5; // spread = (1 − e^(−DRAG·t)) / (1 − e^(−DRAG)): fast out, then hanging in the air
 const SPREAD_NORM = 1 / (1 - Math.exp(-DRAG));
 const STREAK_DECAY = 2.6; // the streak's stretch fades as e^(−STREAK_DECAY·t) with its speed
@@ -91,7 +92,7 @@ const TURN = 0.7; // share of the turn from the launch direction to straight dow
 const GRAVITY = 0.9; // drop at the end of life / volley radius, along t²
 const SHRINK = 0.5; // streaks end at half their size
 const TWINKLE_RATE = 34; // rad per unit of normalized life
-const TWINKLE_DEPTH = 0.45; // how much a streak flickers at the end of its life
+const TWINKLE_DEPTH = 0.35; // how much a streak flickers at the end of its life
 const GLITTER_IN = 0.18; // glitter fades in over the first 18 % of the volley
 const SPIN_PER_SECOND = 0.06 * 60; // glitter spin: ±0.03 rad per frame at 60 fps, as rad per second of age
 const GOLD = 0xffd966;
@@ -101,6 +102,14 @@ const WHITE = 0xffffff;
 function sparkKind(i: number): number {
   if (i === 0) return BLOOM;
   return i % 4 === 0 ? GLITTER : STREAK;
+}
+
+/** `a` moved `k` of the way to `b`, per 8-bit channel. */
+function mixColor(a: number, b: number, k: number): number {
+  const r = Math.round(((a >> 16) & 255) * (1 - k) + ((b >> 16) & 255) * k);
+  const g = Math.round(((a >> 8) & 255) * (1 - k) + ((b >> 8) & 255) * k);
+  const bl = Math.round((a & 255) * (1 - k) + (b & 255) * k);
+  return (r << 16) | (g << 8) | bl;
 }
 
 /** Signed turn in (−π, π] from `angle` to straight down (+π/2 in screen space). */
@@ -392,7 +401,7 @@ export class WinConfettiEffect extends Container {
         p.twinklePhase = 0;
         if (p.kind === FLASH) {
           p.scale = (radius * FLASH_SIZE) / this.glowTextureWidth;
-          p.sprite.tint = WHITE;
+          p.sprite.tint = mixColor(WHITE, main, FLASH_TINT);
         } else if (p.kind === BLOOM) {
           p.scale = (radius * BLOOM_SIZE) / this.glowTextureWidth;
           p.sprite.tint = main;
@@ -406,8 +415,8 @@ export class WinConfettiEffect extends Container {
           // the streak points along its flight and turns towards the fall: still linear in age
           p.rotation0 = angle;
           p.angularVelocity = (turnToDown(angle) * TURN * Math.abs(Math.cos(angle))) / lifeSeconds;
-          p.scale = (cfg.size * (0.026 + rnd() * 0.008)) / this.glowTextureWidth;
-          p.stretch = (4.0 + rnd() * 1.4) * reach;
+          p.scale = (cfg.size * (0.030 + rnd() * 0.009)) / this.glowTextureWidth;
+          p.stretch = (4.2 + rnd() * 1.45) * reach;
           p.fadeFrom = 0.6 + rnd() * 0.25;
           p.twinklePhase = rnd() * Math.PI * 2;
           p.sprite.tint = i % 7 === 3 ? WHITE : main;
@@ -451,7 +460,7 @@ export class WinConfettiEffect extends Container {
       if (p.kind === FLASH) {
         sprite.position.set(p.x0, p.y0);
         sprite.scale.set(p.scale * (0.45 + 0.55 * (1 - u * u * u)));
-        sprite.alpha = Math.pow(u, 1.2);
+        sprite.alpha = u;
       } else if (p.kind === BLOOM) {
         sprite.position.set(p.x0, p.y0);
         sprite.scale.set(p.scale * (0.6 + 0.4 * (1 - u * u * u)));
