@@ -25,7 +25,7 @@ const outDir = process.env.SHOTS_DIR ?? resolve(rootDir, 'showcase-shots/win-con
 mkdirSync(outDir, { recursive: true });
 const FX_FILES = ['fx/spark_star.webp', 'fx/glow_soft.webp'];
 const IGNORED_CONSOLE = [/favicon\.ico/i, /SwiftShader/i, /GPU stall/i, /WebGL/i];
-const WAIT_MS = 90000; // SwiftShader: waits synchronize on state, never on a sleep
+const WAIT_MS = 240000; // SwiftShader (~1 fps with the big additive glows): waits synchronize on state, never on a sleep
 const fail = (message) => { throw new Error(message); };
 
 const VIEWPORTS = [
@@ -143,7 +143,8 @@ async function defaultPath(browser, base) {
   return out;
 }
 
-const FRAME_TIMES = [320, 520, 800, 1150, 1550, 1900, 2450, 3000]; // + one frame past the run's end
+// shares of the run (+ one frame past its end), so the series follows the effect's timing
+const FRAME_SHARES = [0.045, 0.09, 0.16, 0.25, 0.36, 0.5, 0.65, 0.8, 0.93];
 
 async function frameSeries(browser, base) {
   const vp = VIEWPORTS[0];
@@ -159,7 +160,9 @@ async function frameSeries(browser, base) {
     return c.durationMs;
   });
   const every = Number(process.env.FRAME_EVERY_MS) || 0;
-  const times = every > 0 ? Array.from({ length: Math.ceil((duration + 200) / every) }, (_, i) => (i + 1) * every) : [...FRAME_TIMES, duration + 120];
+  const times = every > 0
+    ? Array.from({ length: Math.ceil((duration + 200) / every) }, (_, i) => (i + 1) * every)
+    : [...FRAME_SHARES.map((k) => Math.round((duration * k) / 10) * 10), duration + 120];
   const frames = [];
   for (const target of times) {
     const at = await page.evaluate((t) => {

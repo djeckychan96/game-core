@@ -35,10 +35,10 @@ function tap(target: UiButton, kit: ReturnType<typeof createKit>): void {
 
 const WIN: ResultWindowParams = { level: 19, stars: 3, rewardCoins: 100 };
 const FAIL: ResultWindowParams = { level: 19, outcome: 'fail', rewardCoins: 0 };
-// mobile tier (the default): 8 volleys × (40 particles + 1 flash)
-const MOBILE_SLOTS = 8 * 41;
-// 280 delay + 7 × 300 interval + 1400 life
-const MOBILE_RUN_MS = 280 + 7 * 300 + 1400;
+// mobile tier (the default): 12 volleys × (40 particles + 1 flash)
+const MOBILE_SLOTS = 12 * 41;
+// 280 delay + 11 × 480 interval + 2000 life
+const MOBILE_RUN_MS = 280 + 11 * 480 + 2000;
 
 function createResult(kit: ReturnType<typeof createKit>, extra: Partial<ResultWindowViewOptions> = {}): ResultWindowView {
   return new ResultWindowView({
@@ -54,13 +54,13 @@ const fx = (view: ResultWindowView): WinConfettiEffect => field<WinConfettiEffec
 describe('WinConfettiEffect config (WIN fireworks volleys)', () => {
   it('keeps the tiers and timing; the pool bound is bursts × (sparks + 1)', () => {
     expect(WIN_CONFETTI_TIERS).toEqual({
-      desktop: { bursts: 9, sparksPerBurst: 48 },
-      mobile: { bursts: 8, sparksPerBurst: 40 },
-      lowPerf: { bursts: 6, sparksPerBurst: 24 }
+      desktop: { bursts: 13, sparksPerBurst: 38 },
+      mobile: { bursts: 12, sparksPerBurst: 40 },
+      lowPerf: { bursts: 9, sparksPerBurst: 24 }
     });
     const cfg = resolveWinConfettiConfig();
-    expect([cfg.tier, cfg.bursts, cfg.sparksPerBurst, cfg.startDelayMs, cfg.burstIntervalMs, cfg.lifetimeMs]).toEqual(['mobile', 8, 40, 280, 300, 1400]);
-    expect(resolveWinConfettiConfig({ tier: 'desktop' }).bursts).toBe(9);
+    expect([cfg.tier, cfg.bursts, cfg.sparksPerBurst, cfg.startDelayMs, cfg.burstIntervalMs, cfg.lifetimeMs]).toEqual(['mobile', 12, 40, 280, 480, 2000]);
+    expect(resolveWinConfettiConfig({ tier: 'desktop' }).bursts).toBe(13);
     expect(resolveWinConfettiConfig({ tier: 'lowPerf', sparksPerBurst: 4 }).sparksPerBurst).toBe(4);
     expect(() => resolveWinConfettiConfig({ bursts: 40, sparksPerBurst: 40 })).toThrow(/≤ 512/);
     expect(() => resolveWinConfettiConfig({ tier: 'huge' as never })).toThrow(/tier/);
@@ -118,7 +118,7 @@ describe('ResultWindowView WIN confetti', () => {
     expect(fx(view).getStats().elapsedMs).toBeCloseTo(272, 9);
     advance(kit.core, 16, 16); // 288 ms
     expect(fx(view).getStats().active).toBe(41);
-    advance(kit.core, 304, 16); // 592 ms: volley 1's particles + volley 2 (its flash is gone: a flash lives 15 % = 210 ms)
+    advance(kit.core, 480, 16); // 768 ms: volley 1's particles + volley 2 (its flash is gone: a flash lives 20 % = 400 ms)
     expect(fx(view).getStats().active).toBe(40 + 41);
     view.destroy();
   });
@@ -130,8 +130,8 @@ describe('ResultWindowView WIN confetti', () => {
     expect(created).toBe(MOBILE_SLOTS);
     expect(maxParticles).toBe(MOBILE_SLOTS);
     view.show(WIN);
-    // a volley lives 1400 ms, one starts every 300 ms → at most 5 alive at once
-    const concurrent = Math.ceil(1400 / 300) * 41;
+    // a volley lives 2000 ms, one starts every 480 ms → at most 5 alive at once
+    const concurrent = Math.ceil(2000 / 480) * 41;
     let frames = 0;
     for (let ms = 0; ms < MOBILE_RUN_MS + 200; ms += 16) {
       kit.core.update(16);
@@ -144,8 +144,9 @@ describe('ResultWindowView WIN confetti', () => {
       frames += 1;
     }
     expect(frames).toBeGreaterThan(200);
-    // exact peak: 5 volleys' particles at once + 1 flash (a flash lives 210 ms < the 300 ms interval)
-    expect(fx(view).getStats().peakActive).toBe(5 * 40 + 1);
+    // exact peak: 5 volleys' particles at once, minus the 2 oldest blooms (a bloom is drawn for 55 % = 1100 ms),
+    // + 1 flash (a flash lives 400 ms < the 480 ms interval)
+    expect(fx(view).getStats().peakActive).toBe(5 * 40 - 2 + 1);
     // the run completed on its own: back to idle
     expect(fx(view).getStats()).toMatchObject({ active: 0, pooled: created, running: false, completed: 1 });
     view.destroy();
@@ -304,7 +305,7 @@ describe('ResultWindowView WIN confetti', () => {
     for (const at of [528, 1056, 2112]) {
       const a = run(16, at);
       const b = run(33, at);
-      expect(a.sprites).toBe(9 * 49);
+      expect(a.sprites).toBe(13 * 39);
       expect(a.snapshot.filter((s) => s[0] === 1).length).toBeGreaterThan(0);
       for (let i = 0; i < a.snapshot.length; i++) {
         expect(a.snapshot[i]![0], `particle ${i} visibility at ${at} ms`).toBe(b.snapshot[i]![0]);
