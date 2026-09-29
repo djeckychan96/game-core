@@ -163,5 +163,7 @@ const tapPoint = (name: 'nextButton' | 'retryButton' | 'closeButton') => {
   showWin: () => open(WIN),
   showFail: () => open(FAIL),
   hold: (on: boolean) => { held = on; renderStats(); },
+  /** Proof hook: advances the host clock by hand (used while held; the effect's frame is a function of its time). */
+  step: (ms: number) => { core.update(ms); renderStats(); },
   tapPoint
 };

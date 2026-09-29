@@ -11,7 +11,10 @@
 //      backdrop close mid-run (input goes through the confetti); stats + scene node count after each cycle;
 //      created must not grow, and after every close active = 0 and pooled = created;
 //   3. the default path (?confetti=0, the main showcase) never requests the fx textures; the confetti page requests
-//      exactly the two.
+//      exactly the two;
+//   4. a mobile frame series: a replay on a held host clock, stepped by hand to fixed effect times (each capture is
+//      exactly that moment of the run, however slow SwiftShader draws), up to past its end.
+//      FRAME_EVERY_MS=40 captures every 40 ms instead (frames for a real-time clip).
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -140,19 +143,59 @@ async function defaultPath(browser, base) {
   return out;
 }
 
+const FRAME_TIMES = [320, 520, 800, 1150, 1550, 1900, 2450, 3000]; // + one frame past the run's end
+
+async function frameSeries(browser, base) {
+  const vp = VIEWPORTS[0];
+  const { context, page, errors } = await openPage(browser, base, vp, 'confetti.html?seed=7', false);
+  await page.waitForFunction(() => Boolean(window.__confetti), null, { timeout: WAIT_MS });
+  await page.waitForFunction(() => { const s = window.__confetti.stats(); return s.completed === 1 && !s.running; }, null, { timeout: WAIT_MS });
+  // replay on the held clock: the programmatic close, then the new WIN show, run on hand-made 16 ms steps
+  const duration = await page.evaluate(() => {
+    const c = window.__confetti;
+    c.hold(true);
+    c.showWin();
+    for (let i = 0; i < 200 && c.stats().plays < 2; i++) c.step(16);
+    return c.durationMs;
+  });
+  const every = Number(process.env.FRAME_EVERY_MS) || 0;
+  const times = every > 0 ? Array.from({ length: Math.ceil((duration + 200) / every) }, (_, i) => (i + 1) * every) : [...FRAME_TIMES, duration + 120];
+  const frames = [];
+  for (const target of times) {
+    const at = await page.evaluate((t) => {
+      const c = window.__confetti;
+      for (let i = 0; i < 1000 && c.stats().running && c.stats().elapsedMs + 16 <= t; i++) c.step(16);
+      const rest = t - c.stats().elapsedMs;
+      if (c.stats().running && rest > 0) c.step(rest);
+      return c.stats();
+    }, target);
+    await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const name = `${vp.name}-frame-${String(target).padStart(4, '0')}.png`;
+    await page.screenshot({ path: resolve(outDir, name) });
+    frames.push({ target, elapsedMs: Math.round(at.elapsedMs), active: at.active, running: at.running, file: name });
+  }
+  const end = frames[frames.length - 1];
+  if (end.running || end.active !== 0) fail(`frame series: the run did not end by ${end.target} ms ${JSON.stringify(end)}`);
+  if (errors.length) fail(`frame series: console errors ${JSON.stringify(errors)}`);
+  await context.close();
+  return { durationMs: duration, frames };
+}
+
 async function run(base) {
   const browser = await chromium.launch({ channel: process.env.PW_CHANNEL ?? 'chrome', headless: true });
   try {
     const viewports = [];
     for (const vp of VIEWPORTS) viewports.push(await runViewport(browser, base, vp));
     const defaults = await defaultPath(browser, base);
-    const report = { base, viewports, defaultPath: defaults };
+    const series = await frameSeries(browser, base);
+    const report = { base, viewports, defaultPath: defaults, frameSeries: series };
     writeFileSync(resolve(outDir, 'report.json'), JSON.stringify(report, null, 2));
     for (const v of viewports) {
       const pick = (s) => ({ created: s.created, active: s.active, pooled: s.pooled, peakActive: s.peakActive });
       console.log(`${v.viewport} tier ${v.tier}: peak-shot ${JSON.stringify(pick(v.atPeak))} warm-up ${JSON.stringify(pick(v.warmUp))} cycle 10 ${JSON.stringify(pick(v.final))} plays ${v.final.plays} nodes ${v.warmNodes}→${v.cycles[9].nodes}`);
     }
     console.log(`default path: ${JSON.stringify(defaults)}`);
+    console.log(`frame series (run ${series.durationMs} ms): ${series.frames.map((f) => `${f.target}→${f.active}`).join(' ')}`);
     console.log(`confetti-check: OK → ${outDir}`);
   } finally {
     await browser.close();

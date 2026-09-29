@@ -35,10 +35,10 @@ function tap(target: UiButton, kit: ReturnType<typeof createKit>): void {
 
 const WIN: ResultWindowParams = { level: 19, stars: 3, rewardCoins: 100 };
 const FAIL: ResultWindowParams = { level: 19, outcome: 'fail', rewardCoins: 0 };
-// mobile tier (the default): 10 bursts × (12 sparks + 1 core glow)
-const MOBILE_SLOTS = 10 * 13;
-// 280 delay + 9 × 200 interval + 1050 life
-const MOBILE_RUN_MS = 280 + 9 * 200 + 1050;
+// mobile tier (the default): 8 volleys × (40 particles + 1 flash)
+const MOBILE_SLOTS = 8 * 41;
+// 280 delay + 7 × 300 interval + 1400 life
+const MOBILE_RUN_MS = 280 + 7 * 300 + 1400;
 
 function createResult(kit: ReturnType<typeof createKit>, extra: Partial<ResultWindowViewOptions> = {}): ResultWindowView {
   return new ResultWindowView({
@@ -51,16 +51,16 @@ function createResult(kit: ReturnType<typeof createKit>, extra: Partial<ResultWi
 
 const fx = (view: ResultWindowView): WinConfettiEffect => field<WinConfettiEffect>(view, 'confetti');
 
-describe('WinConfettiEffect config (Trail Arrow LevelComplete screen fireworks)', () => {
-  it('keeps the donor tiers and timing; the pool bound is bursts × (sparks + 1)', () => {
+describe('WinConfettiEffect config (WIN fireworks volleys)', () => {
+  it('keeps the tiers and timing; the pool bound is bursts × (sparks + 1)', () => {
     expect(WIN_CONFETTI_TIERS).toEqual({
-      desktop: { bursts: 13, sparksPerBurst: 16 },
-      mobile: { bursts: 10, sparksPerBurst: 12 },
-      lowPerf: { bursts: 7, sparksPerBurst: 10 }
+      desktop: { bursts: 9, sparksPerBurst: 48 },
+      mobile: { bursts: 8, sparksPerBurst: 40 },
+      lowPerf: { bursts: 6, sparksPerBurst: 24 }
     });
     const cfg = resolveWinConfettiConfig();
-    expect([cfg.tier, cfg.bursts, cfg.sparksPerBurst, cfg.startDelayMs, cfg.burstIntervalMs, cfg.lifetimeMs]).toEqual(['mobile', 10, 12, 280, 200, 1050]);
-    expect(resolveWinConfettiConfig({ tier: 'desktop' }).bursts).toBe(13);
+    expect([cfg.tier, cfg.bursts, cfg.sparksPerBurst, cfg.startDelayMs, cfg.burstIntervalMs, cfg.lifetimeMs]).toEqual(['mobile', 8, 40, 280, 300, 1400]);
+    expect(resolveWinConfettiConfig({ tier: 'desktop' }).bursts).toBe(9);
     expect(resolveWinConfettiConfig({ tier: 'lowPerf', sparksPerBurst: 4 }).sparksPerBurst).toBe(4);
     expect(() => resolveWinConfettiConfig({ bursts: 40, sparksPerBurst: 40 })).toThrow(/≤ 512/);
     expect(() => resolveWinConfettiConfig({ tier: 'huge' as never })).toThrow(/tier/);
@@ -109,7 +109,7 @@ describe('ResultWindowView WIN confetti', () => {
     view.destroy();
   });
 
-  it('3. start delay: nothing is drawn before 280 ms, the first burst (12 sparks + glow) right after', () => {
+  it('3. start delay: nothing is drawn before 280 ms, the first volley (40 particles + flash) right after', () => {
     const kit = createKit();
     const view = createResult(kit);
     view.show(WIN);
@@ -117,9 +117,9 @@ describe('ResultWindowView WIN confetti', () => {
     expect(fx(view).getStats().active).toBe(0);
     expect(fx(view).getStats().elapsedMs).toBeCloseTo(272, 9);
     advance(kit.core, 16, 16); // 288 ms
-    expect(fx(view).getStats().active).toBe(13);
-    advance(kit.core, 200, 16); // 488 ms: burst 1's sparks + burst 2 (its glow is gone: a glow lives 18 % = 189 ms)
-    expect(fx(view).getStats().active).toBe(12 + 13);
+    expect(fx(view).getStats().active).toBe(41);
+    advance(kit.core, 304, 16); // 592 ms: volley 1's particles + volley 2 (its flash is gone: a flash lives 15 % = 210 ms)
+    expect(fx(view).getStats().active).toBe(40 + 41);
     view.destroy();
   });
 
@@ -130,8 +130,8 @@ describe('ResultWindowView WIN confetti', () => {
     expect(created).toBe(MOBILE_SLOTS);
     expect(maxParticles).toBe(MOBILE_SLOTS);
     view.show(WIN);
-    // a burst lives 1050 ms, one starts every 200 ms → at most 6 alive at once
-    const concurrent = Math.ceil(1050 / 200) * 13;
+    // a volley lives 1400 ms, one starts every 300 ms → at most 5 alive at once
+    const concurrent = Math.ceil(1400 / 300) * 41;
     let frames = 0;
     for (let ms = 0; ms < MOBILE_RUN_MS + 200; ms += 16) {
       kit.core.update(16);
@@ -144,8 +144,8 @@ describe('ResultWindowView WIN confetti', () => {
       frames += 1;
     }
     expect(frames).toBeGreaterThan(200);
-    // exact peak: 6 bursts' sparks at once + 1 core glow (a glow lives 189 ms < the 200 ms interval)
-    expect(fx(view).getStats().peakActive).toBe(6 * 12 + 1);
+    // exact peak: 5 volleys' particles at once + 1 flash (a flash lives 210 ms < the 300 ms interval)
+    expect(fx(view).getStats().peakActive).toBe(5 * 40 + 1);
     // the run completed on its own: back to idle
     expect(fx(view).getStats()).toMatchObject({ active: 0, pooled: created, running: false, completed: 1 });
     view.destroy();
@@ -304,7 +304,7 @@ describe('ResultWindowView WIN confetti', () => {
     for (const at of [528, 1056, 2112]) {
       const a = run(16, at);
       const b = run(33, at);
-      expect(a.sprites).toBe(13 * 17);
+      expect(a.sprites).toBe(9 * 49);
       expect(a.snapshot.filter((s) => s[0] === 1).length).toBeGreaterThan(0);
       for (let i = 0; i < a.snapshot.length; i++) {
         expect(a.snapshot[i]![0], `particle ${i} visibility at ${at} ms`).toBe(b.snapshot[i]![0]);

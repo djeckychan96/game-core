@@ -2,82 +2,112 @@ import { Container, Sprite, type Texture } from 'pixi.js';
 import type { MotionHandle, MotionRuntime } from '../../index';
 
 /**
- * Density presets of the Trail Arrow LevelComplete screen fireworks (`playScreenFireworks`): bursts × sparks.
- * The Result window cannot know the device; the host picks the tier (default `mobile`).
+ * Density presets: volleys × particles per volley. The Result window cannot know the device; the host picks the tier
+ * (default `mobile`).
  */
 export type WinConfettiTier = 'desktop' | 'mobile' | 'lowPerf';
 
 export const WIN_CONFETTI_TIERS: Readonly<Record<WinConfettiTier, { bursts: number; sparksPerBurst: number }>> = Object.freeze({
-  desktop: Object.freeze({ bursts: 13, sparksPerBurst: 16 }),
-  mobile: Object.freeze({ bursts: 10, sparksPerBurst: 12 }),
-  lowPerf: Object.freeze({ bursts: 7, sparksPerBurst: 10 })
+  desktop: Object.freeze({ bursts: 9, sparksPerBurst: 48 }),
+  mobile: Object.freeze({ bursts: 8, sparksPerBurst: 40 }),
+  lowPerf: Object.freeze({ bursts: 6, sparksPerBurst: 24 })
 });
 
 /**
- * Look and timing of the WIN confetti. Defaults = the Trail Arrow screen fireworks, re-expressed in the Result
- * window's design units: the donor sized everything from min(screen w, h) in css px, which is ≈ 1150 design units
- * under the Result frame fit on both reference viewports (390 × 844 at 0.337, 1280 × 800 at 0.705).
+ * Look and timing of the WIN fireworks, in the Result window's design units (a portrait phone is ≈ 1150 of them wide
+ * under the Result frame fit). A few large single-colour volleys go off around the window, alternating sides: each one
+ * a white flash, a soft colour bloom, a sphere of streaks flying out, then small twinkling glitter falling and fading.
  */
 export interface WinConfettiConfig {
   /** Picks `bursts` / `sparksPerBurst` when they are not given. Default `mobile`. */
   tier: WinConfettiTier;
-  /** Number of bursts (donor volleys). Default from `tier`. */
+  /** Number of volleys. Default from `tier`. */
   bursts: number;
-  /** Sparks per burst (each burst also has one core glow). Default from `tier`. */
+  /** Particles per volley besides its flash: one colour bloom, streaks and every 4th one glitter. Default from `tier`. */
   sparksPerBurst: number;
-  /** First burst after play() — the donor lets the window entrance land first. Default 280. */
+  /** First volley after play() — the window entrance lands first. Default 280. */
   startDelayMs: number;
-  /** Between two bursts. Default 200. */
+  /** Between two volleys. Default 300. */
   burstIntervalMs: number;
-  /** Life of one burst; its core glow lives the first `coreShare` of it. Default 1050. */
+  /** Life of one volley; its flash lives the first 15 % of it. Default 1400. */
   lifetimeMs: number;
-  /** The donor's `base` = min(w, h), in design units: burst radius 0.20–0.30 of it, sparks 0.010–0.018. Default 1150. */
+  /** Size base in design units: volley radius 0.21–0.27 of it, streaks and glitter scale with it too. Default 1150. */
   size: number;
-  /** Box the burst spots are fractions of, centred on the effect's origin, in design units. Default 1150 × 1150. */
+  /**
+   * Box the volley centres are spread over, centred on the effect's origin (the Result frame centre), in design units.
+   * Default 1150 × 1700: on a portrait phone its sides are the screen edges, its top and bottom rows sit above the
+   * crown and below the buttons, so no volley is centred on the title, the stars, the reward or a button.
+   */
   areaWidth: number;
   areaHeight: number;
-  /** Burst palette: even sparks take the burst colour, odd ones gold or white (the donor's two-colour salute). */
+  /** Volley palette: consecutive volleys take consecutive colours; streaks take it, glitter is white, gold or it. */
   colors: ReadonlyArray<number>;
   /** Random source in [0, 1); inject a seeded one for deterministic tests / captures. Default Math.random. */
   random: () => number;
 }
 
-/** Burst spots as fractions of the area: a ring around the window, then the far perimeter (donor order). */
+/**
+ * Volley centres as fractions of the area, in firing order: left / right beside the reward, then the corners above
+ * the crown and below the buttons, alternating sides; more volleys reuse the table.
+ */
 const SPOTS: ReadonlyArray<readonly [number, number]> = [
-  [-0.30, -0.20], [0.30, -0.20],
-  [-0.32, 0.16], [0.32, 0.16],
-  [0, -0.26], [0, 0.26],
-  [-0.36, 0], [0.36, 0],
-  [-0.34, -0.38], [0.34, -0.38],
-  [0, -0.42],
-  [-0.30, 0.36], [0.30, 0.36]
+  [-0.47, 0.03], [0.47, 0.01],
+  [0.33, -0.45], [-0.34, 0.465],
+  [-0.33, -0.44], [0.34, 0.46],
+  [-0.49, -0.02], [0.49, 0.04],
+  [0, -0.52], [0, 0.53]
 ];
 
 const DEFAULTS: Omit<WinConfettiConfig, 'bursts' | 'sparksPerBurst'> = {
   tier: 'mobile',
   startDelayMs: 280,
-  burstIntervalMs: 200,
-  lifetimeMs: 1050,
+  burstIntervalMs: 300,
+  lifetimeMs: 1400,
   size: 1150,
   areaWidth: 1150,
-  areaHeight: 1150,
-  colors: [0xff5a5a, 0xffd02e, 0xa8e63c, 0x4ec9f5, 0xc678f5, 0xffd966, 0xff8ac2],
+  areaHeight: 1700,
+  colors: [0xff4d5a, 0xffa23a, 0x4cff6a, 0x3fd2ff, 0xb35cff, 0xff5cc8, 0xffd23f],
   random: Math.random
 };
 
 /** Hard bound of the pool: a config beyond it is a mistake, not a bigger celebration. */
 export const WIN_CONFETTI_MAX_PARTICLES = 512;
 
-/** Donor constants, kept by name. */
-const SPARK_SPRITE_K = 5.2; // sprite size / the donor's spark circle radius
-const CORE_SHARE = 0.18; // the core glow lives the first 18 % of a burst
-const CORE_ALPHA = 0.95;
-const FADE_FROM = 0.72; // sparks hold full alpha until 72 % of their life
-const SHRINK = 0.35; // sparks end at 65 % of their size
+/** Particle kinds; a pool slot keeps its kind (and texture) for the effect's lifetime. */
+const FLASH = 0; // white glow at the volley centre, the first FLASH_SHARE of its life
+const BLOOM = 1; // soft glow in the volley colour behind the streaks
+const STREAK = 2; // stretched glow along its flight direction, shrinking into a falling dot
+const GLITTER = 3; // small twinkling spark star that fades in after the flash and falls
+
+const FLASH_SHARE = 0.15; // 210 ms of a 1400 ms volley: shorter than the 300 ms interval
+const FLASH_SIZE = 2.3; // flash sprite diameter at its end / volley radius
+const BLOOM_SIZE = 1.8; // bloom sprite diameter at its end / volley radius
+const BLOOM_ALPHA = 0.8; // along (1 − t)⁴: lights the launch, gone by mid-life
+const DRAG = 5.5; // spread = (1 − e^(−DRAG·t)) / (1 − e^(−DRAG)): fast out, then hanging in the air
+const SPREAD_NORM = 1 / (1 - Math.exp(-DRAG));
+const STREAK_DECAY = 2.6; // the streak's stretch fades as e^(−STREAK_DECAY·t) with its speed
+const FALL_STRETCH = 0.8; // late elongation while falling
+const TURN = 0.7; // share of the turn from the launch direction to straight down reached at the end of life
+const GRAVITY = 0.9; // drop at the end of life / volley radius, along t²
+const SHRINK = 0.5; // streaks end at half their size
 const TWINKLE_RATE = 34; // rad per unit of normalized life
-const SPIN_PER_SECOND = 0.06 * 60; // donor ±0.03 rad per frame at 60 fps, now per second of age
+const TWINKLE_DEPTH = 0.45; // how much a streak flickers at the end of its life
+const GLITTER_IN = 0.18; // glitter fades in over the first 18 % of the volley
+const SPIN_PER_SECOND = 0.06 * 60; // glitter spin: ±0.03 rad per frame at 60 fps, as rad per second of age
 const GOLD = 0xffd966;
 const WHITE = 0xffffff;
+
+/** Kind of spark slot `i` of a volley (its flash is the slot before them). */
+function sparkKind(i: number): number {
+  if (i === 0) return BLOOM;
+  return i % 4 === 0 ? GLITTER : STREAK;
+}
+
+/** Signed turn in (−π, π] from `angle` to straight down (+π/2 in screen space). */
+function turnToDown(angle: number): number {
+  const d = Math.PI / 2 - angle;
+  return Math.atan2(Math.sin(d), Math.cos(d));
+}
 
 export interface WinConfettiTextures {
   spark: Texture;
@@ -114,15 +144,18 @@ export interface WinConfettiStats {
 /** One pooled particle: its sprite and the numeric state the frame is derived from. Fixed shape, created once. */
 interface Particle {
   sprite: Sprite;
+  /** FLASH, BLOOM, STREAK or GLITTER: fixed per slot, like the sprite's texture. */
+  kind: number;
+  /** The volley's flash (the slot before its sparks). */
   core: boolean;
   active: boolean;
   /** Effect time the particle appears at, and how long it lives. */
   spawnMs: number;
   lifetimeMs: number;
-  /** Burst centre. */
+  /** Volley centre. */
   x0: number;
   y0: number;
-  /** Spread offset reached at the end of life, along 1 − (1 − t)³ (the donor's power-out spread). */
+  /** Spread offset reached at the end of life, along the DRAG curve. */
   dx: number;
   dy: number;
   /** Drop reached at the end of life, along t². */
@@ -130,8 +163,12 @@ interface Particle {
   rotation0: number;
   /** rad / s of age: rotation is a function of age, never an increment per frame. */
   angularVelocity: number;
-  /** Base sprite scale (core: the scale at the end of its life). */
+  /** Base sprite scale (flash / bloom: the scale at the end of their life; streak: its thickness). */
   scale: number;
+  /** Streak: extra length at launch, as a multiple of its thickness. */
+  stretch: number;
+  /** Normalized life from which the particle fades out. */
+  fadeFrom: number;
   twinklePhase: number;
 }
 
@@ -172,10 +209,11 @@ export function resolveWinConfettiConfig(overrides: Partial<WinConfettiConfig> =
 }
 
 /**
- * One-shot WIN confetti (internal to the kit; its one consumer is ResultWindowView WIN).
+ * One-shot WIN fireworks (internal to the kit; its one consumer is ResultWindowView WIN).
  *
  * A Container of a fixed pool — `bursts × (sparksPerBurst + 1)` additive sprites over two textures, all created
- * in the constructor — and a fixed array of numeric particle state. `play()` re-seeds that state (no allocation)
+ * in the constructor (per volley: a flash, a bloom and the streaks on the glow texture, the glitter on the spark
+ * star) — and a fixed array of numeric particle state. `play()` re-seeds that state (no allocation)
  * and starts ONE MotionRuntime tween in the owner's scope; its update derives every particle from the run's
  * elapsed time alone (age = elapsed − spawn; position, alpha, scale and rotation are functions of age), so the
  * picture at a given time does not depend on the frame steps that led there. No ticker, no rAF, no timers, no
@@ -221,15 +259,16 @@ export class WinConfettiEffect extends Container {
     for (let b = 0; b < cfg.bursts; b++) {
       for (let i = 0; i <= cfg.sparksPerBurst; i++) {
         const core = i === 0;
-        const sprite = new Sprite(core ? textures.glow : textures.spark);
+        const kind = core ? FLASH : sparkKind(i - 1);
+        const sprite = new Sprite(kind === GLITTER ? textures.spark : textures.glow);
         sprite.anchor.set(0.5);
         sprite.blendMode = 'add';
         sprite.eventMode = 'none';
         sprite.visible = false;
         this.addChild(sprite);
         this.particles.push({
-          sprite, core, active: false, spawnMs: 0, lifetimeMs: 1, x0: 0, y0: 0, dx: 0, dy: 0, gravity: 0,
-          rotation0: 0, angularVelocity: 0, scale: 0, twinklePhase: 0
+          sprite, kind, core, active: false, spawnMs: 0, lifetimeMs: 1, x0: 0, y0: 0, dx: 0, dy: 0, gravity: 0,
+          rotation0: 0, angularVelocity: 0, scale: 0, stretch: 0, fadeFrom: 1, twinklePhase: 0
         });
       }
     }
@@ -318,53 +357,74 @@ export class WinConfettiEffect extends Container {
 
   // --- internals ---
 
-  /** New random state for every slot of the pool (numbers only; the sprites keep their textures). */
+  /** New random state for every slot of the pool (numbers and tints only; the sprites keep their textures). */
   private seed(): void {
     const cfg = this.config;
     const rnd = cfg.random;
     const w = cfg.areaWidth;
     const h = cfg.areaHeight;
     const n = cfg.sparksPerBurst;
+    const palette = cfg.colors;
+    const lifeSeconds = cfg.lifetimeMs / 1000;
+    const firstColor = Math.floor(rnd() * palette.length);
     let index = 0;
     for (let b = 0; b < cfg.bursts; b++) {
       const spot = SPOTS[b % SPOTS.length]!;
-      const cx = spot[0] * w + (rnd() - 0.5) * w * 0.10;
-      const cy = spot[1] * h + (rnd() - 0.5) * h * 0.06;
-      const main = cfg.colors[Math.floor(rnd() * cfg.colors.length) % cfg.colors.length]!;
-      const radius = cfg.size * (0.20 + rnd() * 0.10);
+      const cx = spot[0] * w + (rnd() - 0.5) * w * 0.05;
+      const cy = spot[1] * h + (rnd() - 0.5) * h * 0.03;
+      const main = palette[(firstColor + b) % palette.length]!;
+      const radius = cfg.size * (0.21 + rnd() * 0.06);
       const spawnMs = cfg.startDelayMs + b * cfg.burstIntervalMs;
 
-      const core = this.particles[index++]!;
-      core.spawnMs = spawnMs;
-      core.lifetimeMs = cfg.lifetimeMs * CORE_SHARE;
-      core.x0 = cx;
-      core.y0 = cy;
-      core.dx = 0;
-      core.dy = 0;
-      core.gravity = 0;
-      core.rotation0 = 0;
-      core.angularVelocity = 0;
-      core.scale = (radius * 0.60) / this.glowTextureWidth; // donor: diameter 2 × 0.30 R at the end of the flash
-      core.twinklePhase = 0;
-      core.sprite.tint = WHITE;
-
-      for (let i = 0; i < n; i++) {
+      for (let i = 0; i <= n; i++) {
         const p = this.particles[index++]!;
-        const angle = (i / n) * Math.PI * 2 + rnd() * 0.4;
-        const distance = radius * (0.7 + rnd() * 0.5);
-        const sparkRadius = cfg.size * (0.010 + rnd() * 0.008);
         p.spawnMs = spawnMs;
-        p.lifetimeMs = cfg.lifetimeMs;
+        p.lifetimeMs = p.kind === FLASH ? cfg.lifetimeMs * FLASH_SHARE : cfg.lifetimeMs;
         p.x0 = cx;
         p.y0 = cy;
-        p.dx = Math.cos(angle) * distance;
-        p.dy = Math.sin(angle) * distance;
-        p.gravity = radius * 0.55;
-        p.rotation0 = rnd() * Math.PI * 2;
-        p.angularVelocity = (rnd() - 0.5) * SPIN_PER_SECOND;
-        p.scale = (sparkRadius * SPARK_SPRITE_K) / this.sparkTextureWidth;
-        p.twinklePhase = rnd() * Math.PI * 2;
-        p.sprite.tint = i % 2 === 0 ? main : rnd() < 0.5 ? GOLD : WHITE;
+        p.dx = 0;
+        p.dy = 0;
+        p.gravity = 0;
+        p.rotation0 = 0;
+        p.angularVelocity = 0;
+        p.stretch = 0;
+        p.fadeFrom = 1;
+        p.twinklePhase = 0;
+        if (p.kind === FLASH) {
+          p.scale = (radius * FLASH_SIZE) / this.glowTextureWidth;
+          p.sprite.tint = WHITE;
+        } else if (p.kind === BLOOM) {
+          p.scale = (radius * BLOOM_SIZE) / this.glowTextureWidth;
+          p.sprite.tint = main;
+        } else if (p.kind === STREAK) {
+          // two shells: every 3rd streak stays inside, the others make the sphere's rim
+          const angle = ((i - 1) / n) * Math.PI * 2 + rnd() * 0.35;
+          const reach = i % 3 === 0 ? 0.35 + rnd() * 0.25 : 0.82 + rnd() * 0.18;
+          p.dx = Math.cos(angle) * radius * reach;
+          p.dy = Math.sin(angle) * radius * reach;
+          p.gravity = radius * GRAVITY;
+          // the streak points along its flight and turns towards the fall: still linear in age
+          p.rotation0 = angle;
+          p.angularVelocity = (turnToDown(angle) * TURN * Math.abs(Math.cos(angle))) / lifeSeconds;
+          p.scale = (cfg.size * (0.026 + rnd() * 0.008)) / this.glowTextureWidth;
+          p.stretch = (4.0 + rnd() * 1.4) * reach;
+          p.fadeFrom = 0.6 + rnd() * 0.25;
+          p.twinklePhase = rnd() * Math.PI * 2;
+          p.sprite.tint = i % 7 === 3 ? WHITE : main;
+        } else {
+          const angle = rnd() * Math.PI * 2;
+          const reach = 0.25 + rnd() * 0.6;
+          p.dx = Math.cos(angle) * radius * reach;
+          p.dy = Math.sin(angle) * radius * reach;
+          p.gravity = radius * GRAVITY * 0.75;
+          p.rotation0 = rnd() * Math.PI * 2;
+          p.angularVelocity = (rnd() - 0.5) * SPIN_PER_SECOND;
+          p.scale = (cfg.size * (0.060 + rnd() * 0.025)) / this.sparkTextureWidth;
+          p.fadeFrom = 0.55 + rnd() * 0.3;
+          p.twinklePhase = rnd() * Math.PI * 2;
+          const shade = (i >> 2) % 3;
+          p.sprite.tint = shade === 0 ? WHITE : shade === 1 ? GOLD : main;
+        }
       }
     }
   }
@@ -386,19 +446,32 @@ export class WinConfettiEffect extends Container {
         continue;
       }
       const t = age / p.lifetimeMs;
+      const u = 1 - t;
       const sprite = p.sprite;
-      if (p.core) {
+      if (p.kind === FLASH) {
         sprite.position.set(p.x0, p.y0);
-        sprite.scale.set(p.scale * t);
-        sprite.alpha = (1 - t) * CORE_ALPHA;
-      } else {
-        const u = 1 - t;
-        const spread = 1 - u * u * u;
-        const fade = t < FADE_FROM ? 1 : 1 - (t - FADE_FROM) / (1 - FADE_FROM);
-        sprite.position.set(p.x0 + p.dx * spread, p.y0 + p.dy * spread + p.gravity * t * t);
-        sprite.alpha = fade * (0.72 + 0.28 * Math.sin(t * TWINKLE_RATE + p.twinklePhase));
-        sprite.scale.set(p.scale * (1 - t * SHRINK));
+        sprite.scale.set(p.scale * (0.45 + 0.55 * (1 - u * u * u)));
+        sprite.alpha = Math.pow(u, 1.2);
+      } else if (p.kind === BLOOM) {
+        sprite.position.set(p.x0, p.y0);
+        sprite.scale.set(p.scale * (0.6 + 0.4 * (1 - u * u * u)));
+        sprite.alpha = BLOOM_ALPHA * u * u * u * u;
         sprite.rotation = p.rotation0 + p.angularVelocity * (age / 1000);
+      } else {
+        const spread = (1 - Math.exp(-DRAG * t)) * SPREAD_NORM;
+        const fade = t < p.fadeFrom ? 1 : 1 - (t - p.fadeFrom) / (1 - p.fadeFrom);
+        const wave = 0.5 + 0.5 * Math.sin(t * TWINKLE_RATE + p.twinklePhase);
+        sprite.position.set(p.x0 + p.dx * spread, p.y0 + p.dy * spread + p.gravity * t * t);
+        sprite.rotation = p.rotation0 + p.angularVelocity * (age / 1000);
+        if (p.kind === STREAK) {
+          const size = p.scale * (1 - SHRINK * t);
+          sprite.scale.set(size * (1 + p.stretch * Math.exp(-STREAK_DECAY * t) + FALL_STRETCH * t), size);
+          sprite.alpha = fade * (1 - TWINKLE_DEPTH * t * wave);
+        } else {
+          const appear = t < GLITTER_IN ? t / GLITTER_IN : 1;
+          sprite.scale.set(p.scale * (0.55 + 0.45 * appear) * (1 - 0.3 * t));
+          sprite.alpha = appear * fade * (0.5 + 0.5 * wave);
+        }
       }
       if (!p.active) {
         p.active = true;

@@ -48,8 +48,8 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
   /** The fail's EXIT (e.g. back to the map); the button is drawn only when this is given. */
   onExit?: (params: ResultWindowParams) => void;
   /**
-   * One-shot confetti over the WIN composition (never on a fail). Default off. `true` = the Trail Arrow screen
-   * fireworks at the `mobile` tier; an object overrides that config (e.g. `{ tier: 'desktop' }`).
+   * One-shot confetti over the WIN composition (never on a fail). Default off. `true` = the WIN fireworks (a few
+   * large colour volleys around the window) at the `mobile` tier; an object overrides that config (e.g. `{ tier: 'desktop' }`).
    * Needs WIN_CONFETTI_TEXTURES in `textures`.
    */
   confetti?: boolean | Partial<WinConfettiConfig>;
