@@ -48,6 +48,7 @@
     "showcase:orientation": "node scripts/orientation-guard-check.mjs",
     "showcase:confirm": "node scripts/confirm-exit-check.mjs",
     "showcase:qa": "node scripts/qa-panel-check.mjs",
+    "showcase:confetti": "node scripts/confetti-check.mjs",
     "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",

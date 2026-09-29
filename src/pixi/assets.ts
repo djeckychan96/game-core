@@ -93,7 +93,7 @@ export const READY_UI_ASSET_FILES = {
 /**
  * Kit textures outside the required pack: nothing requests them unless a host lists them in
  * `loadReadyUiAssets({ include })` for the feature that draws them (e.g. CONFIRM_EXIT_FIGMA_TEXTURES for the
- * Figma confirm-exit window). Core's own pack ships them. The Figma confirm-exit art (docs/figma/confirm-exit,
+ * Figma confirm-exit window, WIN_CONFETTI_TEXTURES for the Result WIN confetti). Core's own pack ships them. The Figma confirm-exit art (docs/figma/confirm-exit,
  * rendered by `node scripts/figma-assets.mjs`): no text inside any of them.
  */
 export const READY_UI_OPTIONAL_ASSET_FILES = {
@@ -106,7 +106,11 @@ export const READY_UI_OPTIONAL_ASSET_FILES = {
   /** `art/broken-heart` (crack included, no "-1": the life delta is runtime text). */
   brokenHeart: 'icons/broken_heart@2x.webp',
   /** Figma `ui/button/surface` style=green: 9-slice; caps in READY_UI_NINE_SLICES. */
-  buttonGreen: 'button/button_green@2x.webp'
+  buttonGreen: 'button/button_green@2x.webp',
+  /** Trail Arrow's LevelComplete firework spark (128², additive): the Result WIN confetti. */
+  fxSparkStar: 'fx/spark_star.webp',
+  /** Trail Arrow's soft core glow (128², additive): the flash at the centre of each confetti burst. */
+  fxGlowSoft: 'fx/glow_soft.webp'
 } as const;
 
 export type ReadyUiTextureName = keyof typeof READY_UI_ASSET_FILES;

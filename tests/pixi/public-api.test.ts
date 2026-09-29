@@ -13,12 +13,14 @@ describe('game-core/pixi public entry', () => {
     for (const name of [
       'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView', 'ConfirmWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
-      'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES',
+      'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES', 'WIN_CONFETTI_TEXTURES',
       'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
       'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
     ]) {
       expect(pixiEntry, name).toHaveProperty(name);
     }
+    // the WIN confetti effect is internal to ResultWindowView (opt-in `confetti`), not a public class yet
+    expect(Object.keys(pixiEntry)).not.toContain('WinConfettiEffect');
   });
 
   it('keeps the root entry renderer-agnostic (no kit classes, no pixi.js)', () => {
@@ -33,7 +35,7 @@ describe('game-core/pixi public entry', () => {
   });
 
   it('the kit imports the foundation as types only (no core runtime duplicated in the pixi bundle)', () => {
-    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts'];
+    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts', 'fx/WinConfettiEffect.ts'];
     for (const file of kitFiles) {
       const source = readFileSync(resolve(rootDir, 'src/pixi', file), 'utf-8');
       const foundationImports = source.match(/^import\s+(type\s+)?[^;]*from ['"](\.\.\/)+index['"];/gm) ?? [];
@@ -68,7 +70,7 @@ describe('game-core/pixi public entry', () => {
     const required = Object.keys(pixiEntry.READY_UI_ASSET_FILES);
     expect(required.length).toBe(71);
     for (const name of Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES)) expect(required).not.toContain(name);
-    expect(Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES).sort()).toEqual(['brokenHeart', 'buttonGreen', 'messageGlow', 'windowBase', 'windowClose']);
+    expect(Object.keys(pixiEntry.READY_UI_OPTIONAL_ASSET_FILES).sort()).toEqual(['brokenHeart', 'buttonGreen', 'fxGlowSoft', 'fxSparkStar', 'messageGlow', 'windowBase', 'windowClose']);
   });
 
   it('ships the Figma confirm-exit textures lossless at their @Nx density, 9-slice textures = caps + an 8-unit centre', () => {
@@ -118,9 +120,18 @@ describe('game-core/pixi public entry', () => {
       // the Figma confirm skin asks for its own five, and gets them
       requested.length = 0;
       const figma = await pixiEntry.loadReadyUiAssets({ baseUrl: '/core-pack/', include: pixiEntry.CONFIRM_EXIT_FIGMA_TEXTURES });
-      expect(optionalRequests().sort()).toEqual(optionalFiles.map((file) => `/core-pack/${file}`).sort());
+      const filesOf = (names: readonly (keyof typeof pixiEntry.READY_UI_OPTIONAL_ASSET_FILES)[]) => names.map((name) => `/core-pack/${pixiEntry.READY_UI_OPTIONAL_ASSET_FILES[name]}`).sort();
+      expect(optionalRequests().sort()).toEqual(filesOf(pixiEntry.CONFIRM_EXIT_FIGMA_TEXTURES));
       expect(Object.keys(figma).length).toBe(71 + 5);
       expect(figma.windowBase).toBeInstanceOf(Texture);
+
+      // the WIN confetti asks for its own two (spark + glow), and nothing else optional
+      requested.length = 0;
+      const confetti = await pixiEntry.loadReadyUiAssets({ baseUrl: '/core-pack/', include: pixiEntry.WIN_CONFETTI_TEXTURES });
+      expect(optionalRequests().sort()).toEqual(filesOf(pixiEntry.WIN_CONFETTI_TEXTURES));
+      expect(optionalRequests().sort()).toEqual(['/core-pack/fx/glow_soft.webp', '/core-pack/fx/spark_star.webp']);
+      expect(Object.keys(confetti).length).toBe(71 + 2);
+      expect(confetti.fxSparkStar).toBeInstanceOf(Texture);
 
       // requested but absent: a clear rejection naming the file (only on this path)
       missing = new Set(['/old-skin/window/window_base@2x.webp']);

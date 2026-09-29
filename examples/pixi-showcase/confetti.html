@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Game Core · WIN confetti</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(#3a6fd8, #7b4bc9); font: 13px/1.3 -apple-system, system-ui, sans-serif; color: #fff; }
+      canvas { display: block; }
+      #bar, #stats { position: fixed; left: 0; right: 0; z-index: 2; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; padding: 6px 8px; pointer-events: none; }
+      #bar { top: 0; padding-top: max(6px, env(safe-area-inset-top)); }
+      #stats { bottom: 0; padding-bottom: max(6px, env(safe-area-inset-bottom)); font: 12px/1.3 ui-monospace, Menlo, monospace; }
+      #bar > *, #stats > * { pointer-events: auto; }
+      button, a { font: inherit; color: #fff; background: rgba(0, 0, 0, 0.45); border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 8px; padding: 6px 10px; text-decoration: none; }
+      button:active { background: rgba(0, 0, 0, 0.7); }
+      a.on { background: rgba(255, 255, 255, 0.28); }
+      #stats span { background: rgba(0, 0, 0, 0.5); border-radius: 6px; padding: 3px 7px; white-space: nowrap; }
+    </style>
+  </head>
+  <body>
+    <div id="bar">
+      <button id="replay" type="button">Replay WIN</button>
+      <button id="fail" type="button">Show FAIL</button>
+      <a id="toggle" href="#">confetti</a>
+      <a data-tier="desktop" href="#">desktop</a>
+      <a data-tier="mobile" href="#">mobile</a>
+      <a data-tier="lowPerf" href="#">lowPerf</a>
+    </div>
+    <div id="stats"></div>
+    <script type="module" src="./confettiDemo.ts"></script>
+  </body>
+</html>

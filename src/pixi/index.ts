@@ -33,7 +33,7 @@ export { UiButton } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
-export { ResultWindowView } from './ResultWindowView';
+export { ResultWindowView, WIN_CONFETTI_TEXTURES } from './ResultWindowView';
 export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindowView';
 export { LivesWindowView } from './LivesWindowView';
 export type { LivesWindowParams, LivesWindowViewOptions } from './LivesWindowView';

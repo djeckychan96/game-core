@@ -1,9 +1,17 @@
 import { type Container, Rectangle, Sprite, type Text } from 'pixi.js';
 import type { WindowHiddenReason } from '../index';
+import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName } from './assets';
+import { WinConfettiEffect, type WinConfettiConfig } from './fx/WinConfettiEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth, formatAmount } from './text';
 import { resolveTheme } from './theme';
+
+/**
+ * The textures of the WIN confetti (Trail Arrow's own firework spark + glow). Not in the required pack: a host that
+ * enables `confetti` requests them with `loadReadyUiAssets({ include: WIN_CONFETTI_TEXTURES })`.
+ */
+export const WIN_CONFETTI_TEXTURES = ['fxSparkStar', 'fxGlowSoft'] as const satisfies readonly ReadyUiOptionalTextureName[];
 
 export interface ResultWindowParams {
   level: number;
@@ -39,6 +47,30 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
   onRetry?: (params: ResultWindowParams) => void;
   /** The fail's EXIT (e.g. back to the map); the button is drawn only when this is given. */
   onExit?: (params: ResultWindowParams) => void;
+  /**
+   * One-shot confetti over the WIN composition (never on a fail). Default off. `true` = the Trail Arrow screen
+   * fireworks at the `mobile` tier; an object overrides that config (e.g. `{ tier: 'desktop' }`).
+   * Needs WIN_CONFETTI_TEXTURES in `textures`.
+   */
+  confetti?: boolean | Partial<WinConfettiConfig>;
+}
+
+/** Fails before anything registers when confetti is on and its art was not loaded. */
+function modalOptions(options: ResultWindowViewOptions): ModalWindowOptions {
+  if (options.confetti) {
+    const missing = WIN_CONFETTI_TEXTURES.filter((name) => !options.textures[name]);
+    if (missing.length) {
+      const list = missing.map((name) => `${name} (${READY_UI_OPTIONAL_ASSET_FILES[name]})`).join(', ');
+      throw new Error(`ResultWindowView confetti: no ${list} in textures — load them with loadReadyUiAssets({ include: WIN_CONFETTI_TEXTURES })`);
+    }
+  }
+  return {
+    ...options,
+    id: options.id ?? 'result-window',
+    entrance: options.entrance ?? VICTORY_ENTRANCE,
+    backdropColor: options.backdropColor ?? resolveTheme(options.theme).colors.resultBackdrop,
+    backdropAlpha: options.backdropAlpha ?? resolveTheme(options.theme).colors.resultBackdropAlpha
+  };
 }
 
 /**
@@ -52,6 +84,8 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
  * the currently visible content, so a short fail is never zoomed up and the crown never clips.
  * Next/Retry/Exit are close() continuations, so a cancelled window never triggers navigation;
  * the × and the backdrop run only `onDismiss(reason)`, never a retry or an exit.
+ * Optional WIN confetti (`confetti`): an input-transparent layer over the composition, in panel design units around
+ * the frame centre; it starts at every WIN show (t = 0) and stops on every path to hidden (the fx scope).
  */
 export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private readonly titleText: Text;
@@ -70,15 +104,11 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private params: ResultWindowParams | null = null;
   /** Design-unit box of the whole victory composition; the fit box of both outcomes. */
   private frame: Rectangle | null = null;
+  /** WIN confetti, only when `options.confetti` is on. */
+  private readonly confetti: WinConfettiEffect | null = null;
 
   constructor(options: ResultWindowViewOptions) {
-    super({
-      ...options,
-      id: options.id ?? 'result-window',
-      entrance: options.entrance ?? VICTORY_ENTRANCE,
-      backdropColor: options.backdropColor ?? resolveTheme(options.theme).colors.resultBackdrop,
-      backdropAlpha: options.backdropAlpha ?? resolveTheme(options.theme).colors.resultBackdropAlpha
-    });
+    super(modalOptions(options));
     this.onNext = options.onNext;
     this.onRetry = options.onRetry ?? null;
     this.onExit = options.onExit ?? null;
@@ -127,11 +157,18 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.exitButton = this.createButton('exit', t.btnYellow, options.exitLabel ?? 'EXIT', () => this.finish('exit'), 373, 176, 53, -8);
     this.exitButton.position.set(0, 170);
     this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
-    this.placeClose();
     // the stars are hidden until they pop, so they are counted here, not measured at fit time
     const framed: Container[] = [ribbon, ...this.stars, this.rewardCoin, this.nextButton, this.retryButton];
     if (this.closeButton) framed.push(this.closeButton);
     this.frame = centeredBox(framed);
+    if (options.confetti && t.fxSparkStar && t.fxGlowSoft) {
+      // over the composition (the × stays on top), centred on the frame; eventMode none, excluded from bounds
+      const config = options.confetti === true ? {} : options.confetti;
+      this.confetti = new WinConfettiEffect({ ...config, motion: this.motion, scope: this.fxScope, textures: { spark: t.fxSparkStar, glow: t.fxGlowSoft } });
+      this.confetti.position.set(this.frame.x + this.frame.width / 2, this.frame.y + this.frame.height / 2);
+      this.panel.addChild(this.confetti);
+    }
+    this.placeClose();
   }
 
   protected applyParams(params: ResultWindowParams): void {
@@ -152,6 +189,9 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     setShown(this.failRetryButton, fail);
     setShown(this.exitButton, fail && this.onExit !== null);
     for (const star of this.stars) star.visible = false;
+    // applyParams runs once per show (the controller's onShow): a WIN starts the confetti from t = 0
+    if (fail) this.confetti?.cancel();
+    else this.confetti?.play();
   }
 
   /** Fit box: the victory frame for both outcomes, so the scale never depends on what is visible. */
@@ -198,6 +238,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
 
   protected override onHiddenView(_reason: WindowHiddenReason): void {
     for (const star of this.stars) star.visible = false;
+    this.confetti?.cancel(); // the fx scope cancel already stopped the run; this keeps the stop independent of it
   }
 
   private finish(action: 'next' | 'retry' | 'exit'): void {
