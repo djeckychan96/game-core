@@ -1,5 +1,6 @@
-import { Container, type FederatedPointerEvent, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
+import { Container, type FederatedPointerEvent, type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { ButtonCancelReason, ButtonController, EaseFn, EaseName, UiRuntime } from '../index';
+import { createNineSlice, type NineSliceSpec } from './nineSlice';
 import { createLabel, fitLabelWidth } from './text';
 import type { ReadyUiTheme } from './theme';
 
@@ -12,6 +13,8 @@ export interface UiButtonOptions {
   texture: Texture;
   width?: number;
   height?: number;
+  /** Draw `texture` as a 9-slice over the `width × height` box instead of stretching it (e.g. READY_UI_NINE_SLICES). */
+  nineSlice?: NineSliceSpec;
   label?: string;
   /** Local-units font size for the label. Default: 42% of the button height. */
   fontSize?: number;
@@ -41,7 +44,7 @@ export interface UiButtonOptions {
  */
 export class UiButton extends Container {
   readonly controller: ButtonController;
-  readonly background: Sprite;
+  readonly background: Sprite | NineSliceSprite;
   readonly labelText: Text | null;
   readonly icon: Sprite | null;
   private readonly idleScale = { x: 1, y: 1 };
@@ -51,12 +54,17 @@ export class UiButton extends Container {
   constructor(options: UiButtonOptions) {
     super();
     this.pressScale = options.pressScale ?? 0.92;
-    this.background = new Sprite(options.texture);
-    this.background.anchor.set(0.5);
     const width = options.width ?? options.texture.width;
     const height = options.height ?? options.texture.height;
-    this.background.width = width;
-    this.background.height = height;
+    if (options.nineSlice) {
+      this.background = createNineSlice(options.texture, options.nineSlice, width, height);
+    } else {
+      const sprite = new Sprite(options.texture);
+      sprite.anchor.set(0.5);
+      sprite.width = width;
+      sprite.height = height;
+      this.background = sprite;
+    }
     this.addChild(this.background);
 
     this.icon = null;

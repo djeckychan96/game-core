@@ -46,10 +46,12 @@
     "showcase:ads": "node scripts/ads-demo-check.mjs",
     "showcase:overlay": "node scripts/overlay-demo-check.mjs",
     "showcase:orientation": "node scripts/orientation-guard-check.mjs",
+    "showcase:confirm": "node scripts/confirm-exit-check.mjs",
     "showcase:qa": "node scripts/qa-panel-check.mjs",
     "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
+    "figma:assets": "node scripts/figma-assets.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
     "ocean:compare": "node scripts/ocean-compare.mjs"
   },

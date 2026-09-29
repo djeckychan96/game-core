@@ -6,9 +6,9 @@ import { ShopWindowView, type ShopItem } from '../../src/pixi/ShopWindowView';
 import { SettingsWindowView } from '../../src/pixi/SettingsWindowView';
 import { NoAdsWindowView } from '../../src/pixi/NoAdsWindowView';
 import { StarterPackWindowView } from '../../src/pixi/StarterPackWindowView';
-import { ConfirmWindowView } from '../../src/pixi/ConfirmWindowView';
+import { CONFIRM_EXIT_FIGMA_TEXTURES, ConfirmWindowView } from '../../src/pixi/ConfirmWindowView';
 import type { UiButton } from '../../src/pixi/UiButton';
-import type { Container, Rectangle, Text } from 'pixi.js';
+import { CanvasTextMetrics, NineSliceSprite, type Container, type Rectangle, type Sprite, type Text } from 'pixi.js';
 
 function field<T>(view: object, name: string): T {
   const value = (view as Record<string, unknown>)[name];
@@ -710,7 +710,7 @@ describe('NoAdsWindowView / StarterPackWindowView', () => {
   });
 });
 
-describe('ConfirmWindowView (donor ConfirmWindow: exit with a life lost)', () => {
+describe('ConfirmWindowView default variant (donor ConfirmWindow: exit with a life lost) — unchanged', () => {
   function create(kit: ReturnType<typeof createKit>, log: string[]): ConfirmWindowView {
     return new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, id: 'exit-confirm',
       title: 'ВЫ УВЕРЕНЫ?', body: 'Вы потеряете 1 жизнь', confirmLabel: 'ВЫХОД',
@@ -736,6 +736,7 @@ describe('ConfirmWindowView (donor ConfirmWindow: exit with a life lost)', () =>
     expect(button.background.texture).toBe(kit.textures.confirmButton);
     expect([button.background.width, button.background.height, button.y]).toEqual([600, 206, 334]);
     expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 418, y: -413 });
+    expect(view.variant).toBe('donor');
     view.destroy();
     expect(kit.ui.getStats().buttons).toBe(0);
   });
@@ -783,5 +784,176 @@ describe('ConfirmWindowView (donor ConfirmWindow: exit with a life lost)', () =>
     expect(box.x + box.width / 2).toBeCloseTo(195, 0);
     expect(box.y + box.height / 2).toBeCloseTo(422, 0);
     view.destroy();
+  });
+
+  it('needs only the required pack: no Figma texture in the record, same build', () => {
+    const kit = createKit();
+    const required = { ...kit.textures };
+    for (const name of CONFIRM_EXIT_FIGMA_TEXTURES) delete required[name];
+    const view = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: required, onConfirm: () => {} });
+    expect(view.variant).toBe('donor');
+    expect(field<Container>(view, 'panel').children.length).toBe(5); // art, title, body, button, ×
+    view.destroy();
+  });
+});
+
+describe("ConfirmWindowView variant 'figma' (Figma screen/confirm-exit 820:77655, docs/figma/confirm-exit)", () => {
+  // Figma screen units → panel units: the panel origin is the window box centre, screen (540, 1172)
+  const X = (screenX: number) => screenX - 540;
+  const Y = (screenY: number) => screenY - 1172;
+  // tests/pixi/setup.ts fakes the font: advance 0.56 em per char, line box ascent 0.9 em + descent 0.25 em
+  const baseline = (boxY: number, boxH: number, size: number) => Y(boxY) + (boxH - 1.15 * size) / 2 + 0.9 * size;
+
+  function create(kit: ReturnType<typeof createKit>, log: string[], textures = kit.textures): ConfirmWindowView {
+    return new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures, id: 'exit-confirm', variant: 'figma',
+      title: 'ВЫ УВЕРЕНЫ?', body: 'Вы потеряете 1 жизнь', confirmLabel: 'ВЫХОД',
+      onConfirm: () => log.push('confirm'), onDismiss: (reason) => log.push(`cancel:${reason}`) });
+  }
+
+  /** The glyph run of a Figma label: [left, right] and its baseline, in the label's parent units. */
+  function run(label: Text): { left: number; right: number; baseline: number } {
+    const b = label.getLocalBounds(); // Pixi bounds = 4 stroke + run + 4 stroke + 4 shadow wide; baseline 4 + glyph ascent below the top
+    const glyphAscent = CanvasTextMetrics.measureText(label.text, label.style).fontProperties.ascent;
+    return { left: label.x + (b.x + 4) * label.scale.x, right: label.x + (b.x + b.width - 8) * label.scale.x, baseline: label.y + (b.y + 4 + glyphAscent) * label.scale.y };
+  }
+
+  it('builds the Figma layers bottom → top: 9-slice shell, title, ×, glow, 9-slice button, body, heart, runtime "-1"', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    view.show();
+    advance(kit.core, 400);
+    const panel = field<Container>(view, 'panel');
+    const names = ['surface', 'title', 'closeButton', 'glow', 'confirmButton', 'body', 'heart', 'lifeDelta'];
+    expect(panel.children.map((child) => names.find((n) => field(view, n) === child))).toEqual(names);
+
+    // ui/window/base 960 × 994 at screen (60, 675) + the 4 / 4 / 4 / 8 stroke-and-shadow bleed, as a 9-slice
+    const surface = field<NineSliceSprite>(view, 'surface');
+    expect(surface).toBeInstanceOf(NineSliceSprite);
+    expect(surface.texture).toBe(kit.textures.windowBase);
+    expect([surface.leftWidth, surface.topHeight, surface.rightWidth, surface.bottomHeight]).toEqual([92, 187, 92, 110]);
+    const s = surface.getLocalBounds();
+    expect([s.x, s.y, s.width, s.height]).toEqual([X(56), Y(671), 968, 1006]);
+
+    // sprites at their Figma SVG export boxes (render bounds)
+    const glow = field<Sprite>(view, 'glow');
+    expect(glow.texture).toBe(kit.textures.messageGlow);
+    [glow.x, glow.y, glow.width, glow.height].forEach((v, i) => expect(v).toBeCloseTo([X(89.3), Y(680.3), 902, 806][i]!, 6));
+    const heart = field<Sprite>(view, 'heart');
+    expect(heart.texture).toBe(kit.textures.brokenHeart);
+    [heart.x, heart.y, heart.width, heart.height].forEach((v, i) => expect(v).toBeCloseTo([X(377.001), Y(939), 326, 298][i]!, 6));
+    const close = field<UiButton>(view, 'closeButton');
+    expect(close.background.texture).toBe(kit.textures.windowClose);
+    expect([close.x, close.y, close.background.width, close.background.height]).toEqual([X(923 + 25.5), Y(736 + 25.5), 51, 51]);
+
+    // ui/button/base 600 × 206 at (240, 1400): the green surface as a 9-slice, the label a runtime child
+    const button = field<UiButton>(view, 'confirmButton');
+    expect([button.x, button.y]).toEqual([X(540), Y(1503)]);
+    expect(button.background).toBeInstanceOf(NineSliceSprite);
+    expect(button.background.texture).toBe(kit.textures.buttonGreen);
+    expect([button.background.width, button.background.height]).toEqual([600, 206]);
+    const label = field<Text>(view, 'confirmLabel');
+    expect(label.parent).toBe(button);
+    expect(label.text).toBe('ВЫХОД');
+
+    // runtime text in the Figma slots: centred / left runs, the font's line box centred in the slot
+    const within = (actual: number, expected: number) => expect(actual).toBeCloseTo(expected, 6);
+    const title = run(field<Text>(view, 'title'));
+    within((title.left + title.right) / 2, X(195 + 345));
+    within(title.baseline, baseline(709, 104, 80));
+    const body = run(field<Text>(view, 'body'));
+    expect(field<Text>(view, 'body').text).toBe('Вы потеряете 1 жизнь');
+    within((body.left + body.right) / 2, X(123 + 417));
+    within(body.baseline, baseline(1261, 113, 50));
+    const delta = run(field<Text>(view, 'lifeDelta'));
+    expect(field<Text>(view, 'lifeDelta').text).toBe('-1');
+    within(delta.left, X(603));
+    within(delta.baseline, baseline(1020, 180, 150));
+    const labelRun = run(label); // button-local: the @content slot (25, 27, 550 × 128) around the button centre
+    within((labelRun.left + labelRun.right) / 2, 0);
+    within(labelRun.baseline, 27 - 103 + (128 - 1.15 * 80) / 2 + 0.9 * 80);
+
+    // decoration never takes input (the glow lies over the ×), the controls do
+    for (const name of ['surface', 'title', 'glow', 'body', 'heart', 'lifeDelta']) expect(field<Container>(view, name).eventMode, name).toBe('none');
+    expect(close.eventMode).toBe('static');
+    expect(button.eventMode).toBe('static');
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('keeps runtime text inside its slot: a long label shrinks around its anchor, never past the Figma width', () => {
+    const kit = createKit();
+    const view = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, variant: 'figma', onConfirm: () => {},
+      title: 'SIND SIE WIRKLICH GANZ SICHER?', confirmLabel: 'SPIEL VERLASSEN UND ZURÜCK', lifeDelta: '-2' });
+    const title = run(field<Text>(view, 'title'));
+    within2(title.right - title.left, 690);
+    within2((title.left + title.right) / 2, X(540));
+    const label = run(field<Text>(view, 'confirmLabel'));
+    within2(label.right - label.left, 550);
+    expect(field<Text>(view, 'lifeDelta').text).toBe('-2');
+    expect(run(field<Text>(view, 'lifeDelta')).left).toBeCloseTo(X(603), 6);
+    view.destroy();
+    function within2(actual: number, expected: number) { expect(actual).toBeCloseTo(expected, 6); }
+  });
+
+  it('defaults to the Figma copy and the Figma dim (#080b0d at 0.8)', () => {
+    const kit = createKit();
+    const view = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, variant: 'figma', onConfirm: () => {} });
+    expect([field<Text>(view, 'title').text, field<Text>(view, 'body').text, field<Text>(view, 'confirmLabel').text, field<Text>(view, 'lifeDelta').text])
+      .toEqual(['ARE YOU SURE?', 'YOU WILL LOSE 1 HEART', 'EXIT', '-1']);
+    expect([field<number>(view, 'backdropColor'), field<number>(view, 'backdropAlpha')]).toEqual([0x080b0d, 0.8]);
+    view.destroy();
+  });
+
+  it('the button runs onConfirm after the close; the × and the backdrop cancel (onDismiss), never onConfirm', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = create(kit, log);
+    view.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(view, 'confirmButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm']);
+    expect(view.state).toBe('hidden');
+
+    view.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(view, 'closeButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm', 'cancel:button']);
+
+    view.show();
+    advance(kit.core, 400);
+    const backdrop = field<Container>(view, 'backdrop');
+    backdrop.emit('pointertap', { target: backdrop } as never);
+    advance(kit.core, 300);
+    expect(log).toEqual(['confirm', 'cancel:button', 'cancel:background']);
+    expect(view.state).toBe('hidden');
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+  });
+
+  it('fits like the Figma frame: the 960 × 994 window keeps its share of 1080 × 2344, contain-fitted and centred', () => {
+    for (const [w, h] of [[390, 844], [1280, 800], [1080, 2344]] as const) {
+      const kit = createKit();
+      const view = create(kit, []);
+      view.resize(w, h);
+      view.show();
+      advance(kit.core, 400);
+      const k = Math.min(w / 1080, h / 2344);
+      const shell = field<NineSliceSprite>(view, 'surface').getBounds(); // the box plus its 4 / 4 / 4 / 8 bleed
+      expect(shell.width, `${w}×${h}`).toBeCloseTo(968 * k, 6);
+      expect(shell.height, `${w}×${h}`).toBeCloseTo(1006 * k, 6);
+      expect(shell.x + 4 * k, `${w}×${h}`).toBeCloseTo((w - 960 * k) / 2, 6);
+      expect(shell.y + 4 * k, `${w}×${h}`).toBeCloseTo((h - 994 * k) / 2, 6);
+      view.destroy();
+    }
+  });
+
+  it('requested without its art (not in `include`): a clear error before anything registers', () => {
+    const kit = createKit();
+    const { windowBase: _drop, ...textures } = kit.textures;
+    expect(() => create(kit, [], textures)).toThrow(/variant 'figma': no windowBase \(window\/window_base@2x\.webp\).*include: CONFIRM_EXIT_FIGMA_TEXTURES/);
+    expect(kit.ui.getStats().windows).toBe(0);
+    expect(kit.ui.getStats().buttons).toBe(0);
   });
 });

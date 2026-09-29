@@ -1,4 +1,4 @@
-import { Container, Text, type TextStyleOptions } from 'pixi.js';
+import { CanvasTextMetrics, Container, DOMAdapter, Text, fontStringFromTextStyle, type TextStyleOptions } from 'pixi.js';
 import type { ReadyUiTheme } from './theme';
 
 export interface LabelOptions {
@@ -32,6 +32,79 @@ export function createLabel(theme: ReadyUiTheme, text: string, options: LabelOpt
   const label = new Text({ text, style });
   label.anchor.set(options.anchorX ?? 0.5, options.anchorY ?? 0.5);
   return label;
+}
+
+/** A one-line Figma text box in the parent's units, with the text's horizontal alignment (vertical is CENTER). */
+export interface FigmaTextSlot {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  align: 'left' | 'center';
+}
+
+/** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke color. */
+export const FIGMA_TEXT_STROKE_OUTSIDE = 4;
+export const FIGMA_TEXT_SHADOW_Y = 4;
+
+/**
+ * The Figma text look (theme font / fill / stroke color). Pixi strokes centred on the outline and fills over it,
+ * so a stroke of 2 × FIGMA_TEXT_STROKE_OUTSIDE leaves exactly the Figma OUTSIDE width; the shadow pass draws
+ * stroke + fill like Figma's drop shadow of a stroked text.
+ */
+export function createFigmaLabel(theme: ReadyUiTheme, text: string, fontSize: number): Text {
+  return new Text({
+    text,
+    style: {
+      fontFamily: theme.text.fontFamily,
+      fontSize,
+      fill: theme.text.fill,
+      stroke: { color: theme.text.strokeColor, width: FIGMA_TEXT_STROKE_OUTSIDE * 2, join: 'round' },
+      dropShadow: { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: FIGMA_TEXT_SHADOW_Y }
+    }
+  });
+}
+
+/**
+ * The font's own line box (Figma AUTO line height = ascent + descent), from the canvas font metrics. Measured at
+ * 1000 px and scaled: engines round font metrics to whole pixels at the size they are asked for.
+ */
+function fontLineBox(label: Text): { ascent: number; descent: number } {
+  const size = label.style.fontSize;
+  const probe = label.style.clone();
+  probe.fontSize = 1000;
+  const font = fontStringFromTextStyle(probe);
+  const context = DOMAdapter.get().createCanvas(1, 1).getContext('2d') as CanvasRenderingContext2D | null;
+  if (context) {
+    context.font = font;
+    const m = context.measureText('M');
+    if (m.fontBoundingBoxAscent > 0) return { ascent: (m.fontBoundingBoxAscent / 1000) * size, descent: (m.fontBoundingBoxDescent / 1000) * size };
+  }
+  const glyphs = CanvasTextMetrics.measureFont(font); // engines without fontBoundingBox*: the glyph extents
+  return { ascent: (glyphs.ascent / 1000) * size, descent: (glyphs.descent / 1000) * size };
+}
+
+/**
+ * Places a one-line label the way Figma lays out a fixed text box with AUTO line height and vertical CENTER: the
+ * font's line box is centred in the slot (baseline = its ascent below the line top) and the glyph run is aligned
+ * by its advance — not by Pixi's measured bounds, which also hold the stroke and the drop-shadow distance. A text
+ * wider than the slot shrinks uniformly around that point to the slot width. Call again after changing the text.
+ */
+export function placeFigmaLabel(label: Text, slot: FigmaTextSlot): void {
+  const metrics = CanvasTextMetrics.measureText(label.text, label.style);
+  const stroke = label.style.stroke;
+  const strokeWidth = typeof stroke === 'object' && stroke !== null && 'width' in stroke ? (stroke.width ?? 0) : 0;
+  const advance = metrics.lineWidths[0] ?? metrics.maxLineWidth;
+  const line = fontLineBox(label);
+  const baseline = slot.y + (slot.height - (line.ascent + line.descent)) / 2 + line.ascent;
+  const k = advance > slot.width && advance > 0 ? slot.width / advance : 1;
+  // Pixi draws the run from x = stroke / 2 with the baseline at stroke / 2 + the font's glyph ascent. Anchor 0: a
+  // non-zero anchor is applied to the ceil-rounded texture size and would move the run by up to a unit.
+  const originX = strokeWidth / 2 + (slot.align === 'center' ? advance / 2 : 0);
+  const originY = strokeWidth / 2 + metrics.fontProperties.ascent;
+  label.anchor.set(0, 0);
+  label.scale.set(k);
+  label.position.set((slot.align === 'center' ? slot.x + slot.width / 2 : slot.x) - k * originX, baseline - k * originY);
 }
 
 /** Shrinks the label's scale so its width fits `maxWidth` (never grows). */

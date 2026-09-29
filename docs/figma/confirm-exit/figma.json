@@ -1,0 +1,66 @@
+{
+  "about": "Figma source of truth for the Game Core confirm-exit window (ConfirmWindowView). Read 2026-09-29 through the Figma MCP (3 calls: 2 read-only use_figma dumps + 1 download_assets of the modal). Screen coordinates are Figma units inside the 1080 x 2344 screen frame = Ready UI design units.",
+  "source": {
+    "fileKey": "CNcGCBj8IvUXrPd01FbChm",
+    "page": "HAMSTER PIXEL FLOW АКТУАЛЬНОЕ ",
+    "screen": { "id": "820:77655", "name": "screen/confirm-exit", "size": [1080, 2344], "fill": { "linear": ["#483191", "#274caf"], "transform": [[0, 1, 0], [-1, 0, 1]] } },
+    "reference": { "node": "820:77658", "file": "reference/modal-820-77658@1x.png", "size": [968, 1006], "origin": [56, 671], "sha256": "b2468b2f4b682af5fb8fecfcb50b59aedcddae0f9073595b4c64ac8ab072c8d9" }
+  },
+  "screenChildren": [
+    { "id": "820:77656", "name": "ref/gameplay-background", "note": "reference gameplay art under the dim; not part of the window" },
+    { "id": "820:77657", "name": "overlay/dim", "box": [0, 0, 1080, 2344], "fill": "#080b0d", "opacity": 0.8 },
+    { "id": "820:77658", "name": "modal/confirm-exit", "type": "GROUP", "box": [60, 675, 960, 994], "render": [56, 671, 968, 1006] }
+  ],
+  "modalChildrenBottomToTop": [
+    {
+      "id": "820:77659", "name": "ui/window/base", "type": "INSTANCE", "box": [60, 675, 960, 994], "render": [56, 671, 968, 1006],
+      "master": { "id": "73:5220", "size": [960, 1198], "stretch": [80, 175, 800, 943], "content": [60, 175, 840, 943],
+        "description": "Game Core window shell. Exporter reads @stretch and @content bounds. slot/title is runtime-localized text; action/close is a separate interactive element. Do not bake translated text into the exported surface." },
+      "nineSliceInsets": { "left": 80, "top": 175, "right": 80, "bottom": 80 },
+      "children": [
+        { "id": "73:5209", "name": "surface/body", "constraints": "STRETCH/STRETCH", "fill": "#c3c1ff", "cornerRadius": 80, "stroke": { "color": "#261a30", "weight": 4, "align": "OUTSIDE" },
+          "effects": [{ "type": "INNER_SHADOW", "offset": [0, -23], "blur": 0, "color": "#a29ff4" }, { "type": "DROP_SHADOW", "offset": [0, 4], "blur": 0, "color": "#261a30" }], "svg": "svg/window-body.svg" },
+        { "id": "73:5210", "name": "surface/header", "constraints": "STRETCH/MIN", "box": [0, 0, 960, 175], "fill": "#7453d5", "cornerRadius": [80, 80, 0, 0],
+          "effects": [{ "type": "INNER_SHADOW", "offset": [0, -13], "blur": 0, "color": "#000000", "alpha": 0.25 }], "svg": "svg/window-header.svg" },
+        { "id": "73:5211", "name": "slot/title", "type": "TEXT", "screenBox": [195, 709, 690, 104], "windowBox": [135, 34, 690, 104], "text": "ARE YOU SURE?", "fontSize": 80, "masterFontSize": 100, "align": "CENTER/CENTER", "autoResize": "NONE", "style": "runtime" },
+        { "id": "73:5212", "name": "action/close", "type": "GROUP", "screenBox": [923, 736, 50.519, 50.52], "windowBox": [863, 61, 50.519, 50.52], "fill": "#473381", "svg": "svg/close.svg", "note": "separate interactive element; glyph only, sits on the header" }
+      ]
+    },
+    { "id": "820:77660", "name": "surface/message-card", "type": "RECTANGLE", "box": [315, 906, 450, 354], "render": [89.3, 680.3, 901.4, 805.4], "fill": "#ed7299", "cornerRadius": 138, "effects": [{ "type": "LAYER_BLUR", "radius": 225.7 }], "svg": "svg/message-card-glow.svg", "note": "a soft pink glow behind the heart, drawn ABOVE the window surface, title and close" },
+    {
+      "id": "820:77661", "name": "ui/button/base", "type": "INSTANCE", "box": [240, 1400, 600, 206],
+      "master": { "id": "337:27339", "size": [600, 206], "content": [25, 27, 550, 128],
+        "description": "Game Core button composition. surface/button is stretchable visual; slot/label is runtime-localized text; badge/multiplier is optional. Export visual separately from label." },
+      "props": { "icon#374:2": "374:5364", "heart#373:0": false, "text_up#365:4": false, "gold_gradient#365:2": false, "icons#365:1": false, "x2#365:0": false, "coins#337:2": false },
+      "note": "the master also has surface/highlight (365:22366) and badge/multiplier (374:5578); neither exists in this instance and neither is in the Figma render",
+      "children": [
+        { "id": "I820:77661;337:27298", "name": "surface/button", "component": "ui/button/surface style=green (70:4398, 186 x 192)", "componentStretch": [51, 51, 84, 90], "svg": "svg/button-surface-green.svg",
+          "layers": [{ "name": "Rectangle 18", "box": [8, 5, 584, 185], "fill": "#029437", "cornerRadius": 51, "stroke": { "color": "#261a30", "weight": 4, "align": "OUTSIDE" }, "effects": [{ "type": "DROP_SHADOW", "offset": [0, 8], "spread": 3, "blur": 0, "color": "#261a30" }] },
+                     { "name": "Rectangle 19", "box": [8, 5, 584, 171], "fill": "#3cc31f", "cornerRadius": 51 }] },
+        { "id": "I820:77661;374:7123", "name": "slot/label", "buttonBox": [25, 27, 550, 128], "text": "EXIT", "textBox": [221, 43, 158, 96], "fontSize": 80, "style": "runtime" }
+      ]
+    },
+    { "id": "820:77662", "name": "slot/body", "type": "TEXT", "screenBox": [123, 1261, 834, 113], "windowBox": [63, 586, 834, 113], "text": "YOU WILL LOSE 1 HEART", "fontSize": 50, "align": "CENTER/CENTER", "autoResize": "NONE", "style": "runtime" },
+    { "id": "820:77663", "name": "art/broken-heart", "type": "GROUP", "box": [387.001, 949, 305.395, 268], "render": [377.001, 939, 325.396, 298], "svg": "svg/broken-heart.svg", "note": "7 vectors (crack included), stroke 10 OUTSIDE #261a30, drop shadow 0/10 #261a30" },
+    { "id": "820:77672", "name": "slot/life-delta", "type": "GROUP", "box": [603, 1020, 146, 180], "text": { "id": "820:77673", "chars": "-1", "fontSize": 150, "align": "LEFT/CENTER", "autoResize": "WIDTH_AND_HEIGHT" }, "style": "runtime" }
+  ],
+  "textStyle": { "font": "Fira Sans / Black (900)", "fill": "#ffffff", "stroke": { "color": "#000000", "weight": 4, "align": "OUTSIDE", "join": "ROUND" }, "dropShadow": { "offset": [0, 4], "blur": 0, "color": "#000000" }, "lineHeight": "AUTO (= 1.2 em for Fira Sans: hug boxes 96 @ 80, 180 @ 150)", "letterSpacing": 0, "textCase": "ORIGINAL" },
+  "findings": [
+    "ui/button/surface style=green @stretch = 51 on every side of 186 x 192, but the rounded rects start at x 8 / y 5, so the corners end at x 59 / y 56 and the drop shadow corner at y 64: a literal 51 cap would stretch 8 units of corner. The Core texture uses the clean caps measured from the raster (see assets[].nineSlice).",
+    "slot/title in this instance is 80 px (master 100 px, text 'SETTINGS'): the window shell is shared, the size is a per-screen override.",
+    "overlay/dim is #080b0d at 0.8, not the kit's generic black 0.55 backdrop."
+  ],
+  "assets": [
+    { "key": "windowBase", "file": "window/window_base@2x.webp", "scale": 2,
+      "layers": [{ "svg": "svg/window-body.svg", "at": [0, 0] }, { "svg": "svg/window-header.svg", "at": [4, 4] }],
+      "size": [968, 1210], "pad": { "left": 4, "top": 4, "right": 4, "bottom": 8 },
+      "nineSlice": { "figma": { "left": 80, "top": 175, "right": 80, "bottom": 80 }, "gutter": 8, "strip": 8 } },
+    { "key": "buttonGreen", "file": "button/button_green@2x.webp", "scale": 2,
+      "layers": [{ "svg": "svg/button-surface-green.svg", "at": [0, 0] }],
+      "size": [600, 206], "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+      "nineSlice": { "figma": { "left": 51, "top": 51, "right": 51, "bottom": 51 }, "gutter": 8, "strip": 8 } },
+    { "key": "windowClose", "file": "window/window_close@2x.webp", "scale": 2, "layers": [{ "svg": "svg/close.svg", "at": [0, 0] }], "size": [51, 51] },
+    { "key": "brokenHeart", "file": "icons/broken_heart@2x.webp", "scale": 2, "layers": [{ "svg": "svg/broken-heart.svg", "at": [0, 0] }], "size": [326, 298] },
+    { "key": "messageGlow", "file": "window/message_glow@0.5x.webp", "scale": 0.5, "layers": [{ "svg": "svg/message-card-glow.svg", "at": [0, 0] }], "size": [902, 806] }
+  ]
+}

@@ -37,8 +37,8 @@ export { ResultWindowView } from './ResultWindowView';
 export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindowView';
 export { LivesWindowView } from './LivesWindowView';
 export type { LivesWindowParams, LivesWindowViewOptions } from './LivesWindowView';
-export { ConfirmWindowView } from './ConfirmWindowView';
-export type { ConfirmWindowViewOptions } from './ConfirmWindowView';
+export { ConfirmWindowView, CONFIRM_EXIT_FIGMA_TEXTURES } from './ConfirmWindowView';
+export type { ConfirmWindowViewOptions, ConfirmWindowVariant } from './ConfirmWindowView';
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
 export { SettingsWindowView } from './SettingsWindowView';
@@ -51,10 +51,14 @@ export {
   loadReadyUiAssets,
   createReadyUiTextures,
   READY_UI_ASSET_FILES,
+  READY_UI_OPTIONAL_ASSET_FILES,
+  READY_UI_NINE_SLICES,
   READY_UI_FONT_FILE,
   READY_UI_FONT_FAMILY
 } from './assets';
-export type { ReadyUiTextures, ReadyUiTextureName, LoadReadyUiAssetsOptions } from './assets';
+export type { ReadyUiTextures, ReadyUiTextureName, ReadyUiOptionalTextureName, LoadReadyUiAssetsOptions } from './assets';
+export { createNineSlice } from './nineSlice';
+export type { NineSliceSpec, NineSliceInsets } from './nineSlice';
 export { DEFAULT_READY_UI_THEME, resolveTheme } from './theme';
 export type { ReadyUiTheme, ReadyUiThemeOverrides, ReadyUiTextTheme, ReadyUiColors, ReadyUiLevelMapTheme } from './theme';
 export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer, TEXT_SUPERSAMPLE } from './text';
