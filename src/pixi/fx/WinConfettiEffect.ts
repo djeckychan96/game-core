@@ -29,7 +29,7 @@ export interface WinConfettiConfig {
   startDelayMs: number;
   /** Between two volleys. Default 480. */
   burstIntervalMs: number;
-  /** Life of one volley; its flash lives the first 20 % of it. Default 2000. */
+  /** Life of one volley; its flash lives the first 20 % of it. Default 1480. */
   lifetimeMs: number;
   /** Size base in design units: volley radius 0.315–0.405 of it, streaks and glitter scale with it too. Default 1150. */
   size: number;
@@ -63,7 +63,7 @@ const DEFAULTS: Omit<WinConfettiConfig, 'bursts' | 'sparksPerBurst'> = {
   tier: 'mobile',
   startDelayMs: 280,
   burstIntervalMs: 480,
-  lifetimeMs: 2000,
+  lifetimeMs: 1480,
   size: 1150,
   areaWidth: 1150,
   areaHeight: 1700,
@@ -80,7 +80,7 @@ const BLOOM = 1; // soft glow in the volley colour behind the streaks
 const STREAK = 2; // stretched glow along its flight direction, shrinking into a falling dot
 const GLITTER = 3; // small twinkling spark star that fades in after the flash and falls
 
-const FLASH_SHARE = 0.2; // 400 ms of a 2000 ms volley: shorter than the 480 ms interval
+const FLASH_SHARE = 0.2; // 296 ms of a 1480 ms volley: shorter than the 480 ms interval
 const FLASH_SIZE = 3.0; // flash sprite diameter at its end / volley radius
 const FLASH_TINT = 0.2; // the flash is white moved this far towards the volley colour
 const BLOOM_SIZE = 2.4; // bloom sprite diameter at its end / volley radius
@@ -96,7 +96,7 @@ const SHRINK = 0.5; // streaks end at half their size
 const TWINKLE_RATE = 48; // rad per unit of normalized life
 const TWINKLE_DEPTH = 0.35; // how much a streak flickers at the end of its life
 const GLITTER_IN = 0.18; // glitter fades in over the first 18 % of the volley
-const SPIN_PER_SECOND = 0.06 * 60; // glitter spin: ±0.03 rad per frame at 60 fps, as rad per second of age
+const SPIN_PER_SECOND = 0.06 * 60 * 1.35; // glitter spin: ±0.03 rad per frame at 60 fps, 35 % faster, per second of age
 const GOLD = 0xffd966;
 const WHITE = 0xffffff;
 
