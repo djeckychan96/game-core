@@ -4,14 +4,16 @@
 //   ?parity=1  flat background, no dim: the check diffs the capture against Figma's render of modal/confirm-exit
 //   ?sheet=1   9-slice sheet: the Figma window shell and button surface at other sizes (no window)
 //   ?donor=1   the default variant as every existing game gets it: required pack only, no `include`
+//   ?skin=1    Style 1 chosen once in the game's Ready UI config (`theme: { skin }` + `loadReadyUiAssets({ skin })`), no variant
 import { Application, Container, Text } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
-import { CONFIRM_EXIT_FIGMA_TEXTURES, ConfirmWindowView, READY_UI_NINE_SLICES, UiButton, createNineSlice, loadReadyUiAssets, resolveTheme } from 'game-core/pixi';
+import { CONFIRM_EXIT_FIGMA_TEXTURES, ConfirmWindowView, READY_UI_NINE_SLICES, READY_UI_STYLE_1, UiButton, createNineSlice, loadReadyUiAssets, resolveTheme } from 'game-core/pixi';
 
 const params = new URLSearchParams(location.search);
 const parity = params.has('parity');
 const sheet = params.has('sheet');
 const donor = params.has('donor');
+const styled = params.has('skin');
 const COPY = {
   en: { title: 'ARE YOU SURE?', body: 'YOU WILL LOSE 1 HEART', confirmLabel: 'EXIT' }, // the Figma copy
   ru: { title: 'ВЫ УВЕРЕНЫ?', body: 'Вы потеряете 1 жизнь', confirmLabel: 'ВЫХОД' } // SoliPix (donor ru.json)
@@ -30,9 +32,11 @@ core.registerRuntime('ui', ui);
 core.registerRuntime('motion', motion);
 app.ticker.add((ticker) => core.update(ticker.deltaMS));
 // the Figma confirm skin is requested explicitly: only then are its textures loaded (and a missing one fails)
-const textures = await loadReadyUiAssets(donor ? { baseUrl: './pixi-ui/' } : { baseUrl: './pixi-ui/', include: CONFIRM_EXIT_FIGMA_TEXTURES });
+// (?skin=1: the game's Ready UI style, the one place it is chosen — its files load here, the windows get it as theme)
+const READY_UI_THEME = { skin: READY_UI_STYLE_1 };
+const textures = await loadReadyUiAssets(donor ? { baseUrl: './pixi-ui/' } : styled ? { baseUrl: './pixi-ui/', skin: READY_UI_THEME.skin } : { baseUrl: './pixi-ui/', include: CONFIRM_EXIT_FIGMA_TEXTURES });
 const { windowBase, buttonGreen } = textures;
-if (!donor && (!windowBase || !buttonGreen)) throw new Error('confirm demo: include did not load the Figma 9-slice art');
+if (!donor && !styled && (!windowBase || !buttonGreen)) throw new Error('confirm demo: include did not load the Figma 9-slice art');
 const theme = resolveTheme();
 const events: string[] = [];
 
@@ -46,7 +50,7 @@ const rectOf = (node: Container): Rect => {
 let view: ConfirmWindowView | null = null;
 if (!sheet) {
   view = new ConfirmWindowView({
-    ui, motion, textures, id: 'exit-confirm', ...(donor ? {} : { variant: 'figma' as const }), ...copy,
+    ui, motion, textures, id: 'exit-confirm', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }), ...copy,
     ...(parity ? { backdropAlpha: 0 } : {}),
     onConfirm: () => events.push('confirm'),
     onDismiss: (reason) => events.push(`dismiss:${reason}`)

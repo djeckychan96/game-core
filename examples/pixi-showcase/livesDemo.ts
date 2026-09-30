@@ -5,13 +5,15 @@
 //   ?state=full      lives at the cap: MAX, REFILL disabled
 //   ?state=noad      no ad offer: REFILL alone, centred
 //   ?parity=1        flat background, no dim, the Figma values: the check diffs the capture against Figma's render
+//   ?skin=1          Style 1 chosen once in the game's Ready UI config (`theme: { skin }` + `loadReadyUiAssets({ skin })`), no variant
 import { Application, Container, Text } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
-import { LIVES_FIGMA_TEXTURES, LivesWindowView, loadReadyUiAssets, type LivesWindowParams } from 'game-core/pixi';
+import { LIVES_FIGMA_TEXTURES, LivesWindowView, READY_UI_STYLE_1, loadReadyUiAssets, type LivesWindowParams } from 'game-core/pixi';
 
 const params = new URLSearchParams(location.search);
 const parity = params.has('parity');
 const donor = params.has('donor');
+const styled = params.has('skin');
 const state = params.get('state');
 // EN = the Figma copy. RU: title / next = SoliPix's LIVES_WORDS; REFILL / GET / MAX = demo copy (no game has them yet)
 const COPY = {
@@ -35,11 +37,13 @@ core.registerRuntime('ui', ui);
 core.registerRuntime('motion', motion);
 app.ticker.add((ticker) => core.update(ticker.deltaMS));
 // the Figma Lives skin is requested explicitly: only then are its textures loaded (and a missing one fails)
-const textures = await loadReadyUiAssets(donor ? { baseUrl: './pixi-ui/' } : { baseUrl: './pixi-ui/', include: LIVES_FIGMA_TEXTURES });
+// (?skin=1: the game's Ready UI style, the one place it is chosen — its files load here, the windows get it as theme)
+const READY_UI_THEME = { skin: READY_UI_STYLE_1 };
+const textures = await loadReadyUiAssets(donor ? { baseUrl: './pixi-ui/' } : styled ? { baseUrl: './pixi-ui/', skin: READY_UI_THEME.skin } : { baseUrl: './pixi-ui/', include: LIVES_FIGMA_TEXTURES });
 const events: string[] = [];
 
 const view = new LivesWindowView({
-  ui, motion, textures, id: 'lives', ...(donor ? {} : { variant: 'figma' as const }), ...copy,
+  ui, motion, textures, id: 'lives', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }), ...copy,
   ...(parity ? { backdropAlpha: 0 } : {}),
   onRefill: (p) => events.push(`refill:${p.lives}`),
   onWatchAd: (p) => events.push(`ad:${p.lives}`),

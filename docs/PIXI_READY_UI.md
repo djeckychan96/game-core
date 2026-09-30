@@ -291,6 +291,45 @@ land in `showcase-shots/ocean/`.
 text fill/stroke, backdrop color, level-map geometry (badge size, node scale, gap, focus boost,
 focus ratio) and the design box. It is deliberately small — the default looks right out of the box.
 
+### UI styles (UI Skin V1)
+
+A style is a typed **data package** (`ReadyUiSkin`, `src/pixi/skin.ts`): a stable `id`, its assets by
+semantic role (file + 9-slice caps), its text look (OUTSIDE stroke, shadow offset) and dim, and the
+layout of every window it `covers`. The window code is the same for every style. A game chooses one
+style, once, in its Ready UI config — the theme it gives every window and the loader:
+
+```ts
+import { ConfirmWindowView, LivesWindowView, READY_UI_STYLE_1, loadReadyUiAssets } from 'game-core/pixi';
+
+const READY_UI_THEME = { skin: READY_UI_STYLE_1 }; // the game's one style choice
+const textures = await loadReadyUiAssets({ baseUrl: './pixi-ui/', skin: READY_UI_THEME.skin });
+const readyUi = { ui, motion, textures, theme: READY_UI_THEME };
+new ConfirmWindowView({ ...readyUi, id: 'exit-confirm', onConfirm });
+new LivesWindowView({ ...readyUi, id: 'lives', onRefill, onWatchAd });
+```
+
+| Window | Style 1 (`READY_UI_STYLE_1`, id `style-1`) |
+| --- | --- |
+| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) |
+| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) |
+| Result, Settings, Shop, NoAds, StarterPack, HUD, LevelMap | not covered — donor look |
+
+- The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
+  package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_WINDOW_ROLES` lists the roles each
+  window draws.
+- Only the chosen style's files load, each strictly, cached as `game-core-ui:skin:<id>:<role>` (one
+  role in two styles never collides) and returned under `textures.skins[id]`. The required pack stays
+  the 71 textures; without `skin` nothing else is requested and `textures` has no `skins` key.
+- A covered window whose style lacks its layout, an asset for one of its roles, caps for a 9-slice
+  role or the loaded texture throws, naming what is missing — never a silent donor window.
+- No style → every window donor (unchanged). `variant: 'donor'` forces the donor art. The pre-style
+  `variant: 'figma'` keeps working: the theme's style when it covers the window, else Style 1, whose
+  textures may still come from `include: CONFIRM_EXIT_FIGMA_TEXTURES / LIVES_FIGMA_TEXTURES`
+  (`READY_UI_OPTIONAL_ASSET_FILES` / `READY_UI_NINE_SLICES` are Style 1's values under the old names).
+- Layout conventions are the Figma reads, kept as they are: Confirm boxes are window-local, Lives
+  boxes are frame coordinates. A style changes files, caps, text look, dim and boxes; adding, removing
+  or reordering a window's elements is still view code.
+
 ## Render quality (Retina)
 
 Both the donor and the showcase render at `resolution = min(max(devicePixelRatio, 1), 2)` with

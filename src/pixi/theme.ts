@@ -1,5 +1,6 @@
 // Minimal theme seam for the Pixi Ready UI kit (v0.4): colors, text style, a few spacings.
 // Deliberately small — the default theme is meant to look right out of the box.
+import type { ReadyUiSkin } from './skin';
 
 export interface ReadyUiTextTheme {
   /** CSS font family registered by loadReadyUiAssets (Fira Sans Black by default). */
@@ -49,6 +50,11 @@ export interface ReadyUiTheme {
   /** Portrait design box the kit lays out against (contain-fit, like the donor's 1080 × 2344). */
   designWidth: number;
   designHeight: number;
+  /**
+   * The game's Ready UI style (e.g. READY_UI_STYLE_1): the windows it covers draw with it, every other window keeps
+   * its donor look. Absent = every window donor. Its files load with `loadReadyUiAssets({ skin })`.
+   */
+  skin?: ReadyUiSkin;
 }
 
 export const DEFAULT_READY_UI_THEME: ReadyUiTheme = {
@@ -86,6 +92,7 @@ export type ReadyUiThemeOverrides = {
   levelMap?: Partial<ReadyUiLevelMapTheme>;
   designWidth?: number;
   designHeight?: number;
+  skin?: ReadyUiSkin;
 };
 
 /** Shallow-merges overrides over the default theme, one level deep per section. */
@@ -97,6 +104,7 @@ export function resolveTheme(overrides?: ReadyUiThemeOverrides): ReadyUiTheme {
     colors: { ...base.colors, ...(overrides.colors ?? {}) },
     levelMap: { ...base.levelMap, ...(overrides.levelMap ?? {}) },
     designWidth: overrides.designWidth ?? base.designWidth,
-    designHeight: overrides.designHeight ?? base.designHeight
+    designHeight: overrides.designHeight ?? base.designHeight,
+    ...(overrides.skin ? { skin: overrides.skin } : {})
   };
 }

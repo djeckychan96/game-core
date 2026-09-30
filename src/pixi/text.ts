@@ -48,19 +48,24 @@ export const FIGMA_TEXT_STROKE_OUTSIDE = 4;
 export const FIGMA_TEXT_SHADOW_Y = 4;
 
 /**
- * The Figma text look (theme font / fill / stroke color). Pixi strokes centred on the outline and fills over it,
- * so a stroke of 2 × FIGMA_TEXT_STROKE_OUTSIDE leaves exactly the Figma OUTSIDE width; the shadow pass draws
- * stroke + fill like Figma's drop shadow of a stroked text.
+ * The Figma text look (theme font / fill / stroke color; the OUTSIDE stroke and shadow offset of the style, Figma's
+ * 4 / 4 by default). Pixi strokes centred on the outline and fills over it, so a stroke of 2 × `strokeOutside` leaves
+ * exactly the Figma OUTSIDE width; the shadow pass draws stroke + fill like Figma's drop shadow of a stroked text.
  */
-export function createFigmaLabel(theme: ReadyUiTheme, text: string, fontSize: number): Text {
+export function createFigmaLabel(
+  theme: ReadyUiTheme,
+  text: string,
+  fontSize: number,
+  look: { strokeOutside: number; shadowY: number } = { strokeOutside: FIGMA_TEXT_STROKE_OUTSIDE, shadowY: FIGMA_TEXT_SHADOW_Y }
+): Text {
   return new Text({
     text,
     style: {
       fontFamily: theme.text.fontFamily,
       fontSize,
       fill: theme.text.fill,
-      stroke: { color: theme.text.strokeColor, width: FIGMA_TEXT_STROKE_OUTSIDE * 2, join: 'round' },
-      dropShadow: { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: FIGMA_TEXT_SHADOW_Y }
+      stroke: { color: theme.text.strokeColor, width: look.strokeOutside * 2, join: 'round' },
+      dropShadow: { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: look.shadowY }
     }
   });
 }

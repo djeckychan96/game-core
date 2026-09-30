@@ -1,5 +1,9 @@
 import { Assets, type Texture } from 'pixi.js';
 import type { NineSliceSpec } from './nineSlice';
+import { skinAssetAlias, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from './skin';
+import { READY_UI_STYLE_1 } from './skins/style1';
+
+const STYLE_1 = READY_UI_STYLE_1.assets;
 
 /**
  * Every texture the Ready UI kit draws with, keyed by a stable name. The files ship with the
@@ -93,60 +97,58 @@ export const READY_UI_ASSET_FILES = {
 /**
  * Kit textures outside the required pack: nothing requests them unless a host lists them in
  * `loadReadyUiAssets({ include })` for the feature that draws them (e.g. CONFIRM_EXIT_FIGMA_TEXTURES for the
- * Figma confirm-exit window, LIVES_FIGMA_TEXTURES for the Figma Lives window, WIN_CONFETTI_TEXTURES for the Result WIN confetti). Core's own pack ships them. The Figma confirm-exit art (docs/figma/confirm-exit,
- * rendered by `node scripts/figma-assets.mjs`): no text inside any of them.
+ * Figma confirm-exit window, LIVES_FIGMA_TEXTURES for the Figma Lives window, WIN_CONFETTI_TEXTURES for the Result WIN confetti). Core's own pack ships them.
+ * The Figma window art is Style 1's (READY_UI_STYLE_1 owns its files and caps; these are its pre-style kit names):
+ * no text inside any of them.
  */
 export const READY_UI_OPTIONAL_ASSET_FILES = {
-  /** Figma `ui/window/base`: the 9-slice window shell (surface/body + surface/header); caps in READY_UI_NINE_SLICES. */
-  windowBase: 'window/window_base@2x.webp',
-  /** The window's `action/close` glyph (its 51 × 51 SVG box). */
-  windowClose: 'window/window_close@2x.webp',
-  /** `surface/message-card`: the blurred glow behind a window's hero art. */
-  messageGlow: 'window/message_glow@0.5x.webp',
-  /** `art/broken-heart` (crack included, no "-1": the life delta is runtime text). */
-  brokenHeart: 'icons/broken_heart@2x.webp',
-  /** Figma `ui/button/surface` style=green: 9-slice; caps in READY_UI_NINE_SLICES. */
-  buttonGreen: 'button/button_green@2x.webp',
+  /** Style 1 `windowSurface` (Figma `ui/window/base`): the 9-slice window shell; caps in READY_UI_NINE_SLICES. */
+  windowBase: STYLE_1.windowSurface.file,
+  /** Style 1 `windowClose`: the window's `action/close` glyph (its 51 × 51 SVG box). */
+  windowClose: STYLE_1.windowClose.file,
+  /** Style 1 `heroGlow` (`surface/message-card`): the blurred glow behind a window's hero art. */
+  messageGlow: STYLE_1.heroGlow.file,
+  /** Style 1 `lifeLostArt` (`art/broken-heart`, crack included, no "-1": the life delta is runtime text). */
+  brokenHeart: STYLE_1.lifeLostArt.file,
+  /** Style 1 `buttonPrimary` (Figma `ui/button/surface` style=green): 9-slice; caps in READY_UI_NINE_SLICES. */
+  buttonGreen: STYLE_1.buttonPrimary.file,
   /** Trail Arrow's LevelComplete firework spark (128², additive): the Result WIN confetti. */
   fxSparkStar: 'fx/spark_star.webp',
   /** Trail Arrow's soft core glow (128², additive): the flash at the centre of each confetti burst. */
   fxGlowSoft: 'fx/glow_soft.webp',
   // Figma Lives (docs/figma/lives, `node scripts/figma-assets.mjs docs/figma/lives`): no text inside
-  /** Figma `ui/button/surface` style=orange: 9-slice; caps in READY_UI_NINE_SLICES. */
-  buttonOrange: 'button/button_orange@2x.webp',
-  /** The button's gold `surface/highlight` gradient (307 × 172), drawn over a surface's face. */
-  buttonHighlight: 'button/button_highlight@2x.webp',
-  /** A window's flat inner panel (Lives `section/next-life`): 9-slice; caps in READY_UI_NINE_SLICES. */
-  panelInset: 'window/panel_inset@2x.webp',
-  /** The Lives heart: the broken heart's art without the crack (the count is runtime text). */
-  livesHeart: 'icons/lives_heart@2x.webp',
-  /** Coin icon of a price (100 × 100). */
-  iconCoin: 'icons/icon_coin@2x.webp',
-  /** Heart icon of a reward (154 × 154; its "+1" is runtime text). */
-  iconHeart: 'icons/icon_heart@2x.webp',
-  /** Rewarded-ad clapper icon (128 × 134, the flattened `icon/reward` of the Lives screen). */
-  iconAd: 'icons/icon_ad@2x.webp'
+  /** Style 1 `buttonRewarded` (Figma `ui/button/surface` style=orange): 9-slice; caps in READY_UI_NINE_SLICES. */
+  buttonOrange: STYLE_1.buttonRewarded.file,
+  /** Style 1 `buttonHighlight`: the button's gold `surface/highlight` gradient (307 × 172), drawn over a surface's face. */
+  buttonHighlight: STYLE_1.buttonHighlight.file,
+  /** Style 1 `panelInset`: a window's flat inner panel (Lives `section/next-life`): 9-slice; caps in READY_UI_NINE_SLICES. */
+  panelInset: STYLE_1.panelInset.file,
+  /** Style 1 `lifeArt`: the Lives heart, the broken heart's art without the crack (the count is runtime text). */
+  livesHeart: STYLE_1.lifeArt.file,
+  /** Style 1 `priceIcon`: coin icon of a price (100 × 100). */
+  iconCoin: STYLE_1.priceIcon.file,
+  /** Style 1 `rewardIcon`: heart icon of a reward (154 × 154; its "+1" is runtime text). */
+  iconHeart: STYLE_1.rewardIcon.file,
+  /** Style 1 `adIcon`: rewarded-ad clapper icon (128 × 134, the flattened `icon/reward` of the Lives screen). */
+  iconAd: STYLE_1.adIcon.file
 } as const;
 
 export type ReadyUiTextureName = keyof typeof READY_UI_ASSET_FILES;
 export type ReadyUiOptionalTextureName = keyof typeof READY_UI_OPTIONAL_ASSET_FILES;
-export type ReadyUiTextures = Record<ReadyUiTextureName, Texture> & Partial<Record<ReadyUiOptionalTextureName, Texture>>;
+export type ReadyUiTextures = Record<ReadyUiTextureName, Texture> & Partial<Record<ReadyUiOptionalTextureName, Texture>> & {
+  /** Only after `loadReadyUiAssets({ skin })`: that style's role textures under its id (absent otherwise). */
+  skins?: Readonly<Record<string, ReadyUiSkinTextures>>;
+};
 
 /**
- * 9-slice caps of the stretchable kit textures, in texture (design) units, measured by `scripts/figma-assets.mjs`
- * on the Figma raster: the Figma @stretch insets plus the art's bleed, grown where an effect or a corner reaches
- * into the stretch area, plus an 8-unit uniform gutter at every seam so texture filtering never blends art into
- * the stretched centre (docs/figma/confirm-exit/README.md lists the numbers).
+ * 9-slice caps of the stretchable kit textures under their pre-style kit names: Style 1's caps (READY_UI_STYLE_1
+ * owns them — measured by `scripts/figma-assets.mjs` on the Figma raster, docs/figma/confirm-exit/README.md).
  */
 export const READY_UI_NINE_SLICES = {
-  /** Figma @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
-  windowBase: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } },
-  /** Figma @stretch 51 is short of the rounded corners and the shadow (they end at 59 / 61 / 59 / 81) + gutter 8. */
-  buttonGreen: { left: 67, top: 69, right: 67, bottom: 89 },
-  /** Same geometry as green (measured 59 / 61 / 59 / 81 on the Lives 507 × 207 surface) + gutter 8. */
-  buttonOrange: { left: 67, top: 69, right: 67, bottom: 89 },
-  /** No @stretch in Figma (a plain 900 × 382 rectangle): its 50 corners measured + gutter 8. */
-  panelInset: { left: 58, top: 58, right: 58, bottom: 58 }
+  windowBase: STYLE_1.windowSurface.nineSlice,
+  buttonGreen: STYLE_1.buttonPrimary.nineSlice,
+  buttonOrange: STYLE_1.buttonRewarded.nineSlice,
+  panelInset: STYLE_1.panelInset.nineSlice
 } as const satisfies Partial<Record<ReadyUiOptionalTextureName, NineSliceSpec>>;
 
 /** The kit's font file, also under `assets/pixi-ui/`. Registered as the theme's font family. */
@@ -165,6 +167,11 @@ export interface LoadReadyUiAssetsOptions {
    * Only these are requested, and each one must load: a missing file rejects, naming it. Default: none.
    */
   include?: readonly ReadyUiOptionalTextureName[];
+  /**
+   * The game's Ready UI style (e.g. READY_UI_STYLE_1): its assets load too — only this style's, each strictly — and
+   * land under `textures.skins[skin.id]` by role. Pass the same style as `theme: { skin }` to the windows. Default: none.
+   */
+  skin?: ReadyUiSkin;
 }
 
 const ALIAS_PREFIX = 'game-core-ui:';
@@ -186,10 +193,12 @@ function prepareTexture(texture: Texture): Texture {
  * Loads every kit texture (and the font) through Pixi Assets and returns them keyed by name.
  * Idempotent: repeated calls resolve from the Assets cache. The host owns the Pixi Application;
  * this only needs Assets, which works before or after `Application.init()`.
- * Only the required pack is requested by default; optional textures only when `include` lists them.
- * Any requested texture that fails rejects the load.
+ * Only the required pack is requested by default; optional textures only when `include` lists them, a style's
+ * assets only when `skin` names it (cached under that style's id). Any requested texture that fails rejects the load.
  */
 export async function loadReadyUiAssets(options: LoadReadyUiAssetsOptions = {}): Promise<ReadyUiTextures> {
+  const skin = options.skin;
+  if (skin) validateReadyUiSkin(skin); // a broken style package fails before anything is requested
   const baseUrl = options.baseUrl ?? './pixi-ui/';
   const names = Object.keys(READY_UI_ASSET_FILES) as ReadyUiTextureName[];
   const bundle = names.map((name) => ({
@@ -214,7 +223,20 @@ export async function loadReadyUiAssets(options: LoadReadyUiAssetsOptions = {}):
       throw new Error(`loadReadyUiAssets: "${name}" (${file}) was requested but did not load from ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`);
     });
   });
-  await Promise.all([...loads, ...optional]);
+  // the chosen style's assets, under its own alias namespace (a role of another style never answers from the cache)
+  const skinRoles: ReadyUiSkinRole[] = [];
+  const styled: Promise<Texture>[] = [];
+  if (skin) {
+    for (const role of Object.keys(skin.assets) as ReadyUiSkinRole[]) {
+      const file = skin.assets[role]?.file;
+      if (!file) continue;
+      skinRoles.push(role);
+      styled.push(Assets.load<Texture>({ alias: skinAssetAlias(skin.id, role), src: joinUrl(baseUrl, file) }).catch((error: unknown) => {
+        throw new Error(`loadReadyUiAssets: style '${skin.id}' "${role}" (${file}) was requested but did not load from ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`);
+      }));
+    }
+  }
+  await Promise.all([...loads, ...optional, ...styled]);
   const textures = {} as ReadyUiTextures;
   for (const name of names) {
     textures[name] = prepareTexture(Assets.get<Texture>(ALIAS_PREFIX + name));
@@ -224,6 +246,15 @@ export async function loadReadyUiAssets(options: LoadReadyUiAssetsOptions = {}):
     const texture = loaded[i];
     if (texture) textures[name] = prepareTexture(texture);
   });
+  if (skin) {
+    const roleTextures: ReadyUiSkinTextures = {};
+    const styledLoaded = await Promise.all(styled);
+    skinRoles.forEach((role, i) => {
+      const texture = styledLoaded[i];
+      if (texture) roleTextures[role] = prepareTexture(texture);
+    });
+    textures.skins = { [skin.id]: roleTextures };
+  }
   return textures;
 }
 

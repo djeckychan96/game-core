@@ -1,7 +1,8 @@
 import { CanvasTextMetrics, Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
-import { READY_UI_NINE_SLICES, READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName, type ReadyUiTextures } from './assets';
+import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
+import { resolveWindowSkin, selectWindowSkin, skinNineSlice, type ReadyUiSkin, type ReadyUiSkinBox, type WindowSkinLook } from './skin';
 import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel } from './text';
 import { UiButton } from './UiButton';
 
@@ -16,63 +17,24 @@ export interface LivesWindowParams {
   adOffer?: boolean;
 }
 
-type Box = { x: number; y: number; width: number; height: number };
-
 /**
- * Figma `screen/lives` (file CNcGCBj8IvUXrPd01FbChm, node 85:8944; the read is docs/figma/lives): boxes in the
- * design units of the 1080 × 2344 screen. Sprite boxes are the SVG export boxes (render bounds).
- */
-export const LIVES_FIGMA = {
-  screen: { width: 1080, height: 2344 },
-  /** ui/window/base 85:9689: the confirm-exit shell at 960 × 1059 */
-  window: { x: 60, y: 642, width: 960, height: 1059 },
-  /** overlay/dim 85:9387 */
-  backdrop: { color: 0x080b0d, alpha: 0.8 },
-  /** slot/title: CENTER / CENTER, Fira Sans Black 80 */
-  title: { x: 195, y: 676, width: 690, height: 104, fontSize: 80 },
-  /** action/close (its 51 × 51 SVG box) */
-  close: { x: 923, y: 703, width: 51, height: 51 },
-  /** section/next-life Rectangle 65858: flat #a2a0f4, radius 50 */
-  inset: { x: 90, y: 934, width: 900, height: 382 },
-  /** Group 377: the heart */
-  heart: { x: 152, y: 981, width: 326, height: 298 },
-  /** Group 378 "1": 150; the box is the hug box of "1", the count is centred on it */
-  count: { x: 272, y: 1036, width: 84, height: 180, fontSize: 150 },
-  /** NEXT HEART IN: 50, centre */
-  nextLabel: { x: 531, y: 1052, width: 442, height: 60, fontSize: 50 },
-  /** 24:15: 70, centre */
-  timer: { x: 531, y: 1115, width: 442, height: 84, fontSize: 70 },
-  /** action/refill-coins: ui/button/surface green */
-  refill: { x: 90, y: 1432, width: 371, height: 207 },
-  refillLabel: { x: 112, y: 1438, width: 331, height: 84, fontSize: 50 },
-  /** Frame 381: price text + 1 + coin, hugging, centred on the button, rows centred in 100 */
-  priceRow: { y: 1508, height: 100, gap: 1, fontSize: 64 },
-  coin: { width: 100, height: 100 },
-  /** action/rewarded-life: ui/button/surface orange + the gold highlight */
-  ad: { x: 483, y: 1432, width: 507, height: 207 },
-  adHighlight: { x: 491, y: 1437, width: 307, height: 172 },
-  adLabel: { x: 620, y: 1445, width: 233.199, height: 159, fontSize: 60 },
-  /** Group 385: the rewarded-ad clapper (render box) */
-  adIcon: { x: 511, y: 1448, width: 128, height: 134 },
-  rewardIcon: { x: 819, y: 1448, width: 154, height: 154 },
-  /** +1: LEFT, hugging */
-  rewardLabel: { x: 859, y: 1483, width: 68, height: 72, fontSize: 60 }
-} as const;
-
-/**
- * The textures of the `'figma'` variant. They are not in the required pack: a host that uses the variant requests
- * them with `loadReadyUiAssets({ include: LIVES_FIGMA_TEXTURES })`; nothing else ever loads them.
+ * The pre-style kit names of Style 1's Lives art: a host on the `variant: 'figma'` path requests them with
+ * `loadReadyUiAssets({ include: LIVES_FIGMA_TEXTURES })`; a host with a style loads `{ skin }` instead.
  */
 export const LIVES_FIGMA_TEXTURES = [
   'windowBase', 'windowClose', 'buttonGreen', 'buttonOrange', 'buttonHighlight', 'panelInset', 'livesHeart', 'iconCoin', 'iconHeart', 'iconAd'
 ] as const satisfies readonly ReadyUiOptionalTextureName[];
 
-/** `'donor'`: the Trail Arrow RefillHearts art (required pack). `'figma'`: the Figma Lives window. */
+/** `'donor'`: the Trail Arrow RefillHearts art (required pack). `'figma'`: drawn by a Ready UI style (Style 1 = the Figma Lives window). */
 export type LivesWindowVariant = 'donor' | 'figma';
 
 export interface LivesWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   id?: string;
-  /** Default `'donor'`, unchanged; `'figma'` needs LIVES_FIGMA_TEXTURES in `textures`. */
+  /**
+   * Per-window override of the theme's style. Omitted: `theme.skin` when it covers `lives`, else the donor art
+   * (unchanged). `'donor'`: the donor art whatever the theme says. `'figma'`: the theme's style when it covers
+   * `lives`, else Style 1 (its textures from `{ skin }` or `include: LIVES_FIGMA_TEXTURES`).
+   */
   variant?: LivesWindowVariant;
   /** Default `REFILL HEARTS!` */
   title?: string;
@@ -82,45 +44,47 @@ export interface LivesWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   refillLabel?: string;
   /** Capsule text when lives are full. Default `MAX` */
   fullLabel?: string;
-  /** `'figma'` only: the rewarded button's word. Default `GET`. */
+  /** Styled only: the rewarded button's word. Default `GET`. */
   adLabel?: string;
-  /** `'figma'` only: the reward on its heart icon. Default `+1` (the donor bakes it into its art). */
+  /** Styled only: the reward on its icon. Default `+1` (the donor bakes it into its art). */
   adRewardLabel?: string;
   /** Close continuations. */
   onRefill: (params: LivesWindowParams) => void;
   onWatchAd?: (params: LivesWindowParams) => void;
 }
 
-const F = LIVES_FIGMA;
-/** Figma screen x / y → panel units (the Figma variant's panel origin is the screen centre). */
-const X = (x: number): number => x - F.screen.width / 2;
-const Y = (y: number): number => y - F.screen.height / 2;
-const panelBox = (b: Box): Box => ({ x: X(b.x), y: Y(b.y), width: b.width, height: b.height });
-/** Figma screen box → a button's local units (its origin is the button centre). */
-const buttonBox = (button: Box, b: Box): Box => ({ x: b.x - button.x - button.width / 2, y: b.y - button.y - button.height / 2, width: b.width, height: b.height });
-type FigmaArt = Record<(typeof LIVES_FIGMA_TEXTURES)[number], Texture>;
+type LivesLook = WindowSkinLook<'lives'>;
 
-/** ModalWindow options per variant; the Figma variant fails here, before anything registers, when its art is absent. */
-function modalOptions(options: LivesWindowViewOptions): ModalWindowOptions {
+/** The style drawing this window (null = donor) with its layout and art; a missing piece fails here, before anything registers. */
+function livesLook(options: LivesWindowViewOptions): LivesLook | null {
+  const skin = selectWindowSkin('lives', options.variant, options.theme?.skin);
+  if (!skin) return null;
+  return resolveWindowSkin('LivesWindowView', 'lives', skin, options.textures, { variant: options.variant === 'figma', include: 'LIVES_FIGMA_TEXTURES' });
+}
+
+/** ModalWindow options: the donor's, or the style's dim and its window's share of the style frame. */
+function modalOptions(options: LivesWindowViewOptions, look: LivesLook | null): ModalWindowOptions {
   const id = options.id ?? 'lives-window';
-  if ((options.variant ?? 'donor') === 'donor') return { ...options, id };
-  const textures: ReadyUiTextures = options.textures;
-  const missing = LIVES_FIGMA_TEXTURES.filter((name) => !textures[name]);
-  if (missing.length) {
-    const list = missing.map((name) => `${name} (${READY_UI_OPTIONAL_ASSET_FILES[name]})`).join(', ');
-    throw new Error(`LivesWindowView variant 'figma': no ${list} in textures — load them with loadReadyUiAssets({ include: LIVES_FIGMA_TEXTURES })`);
-  }
+  if (!look) return { ...options, id };
+  const { skin, layout } = look;
   return {
     ...options,
     id,
-    backdropColor: options.backdropColor ?? F.backdrop.color,
-    backdropAlpha: options.backdropAlpha ?? F.backdrop.alpha,
-    // the Figma frame fit: the window's share of the 1080 × 2344 screen, like the kit's design contain-fit
-    fit: { widthRatio: F.window.width / F.screen.width, heightRatio: F.window.height / F.screen.height, ...(options.fit ?? {}) }
+    backdropColor: options.backdropColor ?? skin.backdrop.color,
+    backdropAlpha: options.backdropAlpha ?? skin.backdrop.alpha,
+    // the frame fit: the window's share of the style frame (1080 × 2344), like the kit's design contain-fit
+    fit: { widthRatio: layout.window.width / skin.frame.width, heightRatio: layout.window.height / skin.frame.height, ...(options.fit ?? {}) }
   };
 }
 
-function sprite(texture: Texture, b: Box): Sprite {
+/** Style frame x / y → panel units (the styled panel origin is the frame centre). */
+const X = (look: LivesLook, x: number): number => x - look.skin.frame.width / 2;
+const Y = (look: LivesLook, y: number): number => y - look.skin.frame.height / 2;
+const panelBox = (look: LivesLook, b: ReadyUiSkinBox): ReadyUiSkinBox => ({ x: X(look, b.x), y: Y(look, b.y), width: b.width, height: b.height });
+/** Frame box → a button's local units (its origin is the button centre). */
+const buttonBox = (button: ReadyUiSkinBox, b: ReadyUiSkinBox): ReadyUiSkinBox => ({ x: b.x - button.x - button.width / 2, y: b.y - button.y - button.height / 2, width: b.width, height: b.height });
+
+function sprite(texture: Texture, b: ReadyUiSkinBox): Sprite {
   const s = new Sprite(texture);
   s.position.set(b.x, b.y);
   s.width = b.width;
@@ -135,15 +99,19 @@ function sprite(texture: Texture, b: Box): Sprite {
  * panel, heart at x −261 with `n/max` inside, countdown on the right, REFILL with the coin price and a "+1 for an
  * ad" button at y 350, × at (416, −437)).
  *
- * `'figma'`: the Figma Lives window 1:1 (LIVES_FIGMA): the confirm-exit shell and the green / orange button surfaces
- * as 9-slices, the inner panel as a 9-slice, the heart and the coin / heart / ad icons as sprites; the count (the
- * lives, as Figma shows it), the countdown, the price and every label are runtime text in their Figma boxes.
+ * `'figma'` (a Ready UI style, `theme.skin` or the variant; Style 1 = the Figma Lives window 1:1): the window shell and
+ * the primary / rewarded button surfaces as the style's 9-slices, the inner panel as a 9-slice, the heart and the
+ * price / reward / ad icons as sprites; the count (the lives, as Figma shows it), the countdown, the price and every
+ * label are runtime text in the style's boxes.
  *
  * Both: the same params, actions and states — REFILL disabled at full lives, the ad button only when offered and
  * handled (REFILL then centred), `setTimer` while open, continuations after the close.
  */
 export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   readonly variant: LivesWindowVariant;
+  /** The Ready UI style drawing this window, or null (donor). */
+  readonly skin: ReadyUiSkin | null;
+  private readonly look: LivesLook | null;
   private readonly title: Text;
   private readonly countText: Text;
   private readonly nextLabel: Text;
@@ -151,7 +119,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   private readonly refillButton: UiButton;
   private readonly adButton: UiButton;
   private readonly priceText: Text;
-  /** 'figma' only: the coin that follows the price text (Figma auto-layout row). */
+  /** Styled only: the price icon that follows the price text (Figma auto-layout row). */
   private readonly priceCoin: Sprite | null;
   private readonly fullLabel: string;
   private readonly onRefill: (params: LivesWindowParams) => void;
@@ -159,56 +127,59 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   private params: LivesWindowParams | null = null;
 
   constructor(options: LivesWindowViewOptions) {
-    super(modalOptions(options));
-    this.variant = options.variant ?? 'donor';
+    const look = livesLook(options);
+    super(modalOptions(options, look));
+    this.variant = look ? 'figma' : 'donor';
+    this.skin = look?.skin ?? null;
+    this.look = look;
     this.onRefill = options.onRefill;
     this.onWatchAd = options.onWatchAd ?? null;
     this.fullLabel = options.fullLabel ?? 'MAX';
 
-    if (this.variant === 'figma') {
-      const t = this.textures as ReadyUiTextures & FigmaArt; // checked by modalOptions()
-      const surface = createNineSlice(t.windowBase, READY_UI_NINE_SLICES.windowBase, F.window.width, F.window.height);
-      surface.position.set(X(F.window.x + F.window.width / 2), Y(F.window.y + F.window.height / 2));
-      this.title = createFigmaLabel(this.theme, options.title ?? 'REFILL HEARTS!', F.title.fontSize);
-      placeFigmaLabel(this.title, { ...panelBox(F.title), align: 'center' });
+    if (look) {
+      const { skin, layout: L, art: A } = look;
+      const surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface'), L.window.width, L.window.height);
+      surface.position.set(X(look, L.window.x + L.window.width / 2), Y(look, L.window.y + L.window.height / 2));
+      this.title = createFigmaLabel(this.theme, options.title ?? 'REFILL HEARTS!', L.title.fontSize, skin.text);
+      placeFigmaLabel(this.title, { ...panelBox(look, L.title), align: 'center' });
       if (this.closeButton) {
-        this.closeButton.background.texture = t.windowClose;
-        this.closeButton.background.width = F.close.width;
-        this.closeButton.background.height = F.close.height;
+        this.closeButton.background.texture = A.windowClose;
+        this.closeButton.background.width = L.close.width;
+        this.closeButton.background.height = L.close.height;
       }
-      const inset = createNineSlice(t.panelInset, READY_UI_NINE_SLICES.panelInset, F.inset.width, F.inset.height);
-      inset.position.set(X(F.inset.x + F.inset.width / 2), Y(F.inset.y + F.inset.height / 2));
-      const heart = sprite(t.livesHeart, panelBox(F.heart));
-      this.countText = createFigmaLabel(this.theme, '5', F.count.fontSize);
-      this.nextLabel = createFigmaLabel(this.theme, options.nextLifeLabel ?? 'NEXT HEART IN', F.nextLabel.fontSize);
-      placeFigmaLabel(this.nextLabel, { ...panelBox(F.nextLabel), align: 'center' });
-      this.timerText = createFigmaLabel(this.theme, '00:00', F.timer.fontSize);
+      const inset = createNineSlice(A.panelInset, skinNineSlice(skin, 'panelInset'), L.inset.width, L.inset.height);
+      inset.position.set(X(look, L.inset.x + L.inset.width / 2), Y(look, L.inset.y + L.inset.height / 2));
+      const heart = sprite(A.lifeArt, panelBox(look, L.heart));
+      this.countText = createFigmaLabel(this.theme, '5', L.count.fontSize, skin.text);
+      this.nextLabel = createFigmaLabel(this.theme, options.nextLifeLabel ?? 'NEXT HEART IN', L.nextLabel.fontSize, skin.text);
+      placeFigmaLabel(this.nextLabel, { ...panelBox(look, L.nextLabel), align: 'center' });
+      this.timerText = createFigmaLabel(this.theme, '00:00', L.timer.fontSize, skin.text);
 
       this.refillButton = this.addButton(new UiButton({
-        ui: this.ui, id: `${this.id}:refill`, theme: this.theme, texture: t.buttonGreen, nineSlice: READY_UI_NINE_SLICES.buttonGreen,
-        width: F.refill.width, height: F.refill.height, pressScale: 0.9, onTap: () => this.finish('refill')
+        ui: this.ui, id: `${this.id}:refill`, theme: this.theme, texture: A.buttonPrimary, nineSlice: skinNineSlice(skin, 'buttonPrimary'),
+        width: L.refill.width, height: L.refill.height, pressScale: 0.9, onTap: () => this.finish('refill')
       }));
-      this.refillButton.position.set(X(F.refill.x + F.refill.width / 2), Y(F.refill.y + F.refill.height / 2));
-      const refillLabel = createFigmaLabel(this.theme, options.refillLabel ?? 'REFILL NOW!', F.refillLabel.fontSize);
-      placeFigmaLabel(refillLabel, { ...buttonBox(F.refill, F.refillLabel), align: 'center' });
-      this.priceText = createFigmaLabel(this.theme, '900', F.priceRow.fontSize);
-      this.priceCoin = sprite(t.iconCoin, { x: 0, y: 0, width: F.coin.width, height: F.coin.height });
+      this.refillButton.position.set(X(look, L.refill.x + L.refill.width / 2), Y(look, L.refill.y + L.refill.height / 2));
+      const refillLabel = createFigmaLabel(this.theme, options.refillLabel ?? 'REFILL NOW!', L.refillLabel.fontSize, skin.text);
+      placeFigmaLabel(refillLabel, { ...buttonBox(L.refill, L.refillLabel), align: 'center' });
+      this.priceText = createFigmaLabel(this.theme, '900', L.priceRow.fontSize, skin.text);
+      this.priceCoin = sprite(A.priceIcon, { x: 0, y: 0, width: L.coin.width, height: L.coin.height });
       this.refillButton.addChild(refillLabel, this.priceText, this.priceCoin);
 
       this.adButton = this.addButton(new UiButton({
-        ui: this.ui, id: `${this.id}:ad`, theme: this.theme, texture: t.buttonOrange, nineSlice: READY_UI_NINE_SLICES.buttonOrange,
-        width: F.ad.width, height: F.ad.height, pressScale: 0.9, onTap: () => this.finish('ad')
+        ui: this.ui, id: `${this.id}:ad`, theme: this.theme, texture: A.buttonRewarded, nineSlice: skinNineSlice(skin, 'buttonRewarded'),
+        width: L.ad.width, height: L.ad.height, pressScale: 0.9, onTap: () => this.finish('ad')
       }));
-      this.adButton.position.set(X(F.ad.x + F.ad.width / 2), Y(F.ad.y + F.ad.height / 2));
-      const adLabel = createFigmaLabel(this.theme, options.adLabel ?? 'GET', F.adLabel.fontSize);
-      placeFigmaLabel(adLabel, { ...buttonBox(F.ad, F.adLabel), align: 'center' });
-      const rewardLabel = createFigmaLabel(this.theme, options.adRewardLabel ?? '+1', F.rewardLabel.fontSize);
-      placeFigmaLabel(rewardLabel, { ...buttonBox(F.ad, F.rewardLabel), align: 'left' });
+      this.adButton.position.set(X(look, L.ad.x + L.ad.width / 2), Y(look, L.ad.y + L.ad.height / 2));
+      const adLabel = createFigmaLabel(this.theme, options.adLabel ?? 'GET', L.adLabel.fontSize, skin.text);
+      placeFigmaLabel(adLabel, { ...buttonBox(L.ad, L.adLabel), align: 'center' });
+      const rewardLabel = createFigmaLabel(this.theme, options.adRewardLabel ?? '+1', L.rewardLabel.fontSize, skin.text);
+      placeFigmaLabel(rewardLabel, { ...buttonBox(L.ad, L.rewardLabel), align: 'left' });
       // Figma order: the highlight over the face, GET, the heart icon and its "+1", the clapper on top
       this.adButton.addChild(
-        sprite(t.buttonHighlight, buttonBox(F.ad, F.adHighlight)), adLabel,
-        sprite(t.iconHeart, buttonBox(F.ad, F.rewardIcon)), rewardLabel,
-        sprite(t.iconAd, buttonBox(F.ad, F.adIcon))
+        sprite(A.buttonHighlight, buttonBox(L.ad, L.adHighlight)), adLabel,
+        sprite(A.rewardIcon, buttonBox(L.ad, L.rewardIcon)), rewardLabel,
+        sprite(A.adIcon, buttonBox(L.ad, L.adIcon))
       );
 
       // decoration never takes input: taps on it still land inside the panel's hit area (no backdrop close)
@@ -265,20 +236,22 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   }
 
   protected applyParams(params: LivesWindowParams): void {
-    if (this.variant === 'figma') {
+    const look = this.look;
+    if (look) {
+      const L = look.layout;
       this.params = params;
       const full = params.lives >= params.maxLives;
       this.countText.text = String(params.lives);
-      placeFigmaLabel(this.countText, { ...panelBox(F.count), align: 'center' });
+      placeFigmaLabel(this.countText, { ...panelBox(look, L.count), align: 'center' });
       this.timerText.text = full ? this.fullLabel : params.timerText ?? '';
-      placeFigmaLabel(this.timerText, { ...panelBox(F.timer), align: 'center' });
+      placeFigmaLabel(this.timerText, { ...panelBox(look, L.timer), align: 'center' });
       this.priceText.text = formatAmount(params.refillPrice);
-      this.layoutPrice();
+      this.layoutPrice(look);
       const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
       this.adButton.visible = showAd;
       this.adButton.setEnabled(showAd);
       this.refillButton.setEnabled(!full);
-      this.refillButton.x = showAd ? X(F.refill.x + F.refill.width / 2) : 0;
+      this.refillButton.x = showAd ? X(look, L.refill.x + L.refill.width / 2) : 0;
       return;
     }
     this.params = params;
@@ -299,26 +272,33 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     if (!this.params || this.params.lives >= this.params.maxLives) return;
     this.params.timerText = timerText;
     this.timerText.text = timerText;
-    if (this.variant === 'figma') placeFigmaLabel(this.timerText, { ...panelBox(F.timer), align: 'center' });
+    if (this.look) placeFigmaLabel(this.timerText, { ...panelBox(this.look, this.look.layout.timer), align: 'center' });
   }
 
-  /** 'figma': the Figma window box (the fit, the backdrop test and the hit area; not the art's bleed). 'donor': measured. */
+  /** Styled: the style's window box (the fit, the backdrop test and the hit area; not the art's bleed). Donor: measured. */
   protected override panelBounds(): Rectangle {
-    return this.variant === 'figma' ? new Rectangle(X(F.window.x), Y(F.window.y), F.window.width, F.window.height) : super.panelBounds();
+    const look = this.look;
+    if (!look) return super.panelBounds();
+    const w = look.layout.window;
+    return new Rectangle(X(look, w.x), Y(look, w.y), w.width, w.height);
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
-    return this.variant === 'figma' ? { x: X(F.close.x + F.close.width / 2), y: Y(F.close.y + F.close.height / 2) } : { x: 416, y: -437 };
+    const look = this.look;
+    if (!look) return { x: 416, y: -437 };
+    const c = look.layout.close;
+    return { x: X(look, c.x + c.width / 2), y: Y(look, c.y + c.height / 2) };
   }
 
-  /** 'figma': Frame 381 — the price text, a 1-unit gap and the coin, as one row centred on the REFILL button. */
-  private layoutPrice(): void {
+  /** Styled: Frame 381 — the price text, the gap and the price icon, as one row centred on the REFILL button. */
+  private layoutPrice(look: LivesLook): void {
     if (!this.priceCoin) return;
+    const L = look.layout;
     const advance = CanvasTextMetrics.measureText(this.priceText.text, this.priceText.style).lineWidths[0] ?? 0;
-    const left = -(advance + F.priceRow.gap + F.coin.width) / 2;
-    const top = F.priceRow.y - F.refill.y - F.refill.height / 2;
-    placeFigmaLabel(this.priceText, { x: left, y: top, width: advance, height: F.priceRow.height, align: 'left' });
-    this.priceCoin.position.set(left + advance + F.priceRow.gap, top);
+    const left = -(advance + L.priceRow.gap + L.coin.width) / 2;
+    const top = L.priceRow.y - L.refill.y - L.refill.height / 2;
+    placeFigmaLabel(this.priceText, { x: left, y: top, width: advance, height: L.priceRow.height, align: 'left' });
+    this.priceCoin.position.set(left + advance + L.priceRow.gap, top);
   }
 
   private finish(action: 'refill' | 'ad'): void {
