@@ -20,6 +20,10 @@
       "types": "./dist/platform/yandex/platform/adapters/yandex/index.d.ts",
       "import": "./dist/platform/yandex/game-core-platform-yandex.es.js"
     },
+    "./platform/cleverapps": {
+      "types": "./dist/platform/cleverapps/platform/adapters/cleverapps/index.d.ts",
+      "import": "./dist/platform/cleverapps/game-core-platform-cleverapps.es.js"
+    },
     "./qa": {
       "types": "./dist/qa/qa/index.d.ts",
       "import": "./dist/qa/game-core-qa.es.js"
@@ -32,10 +36,11 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && npm run build:qa && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs && node scripts/check-qa-build.mjs",
+    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && npm run build:platform-cleverapps && npm run build:qa && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs && node scripts/check-qa-build.mjs",
     "build:core": "vite build",
     "build:pixi": "vite build --config vite.pixi.config.ts",
     "build:platform-yandex": "vite build --config vite.platform-yandex.config.ts",
+    "build:platform-cleverapps": "vite build --config vite.platform-cleverapps.config.ts",
     "build:qa": "vite build --config vite.qa.config.ts",
     "showcase": "vite --config vite.showcase.config.ts",
     "showcase:build": "vite build --config vite.showcase.config.ts",
@@ -54,6 +59,7 @@
     "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",
+    "smoke:platform-cleverapps": "node scripts/platform-cleverapps-smoke.mjs",
     "figma:assets": "node scripts/figma-assets.mjs",
     "sync:word-tide": "node scripts/sync-word-tide.mjs",
     "ocean:compare": "node scripts/ocean-compare.mjs"

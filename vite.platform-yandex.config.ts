@@ -25,7 +25,12 @@ export default defineConfig({
     dts({
       rollupTypes: false,
       entryRoot: resolve(rootDir, 'src'),
-      include: ['src/platform', 'src/purchases/types.ts'],
+      include: [
+        'src/platform/adapters/yandex',
+        'src/platform/support',
+        'src/platform/types.ts',
+        'src/purchases/types.ts'
+      ],
       outDir: resolve(rootDir, 'dist/platform/yandex')
     })
   ]

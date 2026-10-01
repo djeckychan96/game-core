@@ -55,7 +55,7 @@ flowchart TB
 | Production | Gameplay Contract, `GameProductionProfile`, `SaveGate`, `SoftCurrencyWallet`, `AdsRuntime` + Ads Policy, `PurchaseRuntime`, `OfferRuntime`, `AnalyticsRuntime`, `PlatformRuntime` |
 | Ready UI (PixiJS 8) | HUD, карта уровней, окна Settings, Result, Shop, NoAds, Lives, StarterPack; для игр не на Pixi — прозрачный overlay поверх игры |
 | Foundation | `CoreRuntime`, `UiRuntime`, `MotionRuntime`, `FxRuntime` |
-| Платформы | DEV, Yandex Games |
+| Платформы | DEV, Yandex Games, CleverApps / Facebook |
 
 ## Проверено на реальных играх
 
@@ -145,6 +145,14 @@ LOC — справочная метрика размера SDK. Главные �
 Цель после этого:
 
 **чистый gameplay + короткий production spec → интеграция AI за один проход → production-сборка**
+
+## CleverApps / Facebook adapter
+
+Facebook-сборка импортирует `game-core/platform/cleverapps` и передаёт adapter в root `PlatformRuntime`.
+Host владеет vendor script: для Facebook Instant Games он кладёт локально закреплённый
+`connector.latest.js` в production build и загружает его до/во время bootstrap; Game Core не скачивает и
+не включает Connector в bundle. Client/server secrets остаются вне Core. V1 включает bootstrap, identity,
+environment, gameplay ready, cloud storage и ads; payments пока не реализованы.
 
 Остальной roadmap (платформы, stable release) — в [GAME_CORE_CURRENT.md](GAME_CORE_CURRENT.md).
 
