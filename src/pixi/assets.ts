@@ -1,6 +1,6 @@
 import { Assets, type Texture } from 'pixi.js';
 import type { NineSliceSpec } from './nineSlice';
-import { skinAssetAlias, skinFontAlias, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from './skin';
+import { skinAssetAlias, skinFontAlias, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinAssetKey, type ReadyUiSkinTextures } from './skin';
 import { READY_UI_STYLE_1 } from './skins/style1';
 
 const STYLE_1 = READY_UI_STYLE_1.assets;
@@ -225,10 +225,10 @@ export async function loadReadyUiAssets(options: LoadReadyUiAssetsOptions = {}):
     });
   });
   // the chosen style's assets, under its own alias namespace (a role of another style never answers from the cache)
-  const skinRoles: ReadyUiSkinRole[] = [];
+  const skinRoles: ReadyUiSkinAssetKey[] = [];
   const styled: Promise<Texture>[] = [];
   if (skin) {
-    for (const role of Object.keys(skin.assets) as ReadyUiSkinRole[]) {
+    for (const role of Object.keys(skin.assets) as ReadyUiSkinAssetKey[]) {
       const file = skin.assets[role]?.file;
       if (!file) continue;
       skinRoles.push(role);

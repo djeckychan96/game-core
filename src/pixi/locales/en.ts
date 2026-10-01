@@ -4,6 +4,7 @@ export const READY_UI_EN = Object.freeze({
   'core.confirm.title': 'ARE YOU SURE?',
   'core.confirm.lose_life': 'You will lose 1 heart',
   'core.confirm.exit': 'EXIT',
+  'core.confirm.restart': 'RESTART',
   'core.lives.title': 'REFILL HEARTS!',
   'core.lives.next': 'Next heart in',
   'core.lives.refill': 'REFILL',

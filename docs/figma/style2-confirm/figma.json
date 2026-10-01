@@ -1,0 +1,131 @@
+{
+ "about": "Figma source of truth for Game Core Style 2 (READY_UI_STYLE_2, id style-2): the Confirm window (ConfirmWindowView), Restart and Exit. Read 2026-10-02 through the Figma MCP: get_metadata, read-only use_figma dumps, get_screenshot (screens and the modal groups, contentsOnly). Coordinates are Figma units of the 1080 x 2344 screen frame; the window boxes are local to the window box (60, 675).",
+ "snapshot": {
+  "label": "provisional approved snapshot",
+  "date": "2026-10-02",
+  "note": "The artist is still working on Style 2: this is the approved state the current implementation follows, not a frozen style. To see what changed: re-read the node ids below (boxes, fills, text styles, main component keys) and re-render the screens / the modal groups, then diff against reference/ and against Style 1's docs/figma/confirm-exit/reference (see README.md)."
+ },
+ "source": {
+  "fileKey": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": {
+   "id": "8:17492",
+   "name": "theme_light_3"
+  },
+  "screens": [
+   {
+    "id": "8:22049",
+    "name": "попап рестарт",
+    "action": "restart",
+    "size": [1080, 2344],
+    "reference": {
+     "file": "reference/screen-8-22049@0.5x.webp",
+     "note": "Figma's 1x render (get_screenshot, 1080 x 2344 PNG, sha256 50453e60e60f2c2e...) downscaled to 0.5x, lossy WebP q90"
+    }
+   },
+   {
+    "id": "8:22069",
+    "name": "попап выйти",
+    "action": "exit",
+    "size": [1080, 2344],
+    "reference": {
+     "file": "reference/screen-8-22069@0.5x.webp",
+     "note": "Figma's 1x render (sha256 e10776003de9aff2...) downscaled to 0.5x, lossy WebP q90"
+    }
+   }
+  ]
+ },
+ "approvedNodes": [
+  {
+   "restart": "8:22050",
+   "exit": "8:22070",
+   "name": "Экран геймлея - бэк  для окон",
+   "type": "INSTANCE of 1:486 (remote, key a2897c90953aa618...)",
+   "box": [0, 0, 1080, 2344],
+   "core": "host context: the gameplay screen under the dim (not part of the skin)"
+  },
+  {
+   "restart": "8:22051",
+   "exit": "8:22071",
+   "name": "Rectangle 65853",
+   "box": [0, 0, 1080, 2344],
+   "fill": "#080b0d @ 0.8",
+   "core": "skin.backdrop (the Style 2 dim, unchanged)"
+  },
+  {
+   "restart": "8:22053",
+   "exit": "8:22073",
+   "name": "Component 9",
+   "type": "INSTANCE of 1:937 'Component 8' (remote library component, key 74018e0988594480f683ad805ad401877bd80d4a; master 960 x 1198) at 960 x 994",
+   "box": [60, 675, 960, 994],
+   "render": [56, 671, 968, 1006],
+   "children": {
+    "surface": "I…;73:5209 Rectangle 65855: #c3c1ff r80, stroke #261a30 4 OUTSIDE, inner shadow 0,-23 #a29ff4, drop shadow 0,4 #261a30",
+    "header": "I…;73:5210 Rectangle 65869: 960 x 175 #7453d5, inner shadow 0,-13 25%",
+    "title": "I…;73:5211: box 135, 34, 690 x 104, Fira Sans Black 80, white, stroke #000 4 OUTSIDE, drop shadow 0,4 #000, CENTER/CENTER, sample 'ARE YOU SURE?'",
+    "close": "I…;73:5212 Group 344 / Union: 50.52 glyph #47337f at 863, 61"
+   },
+   "core": "confirm:windowSurface + confirm:windowClose (Style 1's window_base@2x / window_close@2x) + runtime title"
+  },
+  {
+   "restart": "8:22054",
+   "exit": "8:22074",
+   "name": "Rectangle 218",
+   "box": [315, 906, 450, 354],
+   "render": [89.3, 680.3, 901.4, 805.4],
+   "fill": "#ed7199 r138, layer blur 225.7",
+   "core": "heroGlow (Style 1's message_glow@0.5x)"
+  },
+  {
+   "restart": "8:22055",
+   "exit": "8:22075",
+   "name": "Btn_base",
+   "type": "INSTANCE of 1:969 'Btn_base' (remote, key c26df14d08a4aeb7dae8a4c3ed1ec4b51da6a87b) with btn 1:260 'Property 1=green'",
+   "box": [240, 1400, 600, 206],
+   "children": {
+    "surface": "I…;337:27298: Rectangle 18 #029437 r51 stroke #261a30 4 + drop shadow 0,8 spread 3; Rectangle 19 #3cc31f r51 (584 x 171)",
+    "label": "I…;337:27322: Fira Sans Black 80, white, stroke 4 / shadow 4; 'RESTART' (8:22049) / 'EXIT' (8:22069) — the only difference between the two screens"
+   },
+   "core": "confirm:buttonPrimary (Style 1's button_green@2x) + runtime label by action (core.confirm.restart / core.confirm.exit)"
+  },
+  {
+   "restart": "8:22056",
+   "exit": "8:22076",
+   "name": "YOU WILL LOSE 1 HEART",
+   "box": [123, 1261, 834, 113],
+   "text": "Fira Sans Black 50, white, stroke 4 / shadow 4, CENTER/CENTER",
+   "core": "runtime body (core.confirm.lose_life)"
+  },
+  {
+   "restart": "8:22058 (in Group 413 8:22057)",
+   "exit": "8:22077",
+   "name": "Group 377 / 378 (broken heart: Group 170 + Vector 28 crack)",
+   "box": [387, 949, 305.4, 268],
+   "render": [377, 939, 325.4, 298],
+   "core": "lifeLostArt (Style 1's broken_heart@2x)"
+  },
+  {
+   "restart": "8:22068 (Group 377 8:22067)",
+   "exit": "8:22087 (Group 377 8:22086)",
+   "name": "-1",
+   "box": [603, 1020, 146, 180],
+   "text": "Fira Sans Black 150, white, stroke 4 / shadow 4, LEFT/CENTER, hug",
+   "core": "runtime lifeDelta ('-1' default)"
+  }
+ ],
+ "equivalence": {
+  "what": "The modal groups' own transparent renders (get_screenshot contentsOnly of Group 431 8:22052 / Group 432 8:22072, 968 x 1006) against Style 1's docs/figma/confirm-exit/reference/modal-820-77658@1x.png (file CNcGCBj8IvUXrPd01FbChm), over the opaque pixels",
+  "exit": "mean |Δ| 0.0, max 12, 4 pixels above 8 (the broken heart's edge): pixel-equivalent",
+  "restart": "identical outside the button label (mean 0.0, max 12); the label is RESTART instead of EXIT",
+  "conclusion": "Style 2's Confirm is the Style 1 window: no new file, Style 1's own entries are referenced (READY_UI_STYLE_1.assets.*), window-scoped (`confirm:*`) where the Style 2 Lives / Settings popup draws the same role"
+ },
+ "sampleValuesNotBaked": {
+  "copy": "ARE YOU SURE? / YOU WILL LOSE 1 HEART / RESTART / EXIT -> core.confirm.title / core.confirm.lose_life / core.confirm.restart / core.confirm.exit (or explicit options)",
+  "lifeDelta": "-1 -> the lifeDelta option (runtime text over the art)",
+  "background": "the gameplay screen under the dim -> host context"
+ },
+ "fonts": {
+  "figma": "Fira Sans Black (not Calibri: the window keeps the Style 1 type)",
+  "core": "the kit font (theme.text.fontFamily, FiraSans-Black) with 4 / 4 outside stroke and hard shadow: windows.confirm.text"
+ },
+ "assets": []
+}

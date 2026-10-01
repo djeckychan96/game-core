@@ -4,8 +4,8 @@ import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import { resolveWindowSkin, selectWindowSkin, skinNineSlice, type ReadyUiSkin, type ReadyUiSkinBox, type WindowSkinLook } from './skin';
-import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel } from './text';
+import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinLivesTextBox, type WindowSkinLook } from './skin';
+import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel, type FigmaTextLook } from './text';
 import { UiButton } from './UiButton';
 
 export interface LivesWindowParams {
@@ -86,6 +86,17 @@ const panelBox = (look: LivesLook, b: ReadyUiSkinBox): ReadyUiSkinBox => ({ x: X
 /** Frame box → a button's local units (its origin is the button centre). */
 const buttonBox = (button: ReadyUiSkinBox, b: ReadyUiSkinBox): ReadyUiSkinBox => ({ x: b.x - button.x - button.width / 2, y: b.y - button.y - button.height / 2, width: b.width, height: b.height });
 
+/** A text box's look: the style's, with the box's own fill / stroke over it. */
+function boxLook(look: FigmaTextLook, box: ReadyUiSkinLivesTextBox): FigmaTextLook {
+  const own: FigmaTextLook = { ...look };
+  if (box.fill !== undefined) own.fill = box.fill;
+  if (box.stroke) {
+    own.strokeOutside = box.stroke.width;
+    own.strokeColor = box.stroke.color;
+  }
+  return own;
+}
+
 function sprite(texture: Texture, b: ReadyUiSkinBox): Sprite {
   const s = new Sprite(texture);
   s.position.set(b.x, b.y);
@@ -140,46 +151,49 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
 
     if (look) {
       const { skin, layout: L, art: A } = look;
-      const surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface'), L.window.width, L.window.height);
+      const textLook = skinTextLook(skin);
+      const label = (text: string, box: ReadyUiSkinLivesTextBox): Text => createFigmaLabel(this.theme, text, box.fontSize, boxLook(textLook, box));
+      const surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface', 'lives'), L.window.width, L.window.height);
       surface.position.set(X(look, L.window.x + L.window.width / 2), Y(look, L.window.y + L.window.height / 2));
-      this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), L.title.fontSize, skin.text);
-      placeFigmaLabel(this.title, { ...panelBox(look, L.title), align: 'center' });
+      this.title = label(localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), L.title);
+      placeFigmaLabel(this.title, { ...panelBox(look, L.title), align: L.title.align ?? 'center' });
       if (this.closeButton) {
         this.closeButton.background.texture = A.windowClose;
         this.closeButton.background.width = L.close.width;
         this.closeButton.background.height = L.close.height;
       }
-      const inset = createNineSlice(A.panelInset, skinNineSlice(skin, 'panelInset'), L.inset.width, L.inset.height);
+      const inset = createNineSlice(A.panelInset, skinNineSlice(skin, 'panelInset', 'lives'), L.inset.width, L.inset.height);
       inset.position.set(X(look, L.inset.x + L.inset.width / 2), Y(look, L.inset.y + L.inset.height / 2));
       const heart = sprite(A.lifeArt, panelBox(look, L.heart));
-      this.countText = createFigmaLabel(this.theme, '5', L.count.fontSize, skin.text);
-      this.nextLabel = createFigmaLabel(this.theme, localizedText(options.nextLifeLabel, this.i18n, 'core.lives.next', READY_UI_LEGACY_TEXT.lives.styledNext), L.nextLabel.fontSize, skin.text);
-      placeFigmaLabel(this.nextLabel, { ...panelBox(look, L.nextLabel), align: 'center' });
-      this.timerText = createFigmaLabel(this.theme, '00:00', L.timer.fontSize, skin.text);
+      this.countText = label('5', L.count);
+      this.nextLabel = label(localizedText(options.nextLifeLabel, this.i18n, 'core.lives.next', READY_UI_LEGACY_TEXT.lives.styledNext), L.nextLabel);
+      placeFigmaLabel(this.nextLabel, { ...panelBox(look, L.nextLabel), align: L.nextLabel.align ?? 'center' });
+      this.timerText = label('00:00', L.timer);
 
       this.refillButton = this.addButton(new UiButton({
-        ui: this.ui, id: `${this.id}:refill`, theme: this.theme, texture: A.buttonPrimary, nineSlice: skinNineSlice(skin, 'buttonPrimary'),
+        ui: this.ui, id: `${this.id}:refill`, theme: this.theme, texture: A.buttonPrimary, nineSlice: skinNineSlice(skin, 'buttonPrimary', 'lives'),
         width: L.refill.width, height: L.refill.height, pressScale: 0.9, onTap: () => this.finish('refill')
       }));
       this.refillButton.position.set(X(look, L.refill.x + L.refill.width / 2), Y(look, L.refill.y + L.refill.height / 2));
-      const refillLabel = createFigmaLabel(this.theme, localizedText(options.refillLabel, this.i18n, 'core.lives.refill', READY_UI_LEGACY_TEXT.lives.styledRefill), L.refillLabel.fontSize, skin.text);
-      placeFigmaLabel(refillLabel, { ...buttonBox(L.refill, L.refillLabel), align: 'center' });
-      this.priceText = createFigmaLabel(this.theme, '900', L.priceRow.fontSize, skin.text);
+      const refillLabel = label(localizedText(options.refillLabel, this.i18n, 'core.lives.refill', READY_UI_LEGACY_TEXT.lives.styledRefill), L.refillLabel);
+      placeFigmaLabel(refillLabel, { ...buttonBox(L.refill, L.refillLabel), align: L.refillLabel.align ?? 'center' });
+      this.priceText = createFigmaLabel(this.theme, '900', L.priceRow.fontSize, textLook);
       this.priceCoin = sprite(A.priceIcon, { x: 0, y: 0, width: L.coin.width, height: L.coin.height });
       this.refillButton.addChild(refillLabel, this.priceText, this.priceCoin);
 
       this.adButton = this.addButton(new UiButton({
-        ui: this.ui, id: `${this.id}:ad`, theme: this.theme, texture: A.buttonRewarded, nineSlice: skinNineSlice(skin, 'buttonRewarded'),
+        ui: this.ui, id: `${this.id}:ad`, theme: this.theme, texture: A.buttonRewarded, nineSlice: skinNineSlice(skin, 'buttonRewarded', 'lives'),
         width: L.ad.width, height: L.ad.height, pressScale: 0.9, onTap: () => this.finish('ad')
       }));
       this.adButton.position.set(X(look, L.ad.x + L.ad.width / 2), Y(look, L.ad.y + L.ad.height / 2));
-      const adLabel = createFigmaLabel(this.theme, localizedText(options.adLabel, this.i18n, 'core.lives.ad_action', READY_UI_LEGACY_TEXT.lives.adAction), L.adLabel.fontSize, skin.text);
-      placeFigmaLabel(adLabel, { ...buttonBox(L.ad, L.adLabel), align: 'center' });
-      const rewardLabel = createFigmaLabel(this.theme, options.adRewardLabel ?? '+1', L.rewardLabel.fontSize, skin.text);
-      placeFigmaLabel(rewardLabel, { ...buttonBox(L.ad, L.rewardLabel), align: 'left' });
-      // Figma order: the highlight over the face, GET, the heart icon and its "+1", the clapper on top
+      const adLabel = label(localizedText(options.adLabel, this.i18n, 'core.lives.ad_action', READY_UI_LEGACY_TEXT.lives.adAction), L.adLabel);
+      placeFigmaLabel(adLabel, { ...buttonBox(L.ad, L.adLabel), align: L.adLabel.align ?? 'center' });
+      const rewardLabel = label(options.adRewardLabel ?? '+1', L.rewardLabel);
+      placeFigmaLabel(rewardLabel, { ...buttonBox(L.ad, L.rewardLabel), align: L.rewardLabel.align ?? 'left' });
+      // Figma order: the highlight over the face (when the style has one), GET, the heart icon and its "+1", the clapper on top
+      if (L.adHighlight) this.adButton.addChild(sprite(A.buttonHighlight, buttonBox(L.ad, L.adHighlight)));
       this.adButton.addChild(
-        sprite(A.buttonHighlight, buttonBox(L.ad, L.adHighlight)), adLabel,
+        adLabel,
         sprite(A.rewardIcon, buttonBox(L.ad, L.rewardIcon)), rewardLabel,
         sprite(A.adIcon, buttonBox(L.ad, L.adIcon))
       );
@@ -244,9 +258,9 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       this.params = params;
       const full = params.lives >= params.maxLives;
       this.countText.text = String(params.lives);
-      placeFigmaLabel(this.countText, { ...panelBox(look, L.count), align: 'center' });
+      placeFigmaLabel(this.countText, { ...panelBox(look, L.count), align: L.count.align ?? 'center' });
       this.timerText.text = full ? this.fullLabel : params.timerText ?? '';
-      placeFigmaLabel(this.timerText, { ...panelBox(look, L.timer), align: 'center' });
+      placeFigmaLabel(this.timerText, { ...panelBox(look, L.timer), align: L.timer.align ?? 'center' });
       this.priceText.text = formatAmount(params.refillPrice);
       this.layoutPrice(look);
       const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
@@ -274,7 +288,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     if (!this.params || this.params.lives >= this.params.maxLives) return;
     this.params.timerText = timerText;
     this.timerText.text = timerText;
-    if (this.look) placeFigmaLabel(this.timerText, { ...panelBox(this.look, this.look.layout.timer), align: 'center' });
+    if (this.look) placeFigmaLabel(this.timerText, { ...panelBox(this.look, this.look.layout.timer), align: this.look.layout.timer.align ?? 'center' });
   }
 
   /** Styled: the style's window box (the fit, the backdrop test and the hit area; not the art's bleed). Donor: measured. */
@@ -292,15 +306,16 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     return { x: X(look, c.x + c.width / 2), y: Y(look, c.y + c.height / 2) };
   }
 
-  /** Styled: Frame 381 — the price text, the gap and the price icon, as one row centred on the REFILL button. */
+  /** Styled: the price text, the gap and the price icon, as one row centred on the REFILL button (or the style's row centre). */
   private layoutPrice(look: LivesLook): void {
     if (!this.priceCoin) return;
     const L = look.layout;
     const advance = CanvasTextMetrics.measureText(this.priceText.text, this.priceText.style).lineWidths[0] ?? 0;
-    const left = -(advance + L.priceRow.gap + L.coin.width) / 2;
+    const centre = L.priceRow.x === undefined ? 0 : L.priceRow.x - L.refill.x - L.refill.width / 2;
+    const left = centre - (advance + L.priceRow.gap + L.coin.width) / 2;
     const top = L.priceRow.y - L.refill.y - L.refill.height / 2;
     placeFigmaLabel(this.priceText, { x: left, y: top, width: advance, height: L.priceRow.height, align: 'left' });
-    this.priceCoin.position.set(left + advance + L.priceRow.gap, top);
+    this.priceCoin.position.set(left + advance + L.priceRow.gap, L.coin.y === undefined ? top : L.coin.y - L.refill.y - L.refill.height / 2);
   }
 
   private finish(action: 'refill' | 'ad'): void {

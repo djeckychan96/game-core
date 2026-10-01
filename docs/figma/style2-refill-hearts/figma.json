@@ -1,0 +1,233 @@
+{
+ "about": "Figma source of truth for Game Core Style 2 (READY_UI_STYLE_2, id style-2): the Refill Hearts window (LivesWindowView). Read 2026-10-02 through the Figma MCP: get_metadata, read-only use_figma dumps, get_screenshot with contentsOnly (transparent renders), download_assets (raw image). Coordinates are Figma units of the 1080 x 2344 screen frame = Ready UI design units = the Lives layout's frame coordinates.",
+ "snapshot": {
+  "label": "provisional approved snapshot",
+  "date": "2026-10-02",
+  "note": "The artist is still working on Style 2: this is the approved state the current implementation follows, not a frozen style. To see what changed: re-read the node ids below (boxes, fills, text styles, main components) and re-render the screen / the leaf nodes, then diff against reference/ and png/ (see README.md)."
+ },
+ "source": {
+  "fileKey": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": {
+   "id": "8:17492",
+   "name": "theme_light_3"
+  },
+  "componentsSection": {
+   "id": "8:17503",
+   "name": "компоненты для художников"
+  },
+  "screen": {
+   "id": "8:22838",
+   "name": "screen_refill_hearts",
+   "size": [
+    1080,
+    2344
+   ],
+   "fill": {
+    "linear": [
+     "#483191",
+     "#274caf"
+    ],
+    "note": "the host background under the dim (not part of the skin)"
+   }
+  },
+  "reference": {
+   "node": "8:22838",
+   "file": "reference/screen-8-22838@0.5x.webp",
+   "note": "Figma's 1x render (get_screenshot, 1080 x 2344 PNG, sha256 770a7e952a8bb8c6...) downscaled to 0.5x, lossy WebP q90"
+  }
+ },
+ "approvedNodes": [
+  {
+   "id": "8:22839",
+   "name": "cover_bg",
+   "box": [0, 0, 1080, 2344],
+   "fill": "#080b0d @ 0.8",
+   "core": "skin.backdrop (the Style 2 dim, unchanged)"
+  },
+  {
+   "id": "8:22840",
+   "name": "popup",
+   "type": "INSTANCE of 8:17564 popup (popup_back 8:17585 + header_back 8:17569 + text + btn_close 8:17556), resized 1014 x 416 -> 960 x 1050",
+   "box": [60, 647, 960, 1050],
+   "render": [60, 598, 1005, 1099],
+   "children": {
+    "popup_back": "I8:22840;8:17565: #0099eb rect 946 x 1036 r70 at +7 (inner shadows 0,4 r4 #4db8fb / 0,-10 r3 25%, spread 6 20%) + white rect 892 x 970 r41 at 34, 34",
+    "header_back": "I8:22840;8:17566: 716 x 166 at 122, -49 (left + right constraints: the Settings header at 960 wide); gradient #0eabff -> #218cfe rect 702 x 152 r62",
+    "title": "I8:22840;8:17567: box 226, 645, 628 x 79 (popup-local 166, -2), Calibri Bold 65, white, CENTER/CENTER, sample 'REFILL HEARTS!'",
+    "btn_close": "I8:22840;8:17568: btn_main 136 at 918, 621 (btn_red I8:22840;8:17568;8:17557 rect 120 r41, icon_close I8:22840;8:17568;8:17558 158); render box 907, 610, 158 x 158 (its 5 right columns are empty)"
+   },
+   "core": "windowSurface (the Settings panel 9-slice, reused) + runtime title + windowClose (the Settings close, reused)"
+  },
+  {
+   "id": "8:22841",
+   "name": "frame_blur_bg",
+   "type": "INSTANCE of 8:17707 frame_blur_bg (800 x 520, not resized)",
+   "box": [140, 813, 800, 520],
+   "render": [0, 613, 1080, 920],
+   "children": "I8:22841;8:17708: #179cfe @ 0.3 rect r11500 (a stadium), layer blur 200; its render is clipped by the screen frame at x 0 / 1080 (edge alpha <= 3 / 255)",
+   "core": "panelInset (new: lives_glow@0.5x.webp, drawn at its render box, caps 0)"
+  },
+  {
+   "id": "8:22842",
+   "name": "icon_heart",
+   "box": [150, 904, 338, 338],
+   "children": {
+    "icon_heart_1": "8:22843: INSTANCE of 8:17643 icon_heart_1 (288 component, raster image fill 5232575458...) at 338",
+    "count": "8:22844 '56': box 219, 993, 200 x 160, Calibri Bold 140, white, stroke #9b170b 5 OUTSIDE, CENTER/CENTER"
+   },
+   "core": "lifeArt (icon_heart.webp, reused) + runtime lives count"
+  },
+  {
+   "id": "8:22845",
+   "name": "txt",
+   "box": [488, 882, 442, 390],
+   "children": {
+    "next": "8:22846 'Next heart in': box 488, 992, 442 x 85, Calibri Bold 70, #3f598c, CENTER/CENTER",
+    "timer": "8:22847 '24:15': box 488, 1077, 442 x 85, Calibri Bold 70, #3f598c, CENTER/CENTER"
+   },
+   "core": "runtime label (core.lives.next) + runtime timer (setTimer / MAX)"
+  },
+  {
+   "id": "8:22857",
+   "name": "btn_green (group)",
+   "box": [120, 1403, 354, 214],
+   "children": {
+    "surface": "8:22858 btn_green: INSTANCE of 8:17579 btn_green (214 component) at 354 x 214: rect 340 x 200 r41 at 7, 7, gradient #53cc3e -> #0d9d46, inner shadows 0,4 r4 #8ae866 / 0,-10 r3 25%, spread 6 20%",
+    "label": "8:22859 'REFILL NOW': box 144, 1431, 305.883 x 105, Calibri Bold 60, white, CENTER/CENTER",
+    "priceRow": "8:22860 Frame 1244 at 177.568, 1510, 223.398 x 80 (no auto-layout): '900' 8:22861 Calibri Bold 60 white at +40.432, +3 (92 x 73, hug), icon_coin 8:22862 46 x 46 at +137.432, +13 (gap 5); the content's centre is x 289.5"
+   },
+   "core": "buttonPrimary (new: button_primary.webp 9-slice) + runtime label (core.lives.refill) + runtime price + priceIcon (new: price_coin@2x.webp)"
+  },
+  {
+   "id": "8:22850",
+   "name": "btn_orange (group)",
+   "box": [500, 1403, 460, 214],
+   "children": {
+    "surface": "8:22851 btn_yellow: INSTANCE of 8:17631 btn_yellow (214 component) at 460 x 214: rect 446 x 200 r41 at 7, 7, gradient #f9b72b -> #ef6940, inner shadows 0,4 r4 #fbc628 / 0,-10 r3 25%, spread 6 20%",
+    "label": "8:22852 'GET': box 652, 1437, 162 x 146, Calibri Bold 60, white, CENTER/CENTER (Core: the free space 672..794 between the tv and the heart, same centre 733)",
+    "rewardIcon": "8:22854 icon_heart_1 (8:17643) at 810, 1446, 128 x 128",
+    "rewardLabel": "8:22855 '1': box 847, 1473, 50 x 70, Calibri Bold 59.733, white, stroke #9b170b 2 OUTSIDE, CENTER/CENTER",
+    "adIcon": "8:22856 icon_tv_1: INSTANCE of 8:17637 (288 component, raster image fill 0337448ab7...) at 522, 1435, 150 x 150"
+   },
+   "core": "buttonRewarded (new: button_rewarded.webp 9-slice) + runtime label (core.lives.ad_action) + rewardIcon (icon_heart.webp, reused) + runtime reward label + adIcon (new: icon_tv.webp); no highlight layer (adHighlight null)"
+  }
+ ],
+ "hostContext": [
+  {
+   "id": "8:22849",
+   "name": "icon_bar (hearts)",
+   "why": "the top resource HUD of the sample screen: HudView's (Style 2 hud), drawn by the host's screen, not by the popup"
+  },
+  {
+   "id": "8:22848",
+   "name": "icon_bar (coins)",
+   "why": "same: host HUD context"
+  },
+  {
+   "id": "8:22863",
+   "name": "iPhone",
+   "why": "the device frame mock-up (notch, home indicator): not UI"
+  }
+ ],
+ "sampleValuesNotBaked": {
+  "lives": "56 -> LivesWindowParams.lives (runtime count)",
+  "timer": "24:15 -> LivesWindowParams.timerText / setTimer() (MAX when full)",
+  "price": "900 -> LivesWindowParams.refillPrice (formatAmount)",
+  "reward": "1 -> the adRewardLabel option (default '+1')",
+  "hud": "9990 / 9990 in the top bars -> HudView values (host context)",
+  "copy": "REFILL HEARTS! / Next heart in / REFILL NOW / GET -> core.lives.title / core.lives.next / core.lives.refill / core.lives.ad_action (or explicit options)"
+ },
+ "reused": [
+  {
+   "role": "windowSurface",
+   "file": "style2/settings_panel.webp",
+   "from": "docs/figma/style2-settings (popup 8:17495): the same popup component; its 9-slice drawn at 960 x 1050 + the reused close over it vs render/popup-8-22840.png (title box excluded): mean |Δ| 0.09, max 31 at the ×'s lower-left over the header (the same max 31 as the Settings check)"
+  },
+  {
+   "role": "windowClose",
+   "file": "style2/settings_close.webp",
+   "from": "btn_close of 8:17495, 153 x 158 (its render box clipped by the Settings screen edge): the 5 columns it lacks are fully transparent in render/popup-8-22840.png"
+  },
+  {
+   "role": "lifeArt / rewardIcon",
+   "file": "style2/icon_heart.webp",
+   "from": "icon_heart_1 8:17643 (the 288 component render, the HUD's heart): drawn at 338 and 128 (338 upsamples the 288 raster 1.17x)"
+  },
+  {
+   "role": "font",
+   "file": "fonts/Carlito-Bold.woff",
+   "from": "Calibri Bold -> Carlito Bold (the Style 2 font)"
+  }
+ ],
+ "fonts": {
+  "figma": "Calibri Bold",
+  "core": "Carlito Bold (fonts/Carlito-Bold.woff, the Style 2 font)"
+ },
+ "rasters": "get_screenshot (contentsOnly) of plain-id nodes = Figma's own transparent render. The two button surfaces are top-level instances whose text / icons are siblings in their group, so their renders are the bare surfaces. The price coin is a plain rectangle with a 256 x 256 transparent raster fill (FILL on a square): its raw image (download_assets) is the source, drawn at 46 x 46 units, 2 px per unit.",
+ "assets": [
+  {
+   "key": "style2-button-primary",
+   "file": "style2/button_primary.webp",
+   "scale": 1,
+   "size": [354, 214],
+   "note": "btn_green 8:22858 (component 8:17579): a vertical gradient, so only the width stretches (top + bottom caps = the height minus the strip); the left / right caps = the r41 corner + 7 inset, grown to the measured edge + gutter",
+   "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+   "nineSlice": {
+    "figma": { "left": 48, "top": 103, "right": 48, "bottom": 103 },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 4
+   },
+   "layers": [
+    { "image": "png/btn-green-8-22858.png", "at": [0, 0], "size": [354, 214] }
+   ]
+  },
+  {
+   "key": "style2-button-rewarded",
+   "file": "style2/button_rewarded.webp",
+   "scale": 1,
+   "size": [460, 214],
+   "note": "btn_yellow 8:22851 (component 8:17631): the green button's geometry",
+   "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+   "nineSlice": {
+    "figma": { "left": 48, "top": 103, "right": 48, "bottom": 103 },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 4
+   },
+   "layers": [
+    { "image": "png/btn-yellow-8-22851.png", "at": [0, 0], "size": [460, 214] }
+   ]
+  },
+  {
+   "key": "style2-lives-glow",
+   "file": "style2/lives_glow@0.5x.webp",
+   "scale": 0.5,
+   "size": [1080, 920],
+   "note": "frame_blur_bg 8:22841: its render box 0, 613, 1080 x 920; the source is Figma's 1x render box-filtered 2 x 2 (premultiplied) to the 0.5x the texture keeps (a blur needs no more)",
+   "layers": [
+    { "image": "png/glow-8-22841@0.5x.png", "at": [0, 0], "size": [1080, 920] }
+   ]
+  },
+  {
+   "key": "style2-icon-tv",
+   "file": "style2/icon_tv.webp",
+   "scale": 1,
+   "size": [288, 288],
+   "note": "icon_tv_1 8:17637: the 288 component render (like the other Style 2 icons), drawn at 150",
+   "layers": [
+    { "image": "png/icon-tv-8-17637.png", "at": [0, 0], "size": [288, 288] }
+   ]
+  },
+  {
+   "key": "style2-price-coin",
+   "file": "style2/price_coin@2x.webp",
+   "scale": 2,
+   "size": [46, 46],
+   "note": "icon_coin 8:22862: its 256 x 256 raw image fill drawn at 46 units, 2 px per unit",
+   "layers": [
+    { "image": "png/coin-raw-8-22862.png", "at": [0, 0], "size": [46, 46] }
+   ]
+  }
+ ]
+}

@@ -4,6 +4,7 @@ export const READY_UI_RU = Object.freeze({
   'core.confirm.title': 'ВЫ УВЕРЕНЫ?',
   'core.confirm.lose_life': 'Вы потеряете 1 жизнь',
   'core.confirm.exit': 'ВЫХОД',
+  'core.confirm.restart': 'ЗАНОВО',
   'core.lives.title': 'ЖИЗНИ',
   'core.lives.next': 'Новая жизнь через',
   'core.lives.refill': 'ПОПОЛНИТЬ!',

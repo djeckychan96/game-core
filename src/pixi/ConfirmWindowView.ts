@@ -4,8 +4,8 @@ import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import { resolveWindowSkin, selectWindowSkin, skinNineSlice, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinConfirmLayout, type WindowSkinLook } from './skin';
-import { createFigmaLabel, createLabel, fitLabelWidth, placeFigmaLabel } from './text';
+import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinConfirmLayout, type WindowSkinLook } from './skin';
+import { createFigmaLabel, createLabel, fitLabelWidth, placeFigmaLabel, type FigmaTextLook } from './text';
 import { UiButton } from './UiButton';
 
 /**
@@ -16,6 +16,17 @@ export const CONFIRM_EXIT_FIGMA_TEXTURES = ['windowBase', 'windowClose', 'messag
 
 /** `'donor'`: the Trail Arrow ConfirmWindow art (required pack). `'figma'`: drawn by a Ready UI style (Style 1 = the Figma confirm-exit). */
 export type ConfirmWindowVariant = 'donor' | 'figma';
+
+/**
+ * What the one action does — it only picks the button's default copy (`core.confirm.exit` / `core.confirm.restart`);
+ * the host runs the action itself in `onConfirm`. Both use the same window and layout.
+ */
+export type ConfirmWindowAction = 'exit' | 'restart';
+
+const ACTION_LABEL = {
+  exit: { key: 'core.confirm.exit', legacy: READY_UI_LEGACY_TEXT.confirm.exit },
+  restart: { key: 'core.confirm.restart', legacy: READY_UI_LEGACY_TEXT.confirm.restart }
+} as const satisfies Record<ConfirmWindowAction, { key: string; legacy: string }>;
 
 export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   id?: string;
@@ -29,7 +40,9 @@ export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'>
   title?: string;
   /** Default `You will lose 1 heart` (donor `ui.confirm.body`) / `YOU WILL LOSE 1 HEART` (Figma slot/body). */
   body?: string;
-  /** Default `EXIT` (donor `ui.confirm.exit`, Figma slot/label). */
+  /** The action the button stands for (its default copy). Default `'exit'`. */
+  action?: ConfirmWindowAction;
+  /** Default by `action`: `EXIT` (donor `ui.confirm.exit`, Figma slot/label) / `RESTART`. */
   confirmLabel?: string;
   /** Styled only: default `-1` (slot/life-delta), runtime text over the life-lost art (the donor art bakes it in). */
   lifeDelta?: string;
@@ -69,7 +82,8 @@ function modalOptions(options: ConfirmWindowViewOptions, look: ConfirmLook | nul
 }
 
 /**
- * "Are you sure? You will lose 1 heart", in two variants.
+ * "Are you sure? You will lose 1 heart", in two variants; one window for every action that costs a life (`action`:
+ * exit or restart — only the default button copy differs, the host routes `onConfirm`).
  *
  * `'donor'` (default): the donor's ConfirmWindow (Trail Arrow `Confirm` prefab) 1:1 — the 968 × 1006 `confirmPanel`
  * art with the broken heart and its "-1" baked in, header at (6, −417), body at (16, 157), one 600 × 206 button at
@@ -84,6 +98,7 @@ function modalOptions(options: ConfirmWindowViewOptions, look: ConfirmLook | nul
  */
 export class ConfirmWindowView extends ModalWindow {
   readonly variant: ConfirmWindowVariant;
+  readonly action: ConfirmWindowAction;
   /** The Ready UI style drawing this window, or null (donor). */
   readonly skin: ReadyUiSkin | null;
   private readonly layout: ReadyUiSkinConfirmLayout | null;
@@ -104,7 +119,10 @@ export class ConfirmWindowView extends ModalWindow {
     this.variant = look ? 'figma' : 'donor';
     this.skin = look?.skin ?? null;
     this.layout = look?.layout ?? null;
+    this.action = options.action ?? 'exit';
     this.onConfirm = options.onConfirm;
+    const actionLabel = ACTION_LABEL[this.action];
+    const confirmText = localizedText(options.confirmLabel, this.i18n, actionLabel.key, actionLabel.legacy);
     const onTap = (): void => { this.close('button', () => this.onConfirm()); };
 
     if (!look) {
@@ -118,7 +136,7 @@ export class ConfirmWindowView extends ModalWindow {
       fitLabelWidth(this.body, 880);
       this.panel.addChild(this.title, this.body);
 
-      this.confirmButton = this.createButton('confirm', t.confirmButton, localizedText(options.confirmLabel, this.i18n, 'core.confirm.exit', READY_UI_LEGACY_TEXT.confirm.exit), onTap, 600, 206, 82, -9);
+      this.confirmButton = this.createButton('confirm', t.confirmButton, confirmText, onTap, 600, 206, 82, -9);
       if (this.confirmButton.labelText) fitLabelWidth(this.confirmButton.labelText, 520);
       this.confirmButton.y = 334;
       this.panel.addChild(this.confirmButton);
@@ -129,8 +147,10 @@ export class ConfirmWindowView extends ModalWindow {
     }
 
     const { skin, layout: L, art: A } = look;
-    this.surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface'), L.window.width, L.window.height);
-    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), L.title.fontSize, skin.text);
+    // the window's own text look (the kit font) or the style's
+    const text: FigmaTextLook = L.text ? { ...L.text } : skinTextLook(skin);
+    this.surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface', 'confirm'), L.window.width, L.window.height);
+    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), L.title.fontSize, text);
     placeFigmaLabel(this.title, { ...this.box(L.title), align: 'center' });
     if (this.closeButton) {
       this.closeButton.background.texture = A.windowClose;
@@ -144,22 +164,22 @@ export class ConfirmWindowView extends ModalWindow {
       id: `${this.id}:confirm`,
       theme: this.theme,
       texture: A.buttonPrimary,
-      nineSlice: skinNineSlice(skin, 'buttonPrimary'),
+      nineSlice: skinNineSlice(skin, 'buttonPrimary', 'confirm'),
       width: L.button.width,
       height: L.button.height,
       pressScale: 0.9,
       onTap
     }));
     this.confirmButton.position.set(px(L, L.button.x + L.button.width / 2), py(L, L.button.y + L.button.height / 2));
-    this.confirmLabel = createFigmaLabel(this.theme, localizedText(options.confirmLabel, this.i18n, 'core.confirm.exit', READY_UI_LEGACY_TEXT.confirm.exit), L.buttonLabel.fontSize, skin.text);
+    this.confirmLabel = createFigmaLabel(this.theme, confirmText, L.buttonLabel.fontSize, text);
     const label = L.buttonLabel;
     placeFigmaLabel(this.confirmLabel, { x: label.x - L.button.width / 2, y: label.y - L.button.height / 2, width: label.width, height: label.height, align: 'center' });
     this.confirmButton.addChild(this.confirmLabel);
 
-    this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, skin.text);
+    this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, text);
     placeFigmaLabel(this.body, { ...this.box(L.body), align: 'center' });
     this.heart = this.art(A.lifeLostArt, L.heart);
-    this.lifeDelta = createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, skin.text);
+    this.lifeDelta = createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, text);
     placeFigmaLabel(this.lifeDelta, { ...this.box(L.lifeDelta), align: 'left' });
 
     // Decorative layers never take input: the glow lies over the × and Pixi hit-tests every child of the interactive

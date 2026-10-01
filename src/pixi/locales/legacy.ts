@@ -7,7 +7,8 @@ export const READY_UI_LEGACY_TEXT = Object.freeze({
     title: READY_UI_EN['core.confirm.title'],
     donorBody: READY_UI_EN['core.confirm.lose_life'],
     styledBody: 'YOU WILL LOSE 1 HEART',
-    exit: READY_UI_EN['core.confirm.exit']
+    exit: READY_UI_EN['core.confirm.exit'],
+    restart: READY_UI_EN['core.confirm.restart']
   }),
   lives: Object.freeze({
     title: READY_UI_EN['core.lives.title'],

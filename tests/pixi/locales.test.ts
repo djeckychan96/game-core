@@ -7,6 +7,7 @@ const CORE_KEYS = [
   'core.common.max',
   'core.confirm.exit',
   'core.confirm.lose_life',
+  'core.confirm.restart',
   'core.confirm.title',
   'core.level_map.hard',
   'core.level_map.level',

@@ -350,8 +350,8 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 
 | View | Style 1 (`READY_UI_STYLE_1`, id `style-1`) | Style 2 (`READY_UI_STYLE_2`, id `style-2`) |
 | --- | --- | --- |
-| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) | not covered — donor |
-| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) | not covered — donor |
+| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) | covered — `theme_light_3` 8:22049 Restart / 8:22069 Exit: the Style 1 window (its own files, window-scoped `confirm:*`, the kit font with 4 / 4 stroke / shadow); one view, `action: 'restart' \| 'exit'` picks the copy (docs/figma/style2-confirm) |
+| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) | covered — `theme_light_3` 8:22838: the Settings popup, blur section, heart with the runtime count, green REFILL + price coin, orange GET + tv + heart "+1", no highlight (`adHighlight: null`) (docs/figma/style2-refill-hearts) |
 | SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts | covered — `theme_light_3` 8:17493: Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
@@ -360,7 +360,8 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
-  view can draw; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset. Confirm / Lives need all of their roles; for
+  view can draw; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset. Confirm / Lives need all of their roles
+  (Lives without `buttonHighlight` when its layout has no highlight); for
   Settings and the non-modal views the style's layout says which optional parts exist (no haptic toggle, OFF button
   art, a home icon; no gear, no HARD badge, no glow, its own locked-node art or map background), and
   `requiredSkinRoles(skin, view)` is what it must ship.
@@ -369,6 +370,10 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 - Behaviour never moves into a style: drag / fling / snap / focus / culling and the level spacing stay in the shared
   view code and `theme.levelMap` (the host's numbers; Style 2's Figma spacing is in
   docs/figma/style2-level-map-screen/README.md).
+- A style whose windows draw one role with different art gives a window its own asset under `'<window>:<role>'`
+  (`ReadyUiSkinWindowAssetKey`, e.g. Style 2's `'confirm:windowSurface'` = Style 1's violet shell while its Lives /
+  Settings popup is `windowSurface`): in that window it wins over the role. A window may also keep the kit's type
+  instead of the style's (`windows.confirm.text`), and a Lives text box may carry its own `fill` / `stroke` / `align`.
 - Only the chosen style's files load, each strictly, cached as `game-core-ui:skin:<id>:<role>` (one
   role in two styles never collides) and returned under `textures.skins[id]`. The required pack stays
   the 71 textures; without `skin` nothing else is requested and `textures` has no `skins` key.
@@ -478,6 +483,17 @@ SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:style2-settings   # the Sty
 Restart level, Return home and ×, and no Style 2 Settings request from the donor / Style 1 pages. Writes
 `showcase-shots/style2-settings/`.
 
+```bash
+SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:style2-windows   # the Style 2 Confirm + Refill Hearts proof
+```
+
+`examples/pixi-showcase/windows2.html` (`?window=restart|exit|refill`, `?figma=1` = the Figma sample copy and values
+as host data, `?locale=ru`, `?state=full|noad`) and `scripts/style2-windows-check.mjs`: region parity against Figma's
+renders of 8:22049 / 8:22069 / 8:22838 at 1080 × 2344, 390 × 844 next to Figma, EN / RU / full / no-ad, 320 × 568 and
+1280 × 800 shots, real taps (RESTART / EXIT run the host's action, × / backdrop dismiss, REFILL / GET report the
+params, the countdown ticks), and no Style 2 request from the donor / Style 1 pages. Writes
+`showcase-shots/style2-windows/`.
+
 ## Tests
 
 `tests/pixi/` runs the kit headlessly in Vitest (a tiny fake canvas 2D context behind Pixi's
@@ -503,7 +519,10 @@ background and top shadow (`bg/`), the Figma top bar (`hud/`), buttons (`button/
 settings panel/toggles/buttons (`settings/`), the no-ads and starter-pack panels, heroes, icons
 and the bulb (`offer/`), and Fira Sans Black. No runtime dependency on `trail_arrow/` remains.
 
-Style 2 (`style2/`, ~740 KB, loaded only with `skin: READY_UI_STYLE_2`) is Figma's own transparent renders of the
+Style 2 (`style2/`, ~870 KB, loaded only with `skin: READY_UI_STYLE_2`) is Figma's own transparent renders of the
 static leaf visuals of `theme_light_3` 8:23174 plus the raw sky image, the Settings art of 8:17493 (`settings_*`),
+the Refill Hearts leaves of 8:22838 (`button_primary`, `button_rewarded`, `lives_glow`, `icon_tv`, `price_coin`),
 and `fonts/Carlito-Bold.woff` (OFL 1.1, `fonts/Carlito-OFL.txt`); provenance and commands in
-docs/figma/style2-level-map-screen/README.md and docs/figma/style2-settings/README.md.
+docs/figma/style2-level-map-screen/README.md, docs/figma/style2-settings/README.md and
+docs/figma/style2-refill-hearts/README.md. Style 2's Confirm ships no file of its own: it draws Style 1's
+(docs/figma/style2-confirm/README.md).

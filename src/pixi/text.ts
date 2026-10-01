@@ -49,12 +49,14 @@ export interface FigmaTextSlot {
 export const FIGMA_TEXT_STROKE_OUTSIDE = 4;
 export const FIGMA_TEXT_SHADOW_Y = 4;
 
-/** A style's text look: OUTSIDE stroke and shadow offset (0 = none), and optionally its own font and fill. */
+/** A style's text look: OUTSIDE stroke and shadow offset (0 = none), and optionally its own font, fill and stroke colour. */
 export interface FigmaTextLook {
   strokeOutside: number;
   shadowY: number;
   fontFamily?: string;
   fill?: number;
+  /** Stroke and shadow colour; default the theme's. */
+  strokeColor?: number;
 }
 
 /**
@@ -70,8 +72,9 @@ export function createFigmaLabel(
   look: FigmaTextLook = { strokeOutside: FIGMA_TEXT_STROKE_OUTSIDE, shadowY: FIGMA_TEXT_SHADOW_Y }
 ): Text {
   const style: TextStyleOptions = { fontFamily: look.fontFamily ?? theme.text.fontFamily, fontSize, fill: look.fill ?? theme.text.fill };
-  if (look.strokeOutside > 0) style.stroke = { color: theme.text.strokeColor, width: look.strokeOutside * 2, join: 'round' };
-  if (look.shadowY > 0) style.dropShadow = { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: look.shadowY };
+  const color = look.strokeColor ?? theme.text.strokeColor;
+  if (look.strokeOutside > 0) style.stroke = { color, width: look.strokeOutside * 2, join: 'round' };
+  if (look.shadowY > 0) style.dropShadow = { color, alpha: 1, blur: 0, angle: Math.PI / 2, distance: look.shadowY };
   return new Text({ text, style });
 }
 

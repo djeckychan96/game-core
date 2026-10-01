@@ -1,12 +1,23 @@
 import type { ReadyUiSkin } from '../skin';
+import { READY_UI_STYLE_1 } from './style1';
+
+/** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
+const POPUP = {
+  file: 'style2/settings_panel.webp',
+  nineSlice: { left: 191, top: 167, right: 191, bottom: 88, pad: { left: 0, top: 49, right: 0, bottom: 0 } }
+} as const;
 
 /**
- * Style 2 — the artist's light-blue `theme_light_3` (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1 + Settings.
+ * Style 2 — the artist's light-blue `theme_light_3` (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1, Settings,
+ * Confirm and Refill Hearts.
  *
  * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from the approved `screen_gameplay_pc` 8:23174
- * (docs/figma/style2-level-map-screen), and `settings`, from the approved `настройки` 8:17493
- * (docs/figma/style2-settings). NOT COVERED — donor look: Confirm, Lives, Result, Shop, NoAds, StarterPack. The other
- * screens and the older variants that still lie in `theme_light_3` are not a source for this package.
+ * (docs/figma/style2-level-map-screen); `settings`, from the approved `настройки` 8:17493 (docs/figma/style2-settings);
+ * `confirm`, from the approved `попап рестарт` 8:22049 / `попап выйти` 8:22069 (docs/figma/style2-confirm); `lives`,
+ * from the approved `screen_refill_hearts` 8:22838 (docs/figma/style2-refill-hearts). NOT COVERED — donor look:
+ * Result, Shop, NoAds, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
+ * not a source for this package; every covered screen is a provisional approved snapshot (the artist may still
+ * change Style 2 — see each docs/figma folder).
  *
  * Units: every screen is 2344 high, like the kit's portrait design box, so the views' contain fit keeps Figma's sizes.
  * `frame` is the 1080 × 2344 mobile frame of 8:17493 — only the windows fit into it (the HUD, map, nav and PLAY lay
@@ -18,7 +29,7 @@ import type { ReadyUiSkin } from '../skin';
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings'],
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
@@ -56,7 +67,7 @@ export const READY_UI_STYLE_2 = {
      * Settings 8:17493: `popup_back` + `header_back` (no title, no close), the header 49 above the 1000 × 1050 box.
      * Caps measured on Figma's render (± its dither): the header and the corners stay, the white body stretches.
      */
-    settingsPanel: { file: 'style2/settings_panel.webp', nineSlice: { left: 191, top: 167, right: 191, bottom: 88, pad: { left: 0, top: 49, right: 0, bottom: 0 } } },
+    settingsPanel: POPUP,
     /** `btn_close` (btn_red + icon_close): its 153 × 158 render box. */
     settingsClose: { file: 'style2/settings_close.webp' },
     /** `btn_sound` 228: btn_blue + the icon (ON), btn_grey + the icon (OFF, the slash is `settingsOff`). */
@@ -70,13 +81,101 @@ export const READY_UI_STYLE_2 = {
     settingsBtnRestart: { file: 'style2/settings_btn_restart.webp' },
     settingsBtnHome: { file: 'style2/settings_btn_home.webp' },
     settingsIconRestart: { file: 'style2/settings_icon_restart.webp' },
-    settingsIconHome: { file: 'style2/settings_icon_home.webp' }
+    settingsIconHome: { file: 'style2/settings_icon_home.webp' },
+    /**
+     * Refill Hearts 8:22838: the `popup` instance is the Settings popup at 960 × 1050 (its header stretches with the
+     * width) — the same file and caps; its `btn_close` is the Settings close.
+     */
+    windowSurface: POPUP,
+    windowClose: { file: 'style2/settings_close.webp' },
+    /** `btn_green` 8:22858 / `btn_yellow` 8:22851 (the 214 components at 354 / 460 × 214): vertical gradients, only the width stretches. */
+    buttonPrimary: { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
+    buttonRewarded: { file: 'style2/button_rewarded.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
+    /** `frame_blur_bg` 8:22841: a soft blue blur, drawn whole at its render box (caps 0: it never stretches there). */
+    panelInset: { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, top: 0, right: 0, bottom: 0 } },
+    /** `icon_heart_1` 8:17643: the HUD heart, drawn at 338 (the lives count over it is runtime) and at 128 (the reward). */
+    lifeArt: { file: 'style2/icon_heart.webp' },
+    rewardIcon: { file: 'style2/icon_heart.webp' },
+    /** `icon_coin` 8:22862: the price coin (its own small raster, not the HUD coin). */
+    priceIcon: { file: 'style2/price_coin@2x.webp' },
+    /** `icon_tv_1` 8:17637: the rewarded-ad icon. */
+    adIcon: { file: 'style2/icon_tv.webp' },
+    /**
+     * Confirm 8:22049 / 8:22069 is the Style 1 window (`Component 8` 1:937, `Btn_base` 1:969, the broken heart): its
+     * render matches Style 1's confirm-exit reference (mean |Δ| 0.0), so it draws Style 1's own files — window-scoped
+     * where Lives draws the same role with the Style 2 popup art.
+     */
+    'confirm:windowSurface': READY_UI_STYLE_1.assets.windowSurface,
+    'confirm:windowClose': READY_UI_STYLE_1.assets.windowClose,
+    'confirm:buttonPrimary': READY_UI_STYLE_1.assets.buttonPrimary,
+    heroGlow: READY_UI_STYLE_1.assets.heroGlow,
+    lifeLostArt: READY_UI_STYLE_1.assets.lifeLostArt
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
   /** 8:17494: #080b0d at 0.8 over the screen. */
   backdrop: { color: 0x080b0d, alpha: 0.8 },
   windows: {
+    /**
+     * Confirm 8:22049 (RESTART) / 8:22069 (EXIT): one window, the button's copy is the host's action. The Style 1
+     * geometry (window-local, the window box at 60, 675) and the Style 1 type: Fira Sans Black with 4 units of outside
+     * stroke and a 4-unit hard shadow — the kit font, not Carlito.
+     */
+    confirm: {
+      window: { width: 960, height: 994 },
+      text: { strokeOutside: 4, shadowY: 4 },
+      title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+      close: { x: 863, y: 61, width: 51, height: 51 },
+      /** Rectangle 218 8:22054: 450 × 354 r138 under a 225.7 layer blur (its render box) */
+      glow: { x: 29.3, y: 5.3, width: 902, height: 806 },
+      /** Group 377 / 378: the broken heart (render box, 10 units of stroke / shadow bleed) */
+      heart: { x: 317.001, y: 264, width: 326, height: 298 },
+      /** "-1" 8:22068: Fira Sans Black 150, LEFT / CENTER */
+      lifeDelta: { x: 543, y: 345, width: 146, height: 180, fontSize: 150 },
+      /** "YOU WILL LOSE 1 HEART" 8:22056: 834 × 113, Fira Sans Black 50 */
+      body: { x: 63, y: 586, width: 834, height: 113, fontSize: 50 },
+      /** Btn_base 8:22055 */
+      button: { x: 180, y: 725, width: 600, height: 206 },
+      /** Frame 498 (button-local); "RESTART" / "EXIT" Fira Sans Black 80 */
+      buttonLabel: { x: 25, y: 27, width: 550, height: 128, fontSize: 80 }
+    },
+    /**
+     * Refill Hearts 8:22838: frame boxes (the popup box at 60, 647). Calibri Bold → Carlito: title / buttons white,
+     * "Next heart in" and the timer #3f598c, the lives count and the reward "+1" white with a #9b170b outside stroke.
+     * No highlight on the rewarded button. The top HUD of the sample screen is the host's HudView (context).
+     */
+    lives: {
+      window: { x: 60, y: 647, width: 960, height: 1050 },
+      /** the popup's title, popup-local 166, −2 */
+      title: { x: 226, y: 645, width: 628, height: 79, fontSize: 65 },
+      /** `btn_close` render box (popup-local 847, −37) */
+      close: { x: 907, y: 610, width: 153, height: 158 },
+      /** `frame_blur_bg` render box (the instance at 140, 813, 800 × 520, blur 200; clipped by the frame at 0 / 1080) */
+      inset: { x: 0, y: 613, width: 1080, height: 920 },
+      heart: { x: 150, y: 904, width: 338, height: 338 },
+      /** "56" 8:22844: Calibri Bold 140, stroke 5 */
+      count: { x: 219, y: 993, width: 200, height: 160, fontSize: 140, stroke: { width: 5, color: 0x9b170b } },
+      /** `txt` 8:22845 (vertical auto-layout, centred): "Next heart in" / "24:15", Calibri Bold 70 */
+      nextLabel: { x: 488, y: 992, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
+      timer: { x: 488, y: 1077, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
+      refill: { x: 120, y: 1403, width: 354, height: 214 },
+      /** "REFILL NOW" 8:22859: Calibri Bold 60 */
+      refillLabel: { x: 144, y: 1431, width: 305.883, height: 105, fontSize: 60 },
+      /** Frame 1244 8:22860: "900" 60 + 5 + the 46 coin (13 below the row top); the content's centre is 289.5, not the button's 297 */
+      priceRow: { x: 289.5, y: 1510, height: 80, gap: 5, fontSize: 60 },
+      coin: { width: 46, height: 46, y: 1523 },
+      ad: { x: 500, y: 1403, width: 460, height: 214 },
+      adHighlight: null,
+      /**
+       * "GET" 8:22852 (162 × 146 at 652, Calibri Bold 60): Figma's box runs under the tv (to 672) and the heart (from
+       * 810); the slot is the free space between them around the same centre 733, so a longer word shrinks, never hides.
+       */
+      adLabel: { x: 672, y: 1437, width: 122, height: 146, fontSize: 60 },
+      adIcon: { x: 522, y: 1435, width: 150, height: 150 },
+      rewardIcon: { x: 810, y: 1446, width: 128, height: 128 },
+      /** "1" 8:22855 (50 × 70 at 847, CENTER): the box widened to 100 around its centre 872, so "+1" fits; Calibri Bold 59.73, stroke 2 */
+      rewardLabel: { x: 822, y: 1473, width: 100, height: 70, fontSize: 59.733, stroke: { width: 2, color: 0x9b170b }, align: 'center' }
+    },
     /**
      * Settings 8:17493: boxes local to the popup box (40, 647 of the frame). The approved screen is the in-level one
      * (Restart level / Return home): `gameplay`. It has no haptic toggle. `map` (no game buttons) is not drawn in

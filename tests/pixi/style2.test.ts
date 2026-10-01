@@ -10,10 +10,13 @@ import { HudView } from '../../src/pixi/HudView';
 import { LevelMapScreen, type LevelMapScreenOptions } from '../../src/pixi/LevelMapScreen';
 import { LevelMapView } from '../../src/pixi/LevelMapView';
 import { SettingsWindowView, type SettingsWindowParams, type SettingsWindowViewOptions } from '../../src/pixi/SettingsWindowView';
+import { ConfirmWindowView, type ConfirmWindowViewOptions } from '../../src/pixi/ConfirmWindowView';
+import { LivesWindowView, type LivesWindowParams, type LivesWindowViewOptions } from '../../src/pixi/LivesWindowView';
+import { formatAmount } from '../../src/pixi/text';
 import type { UiButton } from '../../src/pixi/UiButton';
 import { loadReadyUiAssets, type ReadyUiTextures } from '../../src/pixi/assets';
 import { READY_UI_CATALOGS } from '../../src/pixi/locales';
-import { READY_UI_SKINS, READY_UI_SKIN_VIEW_ROLES, requiredSkinRoles, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_SKINS, READY_UI_SKIN_VIEW_ROLES, READY_UI_SKIN_WINDOW_ROLES, requiredSkinRoles, skinAssetKey, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinAssetKey, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
 import { READY_UI_STYLE_1 } from '../../src/pixi/skins/style1';
 import { READY_UI_STYLE_2 } from '../../src/pixi/skins/style2';
 import type { ReadyUiThemeOverrides } from '../../src/pixi/theme';
@@ -26,9 +29,9 @@ const STYLE_2_THEME: ReadyUiThemeOverrides = {
 };
 
 /** One labelled texture per role of `skin` (as `loadReadyUiAssets({ skin })` files them), on top of the white required pack. */
-function styled(kit: TestKit, skin: ReadyUiSkin = READY_UI_STYLE_2, drop: readonly ReadyUiSkinRole[] = []): ReadyUiTextures {
+function styled(kit: TestKit, skin: ReadyUiSkin = READY_UI_STYLE_2, drop: readonly ReadyUiSkinAssetKey[] = []): ReadyUiTextures {
   const roles: ReadyUiSkinTextures = {};
-  for (const role of Object.keys(skin.assets) as ReadyUiSkinRole[]) if (!drop.includes(role)) roles[role] = labelled(`${skin.id}:${role}`);
+  for (const role of Object.keys(skin.assets) as ReadyUiSkinAssetKey[]) if (!drop.includes(role)) roles[role] = labelled(`${skin.id}:${role}`);
   return { ...kit.textures, skins: { [skin.id]: roles } };
 }
 
@@ -113,14 +116,16 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(pixiEntry.READY_UI_STYLE_2).toBe(READY_UI_STYLE_2);
     expect(READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1, 'style-2': READY_UI_STYLE_2 });
     expect(READY_UI_STYLE_2.id).toBe('style-2');
-    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings']);
+    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives']);
     expect(() => validateReadyUiSkin(READY_UI_STYLE_2)).not.toThrow();
     const assetsDir = resolve(rootDir, 'assets/pixi-ui');
     for (const [role, asset] of Object.entries(READY_UI_STYLE_2.assets)) expect(existsSync(resolve(assetsDir, asset.file)), `${role} -> ${asset.file}`).toBe(true);
     expect(existsSync(resolve(assetsDir, READY_UI_STYLE_2.font.file))).toBe(true);
     expect(readFileSync(resolve(assetsDir, 'fonts/Carlito-OFL.txt'), 'utf8')).toMatch(/Reserved Font Name "Carlito"[\s\S]*SIL OPEN FONT LICENSE Version 1.1/);
-    // every Style 2 file lives under its own folder: nothing of Style 1 or the donor pack is replaced
-    for (const asset of Object.values(READY_UI_STYLE_2.assets)) expect(asset.file.startsWith('style2/')).toBe(true);
+    // every Style 2 file lives under its own folder, or is one of Style 1's own entries shared as is (the Confirm
+    // window): nothing of Style 1 or the donor pack is replaced
+    const style1Entries = Object.values(READY_UI_STYLE_1.assets);
+    for (const asset of Object.values(READY_UI_STYLE_2.assets)) expect(asset.file.startsWith('style2/') || style1Entries.includes(asset as never), asset.file).toBe(true);
   });
 
   it('roles a style must ship follow its layout: Style 1 unchanged, Style 2 without gear / HARD / glow art', () => {
@@ -650,9 +655,401 @@ describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView
       expect(requested.filter((src) => src.includes('style2/settings_'))).toEqual([]);
       requested.length = 0;
       const textures = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 });
-      expect(requested.filter((src) => src.includes('style2/settings_')).length).toBe(11);
+      // 11 Settings files; the popup and the close are also the Lives window's (one file, two roles)
+      expect(new Set(requested.filter((src) => src.includes('style2/settings_'))).size).toBe(11);
       expect(requested.filter((src) => src.includes('Carlito'))).toEqual(['./ui/fonts/Carlito-Bold.woff']);
       expect(Object.keys(textures.skins!['style-2']!)).toEqual(expect.arrayContaining(STYLE_2_SETTINGS_ROLES));
+    } finally {
+      load.mockRestore();
+      get.mockRestore();
+    }
+  });
+});
+
+// Style 2 windows: frame units (1080 × 2344) → panel units; the Lives panel origin is the frame centre, the Confirm
+// panel origin the window centre (the window box at 60, 675 sits centred in the frame, so both are (540, 1172)).
+const FX = (x: number): number => x - 540;
+const FY = (y: number): number => y - 1172;
+const within = (actual: number, expected: number, what?: string): void => expect(actual, what).toBeCloseTo(expected, 6);
+const i18nOf = (locale: string) => new LocalizationRuntime({ rawLocale: locale, supportedLocales: ['en', 'ru'], defaultLocale: 'en', catalogs: READY_UI_CATALOGS });
+
+describe('Style 2 — Confirm (Restart 8:22049 / Exit 8:22069) through the existing ConfirmWindowView', () => {
+  function confirmView(kit: TestKit, extra: Partial<ConfirmWindowViewOptions> = {}, log: string[] = [], textures = styled(kit)): ConfirmWindowView {
+    return new ConfirmWindowView({
+      ui: kit.ui, motion: kit.motion, textures, theme: { skin: READY_UI_STYLE_2 }, id: 'confirm',
+      onConfirm: () => log.push('confirm'), onDismiss: (reason) => log.push(`dismiss:${reason}`), ...extra
+    });
+  }
+  /** Every drawn layer as [texture, x, y, width, height] (+ the button positions): the layout signature of a window. */
+  function geometry(view: ConfirmWindowView): unknown[] {
+    const panel = field<Container>(view, 'panel');
+    const strip = (label: string) => label.replace(/^style-\d:(confirm:)?/, '');
+    const art = [...descendants(panel, NineSliceSprite), ...descendants(panel, Sprite)]
+      .map((sprite) => [strip(sprite.texture.source.label), sprite.x, sprite.y, sprite.width, sprite.height]);
+    const buttons = ['confirmButton', 'closeButton'].map((name) => { const b = field<UiButton>(view, name); return [name, b.x, b.y]; });
+    return [...art, ...buttons];
+  }
+
+  it('is part of the Style 2 package: covered, Style 1\'s own files (window-scoped where Lives draws the same role), Style 1 unchanged', () => {
+    expect(READY_UI_STYLE_2.covers).toContain('confirm');
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'confirm')).toEqual(READY_UI_SKIN_WINDOW_ROLES.confirm);
+    // the approved Style 2 Confirm IS the Style 1 window: the same file + caps objects, no duplicate under style2/
+    const A = READY_UI_STYLE_2.assets as ReadyUiSkin['assets'];
+    expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', 'windowSurface')).toBe('confirm:windowSurface');
+    expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', 'windowClose')).toBe('confirm:windowClose');
+    expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', 'buttonPrimary')).toBe('confirm:buttonPrimary');
+    expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', 'heroGlow')).toBe('heroGlow');
+    expect(A['confirm:windowSurface']).toBe(READY_UI_STYLE_1.assets.windowSurface);
+    expect(A['confirm:windowClose']).toBe(READY_UI_STYLE_1.assets.windowClose);
+    expect(A['confirm:buttonPrimary']).toBe(READY_UI_STYLE_1.assets.buttonPrimary);
+    expect(A.heroGlow).toBe(READY_UI_STYLE_1.assets.heroGlow);
+    expect(A.lifeLostArt).toBe(READY_UI_STYLE_1.assets.lifeLostArt);
+    // the same roles in Lives keep the Style 2 popup art (no window key there)
+    expect(skinAssetKey(READY_UI_STYLE_2, 'lives', 'windowSurface')).toBe('windowSurface');
+    expect(A.windowSurface?.file).toBe('style2/settings_panel.webp');
+    // Style 1 has no window keys and its Confirm needs the same roles as before
+    expect(Object.keys(READY_UI_STYLE_1.assets).some((key) => key.includes(':'))).toBe(false);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'confirm')).toEqual(['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary']);
+    // a window key must name a role of a covered window
+    const stray = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, 'lives:heroGlow': { file: 'x.webp' } } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(stray)).toThrow("ReadyUiSkin 'style-2': asset 'lives:heroGlow' names no role of a window the style covers");
+    const uncovered = { ...READY_UI_STYLE_2, covers: READY_UI_STYLE_2.covers.filter((view) => view !== 'confirm') } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(uncovered)).toThrow("ReadyUiSkin 'style-2': asset 'confirm:windowSurface' names no role of a window the style covers");
+    const noCaps = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, 'confirm:buttonPrimary': { file: 'button/button_green@2x.webp' } } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(noCaps)).toThrow("ReadyUiSkin 'style-2': role 'buttonPrimary' is drawn as a 9-slice but has no nineSlice caps");
+  });
+
+  it('Restart and Exit are ONE generic window: same class, same layout and art; only the action\'s copy differs', () => {
+    const kit = createKit();
+    const restart = confirmView(kit, { action: 'restart', id: 'restart' });
+    const exit = confirmView(kit, { id: 'exit' });
+    expect(restart).toBeInstanceOf(ConfirmWindowView);
+    expect(exit.constructor).toBe(restart.constructor);
+    expect([restart.action, exit.action]).toEqual(['restart', 'exit']);
+    expect([restart.skin, exit.skin]).toEqual([READY_UI_STYLE_2, READY_UI_STYLE_2]);
+    expect(geometry(restart)).toEqual(geometry(exit));
+    expect([field<Text>(restart, 'confirmLabel').text, field<Text>(exit, 'confirmLabel').text]).toEqual(['RESTART', 'EXIT']);
+    // drawn with Style 2's window keys: the Style 1 files under the style-2 id
+    expect(field<NineSliceSprite>(restart, 'surface').texture.source.label).toBe('style-2:confirm:windowSurface');
+    expect(field<UiButton>(restart, 'confirmButton').background.texture.source.label).toBe('style-2:confirm:buttonPrimary');
+    expect(field<UiButton>(restart, 'closeButton').background.texture.source.label).toBe('style-2:confirm:windowClose');
+    expect(field<Sprite>(restart, 'glow').texture.source.label).toBe('style-2:heroGlow');
+    expect(field<Sprite>(restart, 'heart').texture.source.label).toBe('style-2:lifeLostArt');
+    // the Style 1 geometry (8:22049 = the confirm-exit window) and the Style 1 type, not Carlito
+    const style1 = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 's1', onConfirm: () => {} });
+    expect(geometry(restart)).toEqual(geometry(style1));
+    const surface = field<NineSliceSprite>(restart, 'surface');
+    expect([surface.leftWidth, surface.topHeight, surface.rightWidth, surface.bottomHeight]).toEqual([92, 187, 92, 110]);
+    const b = surface.getLocalBounds();
+    expect([surface.x + b.x, surface.y + b.y, b.width, b.height]).toEqual([FX(56), FY(671), 968, 1006]);
+    expect([field<UiButton>(restart, 'confirmButton').x, field<UiButton>(restart, 'confirmButton').y]).toEqual([FX(540), FY(1503)]);
+    for (const name of ['title', 'body', 'lifeDelta', 'confirmLabel']) {
+      const style = field<Text>(restart, name).style;
+      expect(style.fontFamily, name).toBe('Firasans Black');
+      expect(style.fill, name).toBe(0xffffff);
+      expect(style.stroke, name).toMatchObject({ width: 8 });
+      expect(style.dropShadow, name).toMatchObject({ distance: 4 });
+    }
+    expect([field<number>(restart, 'backdropColor'), field<number>(restart, 'backdropAlpha')]).toEqual([0x080b0d, 0.8]);
+    for (const view of [restart, exit, style1]) view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('callbacks: the button runs the host\'s onConfirm after the close (restart / exit routing is the host\'s); × and backdrop cancel', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const restart = confirmView(kit, { action: 'restart', id: 'restart', onConfirm: () => log.push('restart-level') }, log);
+    const exit = confirmView(kit, { action: 'exit', id: 'exit', onConfirm: () => log.push('go-home') }, log);
+    restart.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(restart, 'confirmButton'), kit);
+    advance(kit.core, 300);
+    expect(restart.state).toBe('hidden');
+    exit.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(exit, 'confirmButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['restart-level', 'go-home']);
+    restart.show();
+    advance(kit.core, 400);
+    tap(field<UiButton>(restart, 'closeButton'), kit);
+    advance(kit.core, 300);
+    exit.show();
+    advance(kit.core, 400);
+    const backdrop = field<Container>(exit, 'backdrop');
+    backdrop.emit('pointertap', { target: backdrop } as never);
+    advance(kit.core, 300);
+    expect(log).toEqual(['restart-level', 'go-home', 'dismiss:button', 'dismiss:background']);
+    expect(kit.uiErrors).toEqual([]);
+    restart.destroy();
+    exit.destroy();
+  });
+
+  it('copy: explicit text wins, then the provider (RU / EN, the action\'s key), then the legacy default', () => {
+    const kit = createKit();
+    const copy = (view: ConfirmWindowView): string[] => ['title', 'body', 'confirmLabel', 'lifeDelta'].map((name) => field<Text>(view, name).text);
+    const cases: Array<[Partial<ConfirmWindowViewOptions>, string[]]> = [
+      [{ action: 'restart', i18n: i18nOf('ru') }, ['ВЫ УВЕРЕНЫ?', 'Вы потеряете 1 жизнь', 'ЗАНОВО', '-1']],
+      [{ action: 'exit', i18n: i18nOf('ru') }, ['ВЫ УВЕРЕНЫ?', 'Вы потеряете 1 жизнь', 'ВЫХОД', '-1']],
+      [{ action: 'restart', i18n: i18nOf('en') }, ['ARE YOU SURE?', 'You will lose 1 heart', 'RESTART', '-1']],
+      [{ i18n: i18nOf('en') }, ['ARE YOU SURE?', 'You will lose 1 heart', 'EXIT', '-1']],
+      [{ action: 'restart' }, ['ARE YOU SURE?', 'YOU WILL LOSE 1 HEART', 'RESTART', '-1']],
+      [{ action: 'restart', i18n: i18nOf('ru'), confirmLabel: 'ЕЩЁ РАЗ', title: 'ТОЧНО?' }, ['ТОЧНО?', 'Вы потеряете 1 жизнь', 'ЕЩЁ РАЗ', '-1']]
+    ];
+    for (const [options, expected] of cases) {
+      const view = confirmView(kit, options);
+      expect(copy(view), JSON.stringify({ ...options, i18n: options.i18n?.locale })).toEqual(expected);
+      view.destroy();
+    }
+    expect(READY_UI_CATALOGS.en['core.confirm.restart']).toBe('RESTART');
+    expect(READY_UI_CATALOGS.ru['core.confirm.restart']).toBe('ЗАНОВО');
+  });
+
+  it('isolation: no skin stays the donor window (the action still picks its copy), Style 1 stays Style 1; a missing Style 2 Confirm file fails clearly', () => {
+    const kit = createKit();
+    const donor = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), id: 'donor', action: 'restart', onConfirm: () => {} });
+    expect([donor.variant, donor.skin]).toEqual(['donor', null]);
+    expect(labels(donor).some((label) => label.startsWith('style-'))).toBe(false);
+    expect(field<UiButton>(donor, 'confirmButton').labelText?.text).toBe('RESTART');
+    donor.destroy();
+    const forcedDonor = confirmView(kit, { variant: 'donor', id: 'forced' });
+    expect(forcedDonor.skin).toBeNull();
+    forcedDonor.destroy();
+    const style1 = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 's1', onConfirm: () => {} });
+    expect(style1.skin).toBe(READY_UI_STYLE_1);
+    expect(field<NineSliceSprite>(style1, 'surface').texture.source.label).toBe('style-1:windowSurface');
+    expect(field<Text>(style1, 'confirmLabel').text).toBe('EXIT');
+    style1.destroy();
+    expect(() => confirmView(kit, {}, [], styled(kit, READY_UI_STYLE_2, ['confirm:windowSurface'])))
+      .toThrow("ConfirmWindowView style 'style-2': no windowSurface (window/window_base@2x.webp) in textures — load them with loadReadyUiAssets({ skin })");
+    expect(kit.ui.getStats().windows).toBe(0);
+  });
+});
+
+describe('Style 2 — Refill Hearts (8:22838) through the existing LivesWindowView', () => {
+  const PARAMS: LivesWindowParams = { lives: 3, maxLives: 5, timerText: '17:42', refillPrice: 1250 };
+  function livesView(kit: TestKit, extra: Partial<LivesWindowViewOptions> = {}, log: string[] = [], textures = styled(kit)): LivesWindowView {
+    return new LivesWindowView({
+      ui: kit.ui, motion: kit.motion, textures, theme: { skin: READY_UI_STYLE_2 }, id: 'lives',
+      onRefill: (p) => log.push(`refill:${p.lives}`), onWatchAd: (p) => log.push(`ad:${p.lives}`), onDismiss: (reason) => log.push(`dismiss:${reason}`), ...extra
+    });
+  }
+  function show(kit: TestKit, view: LivesWindowView, params: LivesWindowParams = PARAMS): LivesWindowView {
+    view.show(params);
+    advance(kit.core, 400);
+    return view;
+  }
+  const layer = (parent: Container, label: string) => parent.children.find((child) => (child as Sprite).texture?.source.label === label) as Sprite | NineSliceSprite | undefined;
+  /** A Carlito label's glyph run (no stroke unless the box has one): its centre in the parent's units. */
+  const runCentre = (label: Text): number => {
+    const stroke = (label.style.stroke as { width?: number } | null)?.width ?? 0;
+    const advanceWidth = label.text.length * (label.style.fontSize as number) * 0.56;
+    return label.x + label.scale.x * (stroke / 2 + advanceWidth / 2);
+  };
+
+  it('is part of the Style 2 package: covered, its roles follow the layout (no highlight art), the popup / close / heart reused, new files under style2/', () => {
+    expect(READY_UI_STYLE_2.covers).toContain('lives');
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'lives')).toEqual(['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon']);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'lives')).toEqual(READY_UI_SKIN_WINDOW_ROLES.lives);
+    expect(READY_UI_STYLE_2.windows.lives.adHighlight).toBeNull();
+    const A = READY_UI_STYLE_2.assets as ReadyUiSkin['assets'];
+    expect(A.buttonHighlight).toBeUndefined();
+    // reused: the Settings popup (same file + caps), the Settings close, the HUD heart
+    expect(A.windowSurface).toBe(A.settingsPanel);
+    expect(A.windowClose?.file).toBe(A.settingsClose?.file);
+    expect(A.lifeArt?.file).toBe(A.hudHeart?.file);
+    expect(A.rewardIcon?.file).toBe(A.hudHeart?.file);
+    // new leaves of 8:22838
+    expect([A.buttonPrimary, A.buttonRewarded, A.panelInset, A.priceIcon, A.adIcon].map((asset) => asset?.file))
+      .toEqual(['style2/button_primary.webp', 'style2/button_rewarded.webp', 'style2/lives_glow@0.5x.webp', 'style2/price_coin@2x.webp', 'style2/icon_tv.webp']);
+    expect(A.buttonPrimary?.nineSlice).toEqual({ left: 48, top: 103, right: 48, bottom: 103 });
+    const noTv = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, adIcon: undefined } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(noTv)).toThrow("ReadyUiSkin 'style-2' covers 'lives' but has no asset for role 'adIcon'");
+  });
+
+  it('draws 8:22838: the popup 9-slice, the blur, the heart, two 9-slice buttons without highlight, art at the Figma boxes', () => {
+    const kit = createKit();
+    const view = show(kit, livesView(kit));
+    expect([view.variant, view.skin]).toEqual(['figma', READY_UI_STYLE_2]);
+    const panel = field<Container>(view, 'panel');
+    const shell = layer(panel, 'style-2:windowSurface') as NineSliceSprite;
+    expect([shell.leftWidth, shell.topHeight, shell.rightWidth, shell.bottomHeight]).toEqual([191, 167, 191, 88]);
+    const s = shell.getLocalBounds(); // the popup 960 × 1050 at (60, 647) + the header 49 above
+    expect([shell.x + s.x, shell.y + s.y, s.width, s.height]).toEqual([FX(60), FY(598), 960, 1099]);
+    const glow = layer(panel, 'style-2:panelInset') as NineSliceSprite;
+    expect(glow).toBeInstanceOf(NineSliceSprite);
+    const g = glow.getLocalBounds();
+    expect([glow.x + g.x, glow.y + g.y, g.width, g.height]).toEqual([FX(0), FY(613), 1080, 920]);
+    const heart = layer(panel, 'style-2:lifeArt') as Sprite;
+    expect([heart.x, heart.y, heart.width, heart.height]).toEqual([FX(150), FY(904), 338, 338]);
+    const close = field<UiButton>(view, 'closeButton');
+    expect(close.background.texture.source.label).toBe('style-2:windowClose');
+    expect([close.x, close.y, close.background.width, close.background.height]).toEqual([FX(907 + 76.5), FY(610 + 79), 153, 158]);
+
+    const refill = field<UiButton>(view, 'refillButton');
+    expect(refill.background.texture.source.label).toBe('style-2:buttonPrimary');
+    expect([refill.x, refill.y, refill.background.width, refill.background.height]).toEqual([FX(297), FY(1510), 354, 214]);
+    const ad = field<UiButton>(view, 'adButton');
+    expect(ad.background.texture.source.label).toBe('style-2:buttonRewarded');
+    expect([ad.x, ad.y, ad.background.width, ad.background.height]).toEqual([FX(730), FY(1510), 460, 214]);
+    expect(labels(ad)).not.toContain('style-2:buttonHighlight');
+    const tv = layer(ad, 'style-2:adIcon') as Sprite;
+    expect([tv.x, tv.y, tv.width, tv.height]).toEqual([522 - 730, 1435 - 1510, 150, 150]);
+    const reward = layer(ad, 'style-2:rewardIcon') as Sprite;
+    expect([reward.x, reward.y, reward.width, reward.height]).toEqual([810 - 730, 1446 - 1510, 128, 128]);
+    // the GET slot is the free space between the tv and the reward heart: a long word shrinks, never runs under an icon
+    const L = READY_UI_STYLE_2.windows.lives;
+    expect(L.adLabel.x).toBeGreaterThanOrEqual(L.adIcon.x + L.adIcon.width);
+    expect(L.adLabel.x + L.adLabel.width).toBeLessThanOrEqual(L.rewardIcon.x);
+    // Figma order inside the rewarded button: GET, the heart and its "+1", the tv on top
+    expect(ad.children.indexOf(tv)).toBe(ad.children.length - 1);
+    // decoration never takes input
+    for (const node of [shell, glow, heart, field<Text>(view, 'title'), field<Text>(view, 'countText'), field<Text>(view, 'nextLabel'), field<Text>(view, 'timerText')]) expect(node.eventMode).toBe('none');
+    expect(panel.children[panel.children.length - 1]).toBe(close);
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
+  it('runtime values in the Figma text looks: count / timer / price / reward from the host, Carlito, per-box fill and stroke', () => {
+    const kit = createKit();
+    const view = show(kit, livesView(kit));
+    const count = field<Text>(view, 'countText');
+    const timer = field<Text>(view, 'timerText');
+    const price = field<Text>(view, 'priceText');
+    expect([count.text, timer.text, price.text]).toEqual(['3', '17:42', formatAmount(1250)]);
+    expect(count.style.fontFamily).toBe('Carlito');
+    expect(count.style.fill).toBe(0xffffff);
+    expect(count.style.stroke).toMatchObject({ color: 0x9b170b, width: 10 }); // 5 outside
+    expect(count.style.dropShadow).toBeFalsy();
+    within(runCentre(count), FX(319), 'count centred in its 200 box');
+    for (const text of [field<Text>(view, 'nextLabel'), timer]) {
+      expect(text.style.fill).toBe(0x3f598c);
+      expect(text.style.stroke).toBeFalsy();
+      within(runCentre(text), FX(709), text.text);
+    }
+    const title = field<Text>(view, 'title');
+    expect([title.style.fill, title.style.fontFamily, title.style.fontSize]).toEqual([0xffffff, 'Carlito', 65]);
+    within(runCentre(title), FX(540), 'title');
+    // the reward "+1": white, a 2-unit #9b170b outside stroke, centred on the heart (872 = Figma's "1" box centre)
+    const ad = field<UiButton>(view, 'adButton');
+    const adTexts = ad.children.filter((child): child is Text => child instanceof Text);
+    expect(adTexts.map((text) => text.text)).toEqual(['GET', '+1']);
+    expect(adTexts[1]!.style.stroke).toMatchObject({ color: 0x9b170b, width: 4 });
+    within(runCentre(adTexts[1]!), 872 - 730, '+1');
+    within(runCentre(adTexts[0]!), 652 + 81 - 730, 'GET');
+    // Frame 1244: the price, a 5-unit gap, the 46 coin 13 below the row top; the row centred at 289.5 (button 297)
+    const coin = field<Sprite>(view, 'priceCoin');
+    expect(coin.texture.source.label).toBe('style-2:priceIcon');
+    expect([coin.width, coin.height, coin.y]).toEqual([46, 46, 1523 - 1510]);
+    const advanceWidth = price.text.length * 60 * 0.56;
+    within(coin.x, price.x + advanceWidth + 5, 'coin follows the price');
+    within((price.x + coin.x + 46) / 2, 289.5 - 297, 'row centre');
+    view.setTimer('09:05');
+    expect(timer.text).toBe('09:05');
+    within(runCentre(timer), FX(709), 'timer stays centred');
+    view.destroy();
+  });
+
+  it('keeps the runtime semantics: MAX + REFILL disabled when full, the ad only when offered and handled, continuations with the params after the close', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = show(kit, livesView(kit, {}, log));
+    tap(field<UiButton>(view, 'refillButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['refill:3']);
+    expect(view.state).toBe('hidden');
+    show(kit, view, { lives: 5, maxLives: 5, refillPrice: 900 });
+    expect(field<Text>(view, 'timerText').text).toBe('MAX');
+    expect(field<UiButton>(view, 'refillButton').enabled).toBe(false);
+    view.setTimer('00:01');
+    expect(field<Text>(view, 'timerText').text).toBe('MAX');
+    tap(field<UiButton>(view, 'adButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['refill:3', 'ad:5']);
+    show(kit, view, { ...PARAMS, adOffer: false });
+    expect(field<UiButton>(view, 'adButton').visible).toBe(false);
+    expect(field<UiButton>(view, 'refillButton').x).toBe(0);
+    tap(field<UiButton>(view, 'closeButton'), kit);
+    advance(kit.core, 300);
+    show(kit, view);
+    expect(field<UiButton>(view, 'refillButton').x).toBe(FX(297));
+    const backdrop = field<Container>(view, 'backdrop');
+    backdrop.emit('pointertap', { target: backdrop } as never);
+    advance(kit.core, 300);
+    expect(log).toEqual(['refill:3', 'ad:5', 'dismiss:button', 'dismiss:background']);
+    expect(kit.uiErrors).toEqual([]);
+    view.destroy();
+    const noHandler = show(kit, new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: { skin: READY_UI_STYLE_2 }, id: 'no-ad', onRefill: () => {} }));
+    expect(field<UiButton>(noHandler, 'adButton').visible).toBe(false);
+    noHandler.destroy();
+  });
+
+  it('copy: explicit text wins, then the provider (RU / EN), then the legacy default', () => {
+    const kit = createKit();
+    const copy = (view: LivesWindowView): string[] => [
+      field<Text>(view, 'title').text, field<Text>(view, 'nextLabel').text,
+      ...field<UiButton>(view, 'refillButton').children.filter((child): child is Text => child instanceof Text && child !== field<Text>(view, 'priceText')).map((text) => text.text),
+      ...field<UiButton>(view, 'adButton').children.filter((child): child is Text => child instanceof Text).map((text) => text.text)
+    ];
+    const cases: Array<[Partial<LivesWindowViewOptions>, string[]]> = [
+      [{ i18n: i18nOf('ru') }, ['ЖИЗНИ', 'Новая жизнь через', 'ПОПОЛНИТЬ!', 'ВЗЯТЬ', '+1']],
+      [{ i18n: i18nOf('en') }, ['REFILL HEARTS!', 'Next heart in', 'REFILL', 'GET', '+1']],
+      [{}, ['REFILL HEARTS!', 'NEXT HEART IN', 'REFILL NOW!', 'GET', '+1']],
+      [{ i18n: i18nOf('en'), refillLabel: 'REFILL NOW', adRewardLabel: '1' }, ['REFILL HEARTS!', 'Next heart in', 'REFILL NOW', 'GET', '1']]
+    ];
+    for (const [options, expected] of cases) {
+      const view = livesView(kit, options);
+      expect(copy(view), JSON.stringify({ ...options, i18n: options.i18n?.locale })).toEqual(expected);
+      view.destroy();
+    }
+    const ru = show(kit, livesView(kit, { i18n: i18nOf('ru') }), { lives: 5, maxLives: 5, refillPrice: 900 });
+    expect(field<Text>(ru, 'timerText').text).toBe('МАКС');
+    ru.destroy();
+  });
+
+  it('isolation: no skin stays donor, Style 1 keeps its Lives (with the highlight); a missing Style 2 file fails clearly', () => {
+    const kit = createKit();
+    const donor = show(kit, new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), id: 'donor', onRefill: () => {}, onWatchAd: () => {} }));
+    expect([donor.variant, donor.skin]).toEqual(['donor', null]);
+    expect(labels(donor).some((label) => label.startsWith('style-'))).toBe(false);
+    donor.destroy();
+    const style1 = show(kit, new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 's1', onRefill: () => {}, onWatchAd: () => {} }));
+    expect(style1.skin).toBe(READY_UI_STYLE_1);
+    expect(labels(style1)).toEqual(expect.arrayContaining(['style-1:lifeArt', 'style-1:buttonHighlight', 'style-1:adIcon']));
+    expect(layer(field<Container>(style1, 'panel'), 'style-1:windowSurface')).toBeInstanceOf(NineSliceSprite);
+    expect(field<Text>(style1, 'countText').style.stroke).toMatchObject({ color: 0x000000, width: 8 });
+    style1.destroy();
+    expect(() => livesView(kit, {}, [], styled(kit, READY_UI_STYLE_2, ['buttonRewarded'])))
+      .toThrow("LivesWindowView style 'style-2': no buttonRewarded (style2/button_rewarded.webp) in textures — load them with loadReadyUiAssets({ skin })");
+    expect(kit.ui.getStats().windows).toBe(0);
+  });
+
+  it('loading: Style 2 requests its Confirm / Lives files strictly under its own aliases; the donor and Style 1 request no Style 2 file', async () => {
+    const requested: Array<{ alias?: string; src: string }> = [];
+    const load = vi.spyOn(Assets, 'load').mockImplementation((async (input: unknown) => {
+      for (const entry of (Array.isArray(input) ? input : [input]) as Array<{ alias?: string; src: string }>) requested.push(entry);
+      return labelled('loaded');
+    }) as never);
+    const get = vi.spyOn(Assets, 'get').mockImplementation((() => labelled('got')) as never);
+    try {
+      await loadReadyUiAssets({ baseUrl: './ui/' });
+      await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_1 });
+      expect(requested.filter((entry) => entry.src.includes('style2/') || entry.src.includes('Carlito'))).toEqual([]);
+      expect(requested.filter((entry) => entry.alias?.includes('style-2'))).toEqual([]);
+      requested.length = 0;
+      const textures = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 });
+      const src = (alias: string) => requested.find((entry) => entry.alias === `game-core-ui:skin:style-2:${alias}`)?.src;
+      expect(src('confirm:windowSurface')).toBe('./ui/window/window_base@2x.webp');
+      expect(src('confirm:windowClose')).toBe('./ui/window/window_close@2x.webp');
+      expect(src('confirm:buttonPrimary')).toBe('./ui/button/button_green@2x.webp');
+      expect(src('heroGlow')).toBe('./ui/window/message_glow@0.5x.webp');
+      expect(src('lifeLostArt')).toBe('./ui/icons/broken_heart@2x.webp');
+      expect(src('windowSurface')).toBe('./ui/style2/settings_panel.webp');
+      expect(src('buttonPrimary')).toBe('./ui/style2/button_primary.webp');
+      expect(src('panelInset')).toBe('./ui/style2/lives_glow@0.5x.webp');
+      expect(src('adIcon')).toBe('./ui/style2/icon_tv.webp');
+      expect(Object.keys(textures.skins!['style-2']!)).toEqual(expect.arrayContaining(['confirm:windowSurface', 'confirm:windowClose', 'confirm:buttonPrimary', 'windowSurface', 'buttonRewarded', 'priceIcon']));
+      expect(requested.filter((entry) => entry.src.includes('Carlito'))).toHaveLength(1);
     } finally {
       load.mockRestore();
       get.mockRestore();

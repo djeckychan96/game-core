@@ -44,6 +44,16 @@ export const READY_UI_SKIN_VIEW_ROLES = {
 
 export type ReadyUiSkinRole = (typeof READY_UI_SKIN_VIEW_ROLES)[ReadyUiSkinView][number];
 
+/**
+ * A window's own asset for one of its roles: `'<window>:<role>'` (e.g. `'confirm:windowSurface'`). In that window it
+ * wins over the style's role asset — for a style whose windows draw the same role with different art (Style 2: the
+ * violet Confirm shell next to the white / blue popup of Lives and Settings).
+ */
+export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typeof READY_UI_SKIN_WINDOW_ROLES)[W][number]}` }[ReadyUiSkinWindow];
+
+/** A key of a style's `assets`: a role, or a window's own role (`ReadyUiSkinWindowAssetKey`). */
+export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
+
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
 const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected'];
 
@@ -66,11 +76,24 @@ export interface ReadyUiSkinTextBox extends ReadyUiSkinBox {
 }
 
 /**
- * Confirm (exit with a life lost). Boxes are WINDOW-LOCAL: x / y from the window box's top-left (the panel origin is
- * the window centre); `buttonLabel` is button-local. The art boxes are the render (export) boxes.
+ * A window's own runtime text look instead of the style's: the THEME font (the kit's), this OUTSIDE stroke and hard
+ * shadow in the theme's stroke colour, this fill (absent: the theme's) — for a style whose window keeps the kit's type
+ * (Style 2's Confirm is the Style 1 window).
+ */
+export interface ReadyUiSkinWindowText {
+  readonly strokeOutside: number;
+  readonly shadowY: number;
+  readonly fill?: number;
+}
+
+/**
+ * Confirm (exit / restart with a life lost). Boxes are WINDOW-LOCAL: x / y from the window box's top-left (the panel
+ * origin is the window centre); `buttonLabel` is button-local. The art boxes are the render (export) boxes.
  */
 export interface ReadyUiSkinConfirmLayout {
   readonly window: { readonly width: number; readonly height: number };
+  /** This window's own text look (absent: the style's text look and font). */
+  readonly text?: ReadyUiSkinWindowText;
   readonly title: ReadyUiSkinTextBox;
   readonly close: ReadyUiSkinBox;
   /** `heroGlow` */
@@ -84,37 +107,51 @@ export interface ReadyUiSkinConfirmLayout {
 }
 
 /**
+ * A Lives text box with its own look over the style's: `fill`, an OUTSIDE `stroke` in its own colour (instead of the
+ * style's stroke; a style shadow takes the same colour), `align` (absent: the view's alignment for that text).
+ */
+export interface ReadyUiSkinLivesTextBox extends ReadyUiSkinTextBox {
+  readonly fill?: number;
+  readonly stroke?: { readonly width: number; readonly color: number };
+  readonly align?: 'left' | 'center';
+}
+
+/**
  * Lives (refill hearts). Boxes are FRAME coordinates: x / y in the style's `frame` (the panel origin is the frame
  * centre). The Confirm / Lives conventions differ on purpose (each is its Figma read, unchanged).
  */
 export interface ReadyUiSkinLivesLayout {
   readonly window: ReadyUiSkinBox;
-  readonly title: ReadyUiSkinTextBox;
+  readonly title: ReadyUiSkinLivesTextBox;
   readonly close: ReadyUiSkinBox;
   /** `panelInset` */
   readonly inset: ReadyUiSkinBox;
   /** `lifeArt` */
   readonly heart: ReadyUiSkinBox;
   /** The lives count, centred on this box. */
-  readonly count: ReadyUiSkinTextBox;
-  readonly nextLabel: ReadyUiSkinTextBox;
-  readonly timer: ReadyUiSkinTextBox;
+  readonly count: ReadyUiSkinLivesTextBox;
+  readonly nextLabel: ReadyUiSkinLivesTextBox;
+  readonly timer: ReadyUiSkinLivesTextBox;
   /** `buttonPrimary` */
   readonly refill: ReadyUiSkinBox;
-  readonly refillLabel: ReadyUiSkinTextBox;
-  /** The price text, `gap`, then the `priceIcon` (`coin` box), as one row centred on the refill button. */
-  readonly priceRow: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number };
-  readonly coin: { readonly width: number; readonly height: number };
+  readonly refillLabel: ReadyUiSkinLivesTextBox;
+  /**
+   * The price text, `gap`, then the `priceIcon` (`coin` box), as one row centred on `x` (frame; absent: the refill
+   * button's centre) — the row moves with the button.
+   */
+  readonly priceRow: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number; readonly x?: number };
+  /** `y`: the icon's top (frame; absent: the row's top). */
+  readonly coin: { readonly width: number; readonly height: number; readonly y?: number };
   /** `buttonRewarded` */
   readonly ad: ReadyUiSkinBox;
-  /** `buttonHighlight` */
-  readonly adHighlight: ReadyUiSkinBox;
-  readonly adLabel: ReadyUiSkinTextBox;
+  /** `buttonHighlight`; `null` = this style's rewarded button has no highlight layer (no `buttonHighlight` art). */
+  readonly adHighlight: ReadyUiSkinBox | null;
+  readonly adLabel: ReadyUiSkinLivesTextBox;
   /** `adIcon` */
   readonly adIcon: ReadyUiSkinBox;
   /** `rewardIcon` */
   readonly rewardIcon: ReadyUiSkinBox;
-  readonly rewardLabel: ReadyUiSkinTextBox;
+  readonly rewardLabel: ReadyUiSkinLivesTextBox;
 }
 
 /** A Settings text box; `fill` = this text's colour (absent: the style's text fill, the theme's version colour for the version). */
@@ -293,8 +330,11 @@ export interface ReadyUiSkin {
   readonly covers: readonly ReadyUiSkinView[];
   /** The design frame the layouts are measured in; a covered window keeps its share of it (contain-fit). */
   readonly frame: { readonly width: number; readonly height: number };
-  /** Semantic role → asset. Only these files load for the style (`loadReadyUiAssets({ skin })`). */
-  readonly assets: { readonly [R in ReadyUiSkinRole]?: ReadyUiSkinAsset };
+  /**
+   * Semantic role → asset; a window's own role (`'<window>:<role>'`) wins over the role in that window. Only these
+   * files load for the style (`loadReadyUiAssets({ skin })`).
+   */
+  readonly assets: { readonly [K in ReadyUiSkinAssetKey]?: ReadyUiSkinAsset };
   /**
    * Runtime text: OUTSIDE stroke width and hard drop-shadow offset, in the stroke colour (font / fill / stroke colour =
    * `theme.text`); 0 = none. `fill` overrides the theme's text fill for this style's views.
@@ -311,8 +351,8 @@ export interface ReadyUiSkin {
   readonly levelMapScreen?: ReadyUiSkinLevelMapScreenLayout;
 }
 
-/** A skin's role textures, as `loadReadyUiAssets({ skin })` puts them under `textures.skins[skin.id]`. */
-export type ReadyUiSkinTextures = { [R in ReadyUiSkinRole]?: Texture };
+/** A skin's role textures, as `loadReadyUiAssets({ skin })` puts them under `textures.skins[skin.id]` (by asset key). */
+export type ReadyUiSkinTextures = { [K in ReadyUiSkinAssetKey]?: Texture };
 
 /** The ready-made styles of this Core, by id (no runtime registration: a new style is a new package here). */
 export const READY_UI_SKINS = {
@@ -327,8 +367,8 @@ function viewLayout(skin: ReadyUiSkin, view: ReadyUiSkinView): unknown {
 }
 
 /**
- * The roles `skin` must ship for `view`: every role of Confirm / Lives; for Settings and the non-modal views the parts
- * its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
+ * The roles `skin` must ship for `view`: every role of Confirm / Lives (Lives without `buttonHighlight` when its
+ * layout has no highlight); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
  * art, `background` → the map background). BottomNav item icons are never required.
  */
@@ -352,6 +392,7 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
+  if (view === 'lives' && skin.windows.lives?.adHighlight === null) return READY_UI_SKIN_WINDOW_ROLES.lives.filter((role) => role !== 'buttonHighlight');
   if (view === 'settings') {
     const layouts = skin.windows.settings;
     const haptic = layouts?.map.haptic !== null || layouts?.gameplay.haptic !== null;
@@ -365,10 +406,27 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
   return READY_UI_SKIN_VIEW_ROLES[view];
 }
 
+const isWindow = (view: ReadyUiSkinView): view is ReadyUiSkinWindow => !STANDALONE_VIEWS.includes(view);
+
+/** The asset key a view draws `role` with: a window's own `'<window>:<role>'` when the style has one, else the role. */
+export function skinAssetKey(skin: ReadyUiSkin, view: ReadyUiSkinView, role: ReadyUiSkinRole): ReadyUiSkinAssetKey {
+  if (!isWindow(view)) return role;
+  const own = `${view}:${role}` as ReadyUiSkinWindowAssetKey;
+  return skin.assets[own] ? own : role;
+}
+
 /** Checks a style package: every covered view has its layout and an asset (with caps where it stretches) per role. */
 export function validateReadyUiSkin(skin: ReadyUiSkin): void {
   if (typeof skin?.id !== 'string' || !skin.id) throw new Error('ReadyUiSkin: a style needs a non-empty string id');
   if (skin.font && (!skin.font.family || !skin.font.file)) throw new Error(`ReadyUiSkin '${skin.id}': a style font needs a family and a file`);
+  for (const key of Object.keys(skin.assets)) {
+    const [window, role, extra] = key.split(':');
+    if (role === undefined) continue;
+    const roles = READY_UI_SKIN_WINDOW_ROLES[window as ReadyUiSkinWindow] as readonly string[] | undefined;
+    if (extra !== undefined || !roles?.includes(role) || !skin.covers.includes(window as ReadyUiSkinWindow)) {
+      throw new Error(`ReadyUiSkin '${skin.id}': asset '${key}' names no role of a window the style covers`);
+    }
+  }
   for (const view of skin.covers) {
     if (!READY_UI_SKIN_VIEW_ROLES[view]) throw new Error(`ReadyUiSkin '${skin.id}' covers '${String(view)}', which no style can cover yet (${Object.keys(READY_UI_SKIN_VIEW_ROLES).join(', ')})`);
     if (!viewLayout(skin, view)) {
@@ -379,7 +437,7 @@ export function validateReadyUiSkin(skin: ReadyUiSkin): void {
       throw new Error(`ReadyUiSkin '${skin.id}': levelMap hardNode and hardBadge are both art or both null`);
     }
     for (const role of requiredSkinRoles(skin, view)) {
-      const asset = skin.assets[role];
+      const asset = skin.assets[skinAssetKey(skin, view, role)];
       if (!asset?.file) throw new Error(`ReadyUiSkin '${skin.id}' covers '${view}' but has no asset for role '${role}'`);
       if (NINE_SLICE_ROLES.includes(role) && !asset.nineSlice) throw new Error(`ReadyUiSkin '${skin.id}': role '${role}' is drawn as a 9-slice but has no nineSlice caps`);
     }
@@ -473,6 +531,7 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
   const roles = READY_UI_SKIN_WINDOW_ROLES[window] as readonly ReadyUiSkinRole[];
   const required = requiredSkinRoles(skin, window);
   const loaded = textures.skins?.[skin.id];
+  const key = (role: ReadyUiSkinRole): ReadyUiSkinAssetKey => skinAssetKey(skin, window, role);
   const pick = (source: (role: ReadyUiSkinRole) => Texture | undefined): { art: Record<string, Texture>; missing: ReadyUiSkinRole[] } => {
     const art: Record<string, Texture> = {};
     const missing: ReadyUiSkinRole[] = [];
@@ -483,7 +542,7 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
     }
     return { art, missing };
   };
-  const fileOf = (role: ReadyUiSkinRole): string => skin.assets[role]?.file ?? '?';
+  const fileOf = (role: ReadyUiSkinRole): string => skin.assets[key(role)]?.file ?? '?';
   const styleError = (missing: readonly ReadyUiSkinRole[]): Error =>
     new Error(`${view} style '${skin.id}': no ${missing.map((role) => `${role} (${fileOf(role)})`).join(', ')} in textures — load them with loadReadyUiAssets({ skin })`);
 
@@ -492,7 +551,7 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
   const found = pick(included ? (role) => {
     const name = (STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>)[role];
     return name ? textures[name] : undefined;
-  } : (role) => loaded?.[role]);
+  } : (role) => loaded?.[key(role)]);
   if (found.missing.length && included && legacy.variant) {
     const names = STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>;
     const list = found.missing.map((role) => `${names[role] ?? role} (${fileOf(role)})`).join(', ');
@@ -515,14 +574,14 @@ export function skinFontAlias(skinId: string): string {
   return `game-core-ui:skin:${skinId}:font`;
 }
 
-/** The caps of a 9-slice role (checked by validateReadyUiSkin). */
-export function skinNineSlice(skin: ReadyUiSkin, role: ReadyUiSkinRole): NineSliceSpec {
-  const spec = skin.assets[role]?.nineSlice;
+/** The caps of a 9-slice role (checked by validateReadyUiSkin); `view` = the view drawing it (a window's own asset wins). */
+export function skinNineSlice(skin: ReadyUiSkin, role: ReadyUiSkinRole, view?: ReadyUiSkinView): NineSliceSpec {
+  const spec = skin.assets[view ? skinAssetKey(skin, view, role) : role]?.nineSlice;
   if (!spec) throw new Error(`ReadyUiSkin '${skin.id}': role '${role}' has no nineSlice caps`);
   return spec;
 }
 
 /** The Pixi Assets alias of a style asset: namespaced by the style id, so one role in two styles never collides. */
-export function skinAssetAlias(skinId: string, role: ReadyUiSkinRole): string {
+export function skinAssetAlias(skinId: string, role: ReadyUiSkinAssetKey): string {
   return `game-core-ui:skin:${skinId}:${role}`;
 }
