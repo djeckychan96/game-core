@@ -2,10 +2,11 @@ import type { ReadyUiOptionalTextureName } from '../assets';
 import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
 
 /**
- * Style 1 — the Figma "HAMSTER PIXEL FLOW" windows (file CNcGCBj8IvUXrPd01FbChm), accepted on Confirm and Lives.
+ * Style 1 — the Figma "HAMSTER PIXEL FLOW" windows (file CNcGCBj8IvUXrPd01FbChm), accepted on Confirm, Lives and Settings.
  *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
- * docs/figma/lives). NOT COVERED — donor look for now: Settings, Result, HUD, LevelMap, Shop, NoAds, StarterPack.
+ * docs/figma/lives), plus the current runtime surface of `settings`. NOT COVERED — donor look for now: Result, HUD,
+ * LevelMap, Shop, NoAds, StarterPack.
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -15,7 +16,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives'],
+  covers: ['confirm', 'lives', 'settings'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -41,7 +42,18 @@ export const READY_UI_STYLE_1 = {
     /** Heart of a reward (154 × 154; its "+1" is runtime text). */
     rewardIcon: { file: 'icons/icon_heart@2x.webp' },
     /** Rewarded-ad clapper (128 × 134, the flattened `icon/reward`). */
-    adIcon: { file: 'icons/icon_ad@2x.webp' }
+    adIcon: { file: 'icons/icon_ad@2x.webp' },
+    /** Settings window shell. Its 968 × 1102 export is the 960 × 1090 logical map box plus 4 / 4 / 4 / 8 bleed. */
+    settingsPanel: { file: 'settings/panel.webp', nineSlice: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } } },
+    /** Settings close glyph (51 × 51). */
+    settingsClose: { file: 'button/btn_close.webp' },
+    settingsSound: { file: 'settings/btn_sound.webp' },
+    settingsMusic: { file: 'settings/btn_music.webp' },
+    settingsHaptic: { file: 'settings/btn_haptic.webp' },
+    settingsOff: { file: 'settings/deactivated.webp' },
+    settingsBtnHome: { file: 'settings/btn_home.webp' },
+    settingsBtnRestart: { file: 'settings/btn_restart.webp' },
+    settingsIconRestart: { file: 'settings/icon_restart.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -102,13 +114,72 @@ export const READY_UI_STYLE_1 = {
       rewardIcon: { x: 819, y: 1448, width: 154, height: 154 },
       /** +1: LEFT, hugging */
       rewardLabel: { x: 859, y: 1483, width: 68, height: 72, fontSize: 60 }
+    },
+    /**
+     * Current SettingsWindowView only. All boxes are local to the window's top-left. The legacy notification,
+     * privacy and restore controls are intentionally absent: the current runtime has no state or callbacks for them.
+     */
+    settings: {
+      /** map-a / map-b collapse to the one current map layout; their unsupported legacy controls are not represented. */
+      map: {
+        window: { width: 960, height: 1090 },
+        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+        close: { x: 863, y: 61, width: 51, height: 51 },
+        sound: {
+          button: { x: 62, y: 291, width: 224, height: 220 },
+          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        music: {
+          button: { x: 368, y: 291, width: 224, height: 220 },
+          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        haptic: {
+          button: { x: 674, y: 291, width: 224, height: 220 },
+          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        version: { x: 267, y: 994, width: 439, height: 48, fontSize: 40 }
+      },
+      gameplay: {
+        window: { width: 960, height: 1576 },
+        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+        close: { x: 863, y: 61, width: 51, height: 51 },
+        sound: {
+          button: { x: 62, y: 291, width: 224, height: 220 },
+          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        music: {
+          button: { x: 368, y: 291, width: 224, height: 220 },
+          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        haptic: {
+          button: { x: 674, y: 291, width: 224, height: 220 },
+          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
+          off: { x: 32.5, y: 29, width: 159, height: 162 }
+        },
+        restart: {
+          button: { x: 181, y: 988, width: 599, height: 207 },
+          label: { x: 190, y: 27, width: 360, height: 128, fontSize: 70 },
+          icon: { x: 44.5, y: 16, width: 170, height: 155 }
+        },
+        home: {
+          button: { x: 181, y: 1220, width: 599, height: 207 },
+          label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
+        },
+        version: { x: 267, y: 1476, width: 439, height: 48, fontSize: 40 }
+      }
     }
   }
 } as const satisfies ReadyUiSkin;
 
 /**
- * Style 1's roles → the kit names the same files had before styles (`READY_UI_OPTIONAL_ASSET_FILES`, loaded by
- * `include: CONFIRM_EXIT_FIGMA_TEXTURES / LIVES_FIGMA_TEXTURES`). Only the pre-style `variant: 'figma'` path reads it.
+ * Style 1's legacy Confirm/Lives roles → the kit names the same files had before styles
+ * (`READY_UI_OPTIONAL_ASSET_FILES`, loaded by `include: CONFIRM_EXIT_FIGMA_TEXTURES / LIVES_FIGMA_TEXTURES`). Only
+ * the pre-style `variant: 'figma'` path reads it; Settings has no legacy include path.
  */
 export const STYLE_1_INCLUDE_NAMES = {
   windowSurface: 'windowBase',
@@ -123,4 +194,4 @@ export const STYLE_1_INCLUDE_NAMES = {
   priceIcon: 'iconCoin',
   rewardIcon: 'iconHeart',
   adIcon: 'iconAd'
-} as const satisfies Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>;
+} as const satisfies Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>;

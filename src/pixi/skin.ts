@@ -1,5 +1,5 @@
 import type { Texture } from 'pixi.js';
-import type { ReadyUiTextures } from './assets';
+import type { ReadyUiOptionalTextureName, ReadyUiTextures } from './assets';
 import type { NineSliceSpec } from './nineSlice';
 import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from './skins/style1';
 
@@ -10,19 +10,20 @@ import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from './skins/style1';
  * for every style. A window the style does not cover keeps its donor look.
  */
 
-/** The windows a style can cover (V1: the two Figma-exact windows). */
-export type ReadyUiSkinWindow = 'confirm' | 'lives';
+/** The windows a style can cover. */
+export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings';
 
 /** The roles each covered window draws with, in the view's order. A covering style must give every one an asset. */
 export const READY_UI_SKIN_WINDOW_ROLES = {
   confirm: ['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary'],
-  lives: ['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon']
+  lives: ['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon'],
+  settings: ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart']
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 export type ReadyUiSkinRole = (typeof READY_UI_SKIN_WINDOW_ROLES)[ReadyUiSkinWindow][number];
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel'];
 
 /** One asset of a style: its file under the served `assets/pixi-ui/` folder, and its caps when it stretches. */
 export interface ReadyUiSkinAsset {
@@ -94,9 +95,47 @@ export interface ReadyUiSkinLivesLayout {
   readonly rewardLabel: ReadyUiSkinTextBox;
 }
 
+/** One current Settings toggle: the button and label are window-local; `off` is button-local. */
+export interface ReadyUiSkinSettingsToggleLayout {
+  readonly button: ReadyUiSkinBox;
+  readonly label: ReadyUiSkinTextBox;
+  readonly off: ReadyUiSkinBox;
+}
+
+/** A current Settings game action: the button is window-local; label/icon are button-local. */
+export interface ReadyUiSkinSettingsActionLayout {
+  readonly button: ReadyUiSkinBox;
+  readonly label: ReadyUiSkinTextBox;
+  readonly icon?: ReadyUiSkinBox;
+}
+
+/** The Settings surface shared by the map and gameplay layouts. Every box is window-local. */
+export interface ReadyUiSkinSettingsBaseLayout {
+  readonly window: { readonly width: number; readonly height: number };
+  readonly title: ReadyUiSkinTextBox;
+  readonly close: ReadyUiSkinBox;
+  readonly sound: ReadyUiSkinSettingsToggleLayout;
+  readonly music: ReadyUiSkinSettingsToggleLayout;
+  readonly haptic: ReadyUiSkinSettingsToggleLayout;
+  readonly version: ReadyUiSkinTextBox;
+}
+
+export type ReadyUiSkinSettingsMapLayout = ReadyUiSkinSettingsBaseLayout;
+
+export interface ReadyUiSkinSettingsGameplayLayout extends ReadyUiSkinSettingsBaseLayout {
+  readonly restart: ReadyUiSkinSettingsActionLayout & { readonly icon: ReadyUiSkinBox };
+  readonly home: ReadyUiSkinSettingsActionLayout;
+}
+
+export interface ReadyUiSkinSettingsLayouts {
+  readonly map: ReadyUiSkinSettingsMapLayout;
+  readonly gameplay: ReadyUiSkinSettingsGameplayLayout;
+}
+
 export interface ReadyUiSkinLayouts {
   readonly confirm?: ReadyUiSkinConfirmLayout;
   readonly lives?: ReadyUiSkinLivesLayout;
+  readonly settings?: ReadyUiSkinSettingsLayouts;
 }
 
 export interface ReadyUiSkin {
@@ -189,9 +228,13 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
 
   // the pre-style path: Style 1's files loaded by `include` under their kit names
   const included = !loaded && skin === READY_UI_STYLE_1;
-  const found = pick(included ? (role) => textures[STYLE_1_INCLUDE_NAMES[role]] : (role) => loaded?.[role]);
+  const found = pick(included ? (role) => {
+    const name = (STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>)[role];
+    return name ? textures[name] : undefined;
+  } : (role) => loaded?.[role]);
   if (found.missing.length && included && legacy.variant) {
-    const list = found.missing.map((role) => `${STYLE_1_INCLUDE_NAMES[role]} (${fileOf(role)})`).join(', ');
+    const names = STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>;
+    const list = found.missing.map((role) => `${names[role] ?? role} (${fileOf(role)})`).join(', ');
     throw new Error(`${view} variant 'figma': no ${list} in textures — load them with loadReadyUiAssets({ include: ${legacy.include} })`);
   }
   if (found.missing.length) throw styleError(found.missing);

@@ -15,6 +15,7 @@ import {
   LevelMapView,
   LivesWindowView,
   NoAdsWindowView,
+  READY_UI_STYLE_1,
   ResultWindowView,
   SettingsWindowView,
   ShopWindowView,
@@ -72,7 +73,10 @@ const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> |
 ];
 
 async function boot(): Promise<void> {
-  const theme = resolveTheme();
+  const demoParams = new URLSearchParams(window.location.search);
+  const settingsSkin = demoParams.get('skin') === 'style1' ? READY_UI_STYLE_1 : undefined;
+  const settingsGameplay = demoParams.get('settings') === 'gameplay';
+  const theme = resolveTheme(settingsSkin ? { skin: settingsSkin } : undefined);
   const app = new Application();
   const resolution = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
   await app.init({
@@ -102,11 +106,12 @@ async function boot(): Promise<void> {
     tickTimers(ticker.deltaMS);
   });
 
-  const textures: ReadyUiTextures = await loadReadyUiAssets({ baseUrl: './pixi-ui/' });
+  const textures: ReadyUiTextures = await loadReadyUiAssets({ baseUrl: './pixi-ui/', ...(settingsSkin ? { skin: settingsSkin } : {}) });
   document.getElementById('boot')?.remove();
 
   const state = createDemoState();
-  const settings = { sound: true, music: true };
+  const settings = { sound: true, music: true, haptic: true };
+  const settingsActions: string[] = [];
   const totalStars = () => state.levels.reduce((sum, level) => sum + (level.stars ?? 0), 0);
   const screen = new Container();
   const modals = new Container();
@@ -150,7 +155,11 @@ async function boot(): Promise<void> {
   });
   const settingsWindow = new SettingsWindowView({
     ui, motion, textures,
-    onToggle: (setting, enabled) => { if (setting === 'sound' || setting === 'music') settings[setting] = enabled; }
+    ...(settingsSkin ? { theme: { skin: settingsSkin } } : {}),
+    haptic: true,
+    onToggle: (setting, enabled) => { settings[setting] = enabled; },
+    onHome: () => { settingsActions.push('home'); toast('SETTINGS HOME — host continuation'); },
+    onRestart: () => { settingsActions.push('restart'); toast('SETTINGS RESTART — host continuation'); }
   });
   const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
   // The starter-pack window is data-only. When it shows a chain offer, BUY runs the demo purchase
@@ -180,7 +189,7 @@ async function boot(): Promise<void> {
   const openFail = (level: number) => resultWindow.show({ level, rewardCoins: 0, outcome: 'fail' });
   const openShop = () => shopWindow.show({ items: DEMO_SHOP_ITEMS });
   const openLives = () => livesWindow.show({ lives: state.lives, maxLives: DEMO_MAX_LIVES, timerText: formatTimer(state.refillSeconds), refillPrice: DEMO_REFILL_PRICE });
-  const openSettings = () => settingsWindow.show({ ...settings, version: `VERSION ${BUILD_INFO.version}` });
+  const openSettings = (gameButtons = settingsGameplay) => settingsWindow.show({ ...settings, version: `VERSION ${BUILD_INFO.version}`, gameButtons });
   const openNoAds = () => noAdsWindow.show({ price: '$1.99' });
   /** The static starter-pack demo (no chain): fixed params, no timer. */
   const openStarter = () => {
@@ -682,7 +691,7 @@ async function boot(): Promise<void> {
 
   // dev hooks for automated visual checks (Playwright)
   (window as unknown as { __showcase: unknown }).__showcase = {
-    app, core, ui, motion, map, hud, state,
+    app, core, ui, motion, map, hud, state, settings, settingsActions,
     resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow,
     playButton, toolbar, offerStrip, starterIcon, noAdsIcon,
     ripple, ripplePresets: RIPPLE_PRESETS, setRipplePreset,

@@ -4,6 +4,7 @@ import { advance, createKit, pointer } from './setup';
 import * as pixiEntry from '../../src/pixi/index';
 import { ConfirmWindowView, type ConfirmWindowViewOptions } from '../../src/pixi/ConfirmWindowView';
 import { LivesWindowView, type LivesWindowParams, type LivesWindowViewOptions } from '../../src/pixi/LivesWindowView';
+import { SettingsWindowView, type SettingsWindowParams, type SettingsWindowViewOptions } from '../../src/pixi/SettingsWindowView';
 import { READY_UI_NINE_SLICES, READY_UI_OPTIONAL_ASSET_FILES, loadReadyUiAssets, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
 import { READY_UI_SKIN_WINDOW_ROLES, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
 import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from '../../src/pixi/skins/style1';
@@ -49,7 +50,12 @@ function styled(kit: Kit, skin: ReadyUiSkin, roles = roleTextures(skin)): ReadyU
 /** The pre-style path with the very same Texture objects: Style 1's files under their kit names (`include`). */
 function included(kit: Kit, roles: ReadyUiSkinTextures): ReadyUiTextures {
   const out: ReadyUiTextures = { ...requiredOnly(kit) };
-  for (const role of ROLES) { const texture = roles[role]; if (texture) out[STYLE_1_INCLUDE_NAMES[role]] = texture; }
+  const names = STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>;
+  for (const role of ROLES) {
+    const texture = roles[role];
+    const name = names[role];
+    if (texture && name) out[name] = texture;
+  }
   return out;
 }
 
@@ -84,6 +90,19 @@ function lives(kit: Kit, textures: ReadyUiTextures, extra: Partial<LivesWindowVi
     onRefill: (p) => log.push(`refill:${p.lives}`), onWatchAd: (p) => log.push(`ad:${p.lives}`), onDismiss: (r) => log.push(`dismiss:${r}`), ...extra });
 }
 
+function settings(kit: Kit, textures: ReadyUiTextures, extra: Partial<SettingsWindowViewOptions> = {}, log: string[] = []): SettingsWindowView {
+  return new SettingsWindowView({
+    ui: kit.ui, motion: kit.motion, textures, id: 'settings', onToggle: (setting, enabled) => log.push(`${setting}:${enabled}`),
+    onHome: () => log.push('home'), onRestart: () => log.push('restart'), ...extra
+  });
+}
+
+function shownSettings(kit: Kit, view: SettingsWindowView, params: SettingsWindowParams): SettingsWindowView {
+  view.show(params);
+  advance(kit.core, 400);
+  return view;
+}
+
 function shown<T extends ConfirmWindowView | LivesWindowView>(kit: Kit, view: T): T {
   if (view instanceof LivesWindowView) view.show({ ...LIVES });
   else view.show();
@@ -99,21 +118,27 @@ function restyle(id: string, change: (skin: { -readonly [K in keyof ReadyUiSkin]
   return skin;
 }
 
-describe('UI Skin V1 — Style 1 is a data package for Confirm and Lives', () => {
+describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives and Settings', () => {
   it('is exported from game-core/pixi: Style 1, the catalog and the per-window roles; the package states its coverage', () => {
     expect(pixiEntry.READY_UI_STYLE_1).toBe(READY_UI_STYLE_1);
     expect(pixiEntry.READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1 });
     expect(pixiEntry.READY_UI_SKIN_WINDOW_ROLES).toBe(READY_UI_SKIN_WINDOW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
-    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives']);
-    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives']);
-    // exactly the roles its two windows draw, no more
-    expect(ROLES.sort()).toEqual([...new Set([...READY_UI_SKIN_WINDOW_ROLES.confirm, ...READY_UI_SKIN_WINDOW_ROLES.lives])].sort());
+    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings']);
+    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'settings']);
+    // exactly the roles its three windows draw, no more
+    expect(ROLES.sort()).toEqual([...new Set([
+      ...READY_UI_SKIN_WINDOW_ROLES.confirm,
+      ...READY_UI_SKIN_WINDOW_ROLES.lives,
+      ...READY_UI_SKIN_WINDOW_ROLES.settings
+    ])].sort());
+    expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 1090 });
+    expect(READY_UI_STYLE_1.windows.settings.gameplay.window).toEqual({ width: 960, height: 1576 });
   });
 
   it('owns the files and caps: the pre-style kit names (READY_UI_OPTIONAL_ASSET_FILES / READY_UI_NINE_SLICES) are the same values', () => {
-    for (const role of ROLES) {
-      expect(READY_UI_OPTIONAL_ASSET_FILES[STYLE_1_INCLUDE_NAMES[role]], role).toBe(READY_UI_STYLE_1.assets[role].file);
+    for (const [role, name] of Object.entries(STYLE_1_INCLUDE_NAMES) as Array<[ReadyUiSkinRole, ReadyUiOptionalTextureName]>) {
+      expect(READY_UI_OPTIONAL_ASSET_FILES[name], role).toBe(READY_UI_STYLE_1.assets[role]?.file);
     }
     expect(READY_UI_NINE_SLICES).toEqual({
       windowBase: READY_UI_STYLE_1.assets.windowSurface.nineSlice,
@@ -201,6 +226,93 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     }
   });
 
+  it('8. Settings resolves Style 1 assets and map layout while ON/OFF stays runtime state', () => {
+    const kit = createKit();
+    const roles = roleTextures(READY_UI_STYLE_1);
+    const log: string[] = [];
+    const view = shownSettings(kit, settings(kit, styled(kit, READY_UI_STYLE_1, roles), {
+      theme: { skin: READY_UI_STYLE_1 }, haptic: true
+    }, log), { sound: true, music: false, haptic: true, version: 'VERSION 1.2.3' });
+    const toggles = field<Record<'sound' | 'music' | 'haptic', { button: UiButton; off: Sprite; label: Text }>>(view, 'toggles');
+    expect(view.skin).toBe(READY_UI_STYLE_1);
+    expect(field<NineSliceSprite>(view, 'surface').texture).toBe(roles.settingsPanel);
+    expect(field<UiButton>(view, 'closeButton').background.texture).toBe(roles.settingsClose);
+    expect(toggles.sound.button.background.texture).toBe(roles.settingsSound);
+    expect(toggles.music.button.background.texture).toBe(roles.settingsMusic);
+    expect(toggles.haptic.button.background.texture).toBe(roles.settingsHaptic);
+    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: -144 });
+    expect(toggles.music.button.position).toMatchObject({ x: 0, y: -144 });
+    expect(toggles.haptic.button.position).toMatchObject({ x: 306, y: -144 });
+    expect(field<object>(view, 'activeLayout')).toBe(READY_UI_STYLE_1.windows.settings.map);
+    expect(field<Text>(view, 'version').text).toBe('VERSION 1.2.3');
+    expect(toggles.sound.off.visible).toBe(false);
+    expect(toggles.music.off.visible).toBe(true);
+    tap(toggles.sound.button, kit);
+    expect(toggles.sound.off.visible).toBe(true);
+    expect(log).toEqual(['sound:false']);
+    view.setSettings({ music: true, haptic: false });
+    expect(toggles.music.off.visible).toBe(false);
+    expect(toggles.haptic.off.visible).toBe(true);
+    tap(toggles.haptic.button, kit);
+    expect(log).toEqual(['sound:false', 'haptic:true']);
+    const text = scene(field<Container>(view, 'panel'))
+      .flatMap((entry) => typeof entry === 'object' && entry !== null && 'text' in entry ? [String((entry as { text: unknown }).text)] : []);
+    expect(text).not.toContain('NOTIFICATION');
+    expect(text).not.toContain('PRIVACY POLICY');
+    expect(text).not.toContain('RESTORE PURCHASES');
+    view.destroy();
+  });
+
+  it('9. gameButtons selects the gameplay layout and keeps the existing action / haptic visibility behavior', () => {
+    const kit = createKit();
+    const roles = roleTextures(READY_UI_STYLE_1);
+    const log: string[] = [];
+    const view = shownSettings(kit, settings(kit, styled(kit, READY_UI_STYLE_1, roles), {
+      theme: { skin: READY_UI_STYLE_1 }, haptic: true
+    }, log), { sound: true, music: true, haptic: true, version: 'VERSION 1.2.3', gameButtons: true });
+    const toggles = field<Record<'sound' | 'music' | 'haptic', { button: UiButton; off: Sprite; label: Text }>>(view, 'toggles');
+    const restart = field<UiButton>(view, 'restartButton');
+    const home = field<UiButton>(view, 'homeButton');
+    expect(field<NineSliceSprite>(view, 'surface').height).toBe(1588); // 1576 logical + 4 top / 8 bottom bleed
+    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: -387 });
+    expect(toggles.music.button.position).toMatchObject({ x: 0, y: -387 });
+    expect(toggles.haptic.button.visible).toBe(false);
+    expect(restart.position).toMatchObject({ x: 0.5, y: 303.5 });
+    expect(home.position).toMatchObject({ x: 0.5, y: 535.5 });
+    expect(restart.background.texture).toBe(roles.settingsBtnRestart);
+    expect(home.background.texture).toBe(roles.settingsBtnHome);
+    tap(restart, kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['restart']);
+    view.show({ sound: true, music: true, gameButtons: true });
+    advance(kit.core, 400);
+    tap(home, kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['restart', 'home']);
+    view.destroy();
+  });
+
+  it('10. Settings without a skin stays on the unchanged donor path', () => {
+    const kit = createKit();
+    const view = shownSettings(kit, settings(kit, requiredOnly(kit)), { sound: true, music: false, version: 'VERSION 1' });
+    const toggles = field<Record<'sound' | 'music' | 'haptic', { button: UiButton }>>(view, 'toggles');
+    expect(view.skin).toBeNull();
+    expect(field<Container>(view, 'panel').children.some((child) => (child as Sprite).texture === kit.textures.settingsPanel)).toBe(true);
+    expect(toggles.sound.button.position).toMatchObject({ x: -150, y: 0 });
+    expect(toggles.music.button.position).toMatchObject({ x: 150, y: 0 });
+    expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 402, y: -461 });
+    view.destroy();
+  });
+
+  it('11. a covered Settings window with a missing required role fails clearly', () => {
+    const kit = createKit();
+    const roles = roleTextures(READY_UI_STYLE_1);
+    delete roles.settingsOff;
+    expect(() => settings(kit, styled(kit, READY_UI_STYLE_1, roles), { theme: { skin: READY_UI_STYLE_1 } }))
+      .toThrow("SettingsWindowView style 'style-1': no settingsOff (settings/deactivated.webp) in textures — load them with loadReadyUiAssets({ skin })");
+    expect(kit.ui.getStats()).toMatchObject({ windows: 0, buttons: 0 });
+  });
+
   it("3. explicit 'donor' wins over the theme's style; the old `variant: 'figma'` (include textures, no theme) is unchanged", () => {
     const kit = createKit();
     const roles = roleTextures(READY_UI_STYLE_1);
@@ -262,7 +374,8 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     const moved = restyle('test-layout', (s) => {
       s.windows = {
         confirm: { ...READY_UI_STYLE_1.windows.confirm, button: { ...READY_UI_STYLE_1.windows.confirm.button, y: 725 + 40 } },
-        lives: { ...READY_UI_STYLE_1.windows.lives, refill: { ...READY_UI_STYLE_1.windows.lives.refill, x: 90 + 30 } }
+        lives: { ...READY_UI_STYLE_1.windows.lives, refill: { ...READY_UI_STYLE_1.windows.lives.refill, x: 90 + 30 } },
+        settings: READY_UI_STYLE_1.windows.settings
       };
       s.assets = {
         ...s.assets,

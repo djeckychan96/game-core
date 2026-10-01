@@ -202,10 +202,12 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   (36/255 of the height), the 89-unit × at the top-right, then the blue `SPECIAL OFFER` ribbon
   and a 3-column grid of 318 × 418 pack cards (amount on top, coin pile, price on the bottom band)
   scaled to the screen width minus 2 × 32, scrollable when it overflows; `onBuy(item)`.
-- **SettingsWindowView** — 968 × 1102 panel, `SETTINGS`, SOUND / MUSIC toggles (blue squares
+- **SettingsWindowView** — 968 × 1102 donor panel, `SETTINGS`, SOUND / MUSIC toggles (blue squares
   300 apart at y 45, labels above, red slash when off; HAPTIC optional), version caption,
   optional in-level HOME / RESTART; `onToggle(setting, enabled)` fires in place, home/restart
-  are continuations. `setSettings`, `currentSettings`.
+  are continuations. `setSettings`, `currentSettings`. Style 1 keeps this one generic View and
+  selects its typed `map` / `gameplay` layout from `gameButtons`; these are layout/state variants,
+  not separate View classes.
 - **NoAdsWindowView** — 975 × 1355 blue panel with the crossed clapperboard, `NO` / `ADS`
   rotated −32° over the corner, description band at y 248, green price button at y 517;
   `onBuy(params)` continuation, no purchase logic inside.
@@ -299,20 +301,22 @@ layout of every window it `covers`. The window code is the same for every style.
 style, once, in its Ready UI config — the theme it gives every window and the loader:
 
 ```ts
-import { ConfirmWindowView, LivesWindowView, READY_UI_STYLE_1, loadReadyUiAssets } from 'game-core/pixi';
+import { ConfirmWindowView, LivesWindowView, SettingsWindowView, READY_UI_STYLE_1, loadReadyUiAssets } from 'game-core/pixi';
 
 const READY_UI_THEME = { skin: READY_UI_STYLE_1 }; // the game's one style choice
 const textures = await loadReadyUiAssets({ baseUrl: './pixi-ui/', skin: READY_UI_THEME.skin });
 const readyUi = { ui, motion, textures, theme: READY_UI_THEME };
 new ConfirmWindowView({ ...readyUi, id: 'exit-confirm', onConfirm });
 new LivesWindowView({ ...readyUi, id: 'lives', onRefill, onWatchAd });
+new SettingsWindowView({ ...readyUi, id: 'settings', onToggle, onHome, onRestart });
 ```
 
 | Window | Style 1 (`READY_UI_STYLE_1`, id `style-1`) |
 | --- | --- |
 | ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) |
 | LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) |
-| Result, Settings, Shop, NoAds, StarterPack, HUD, LevelMap | not covered — donor look |
+| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts |
+| Result, Shop, NoAds, StarterPack, HUD, LevelMap | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_WINDOW_ROLES` lists the roles each
@@ -326,8 +330,11 @@ new LivesWindowView({ ...readyUi, id: 'lives', onRefill, onWatchAd });
   `variant: 'figma'` keeps working: the theme's style when it covers the window, else Style 1, whose
   textures may still come from `include: CONFIRM_EXIT_FIGMA_TEXTURES / LIVES_FIGMA_TEXTURES`
   (`READY_UI_OPTIONAL_ASSET_FILES` / `READY_UI_NINE_SLICES` are Style 1's values under the old names).
-- Layout conventions are the Figma reads, kept as they are: Confirm boxes are window-local, Lives
-  boxes are frame coordinates. A style changes files, caps, text look, dim and boxes; adding, removing
+- Layout conventions are the Figma reads, kept as they are: Confirm and Settings boxes are window-local,
+  Lives boxes are frame coordinates. Settings `map-a` / `map-b` currently collapse to the one `map`
+  layout. Legacy notification, privacy and restore controls are intentionally not represented: the
+  current `SettingsWindowView` has no runtime state or callbacks for them, so adding them is a future
+  bounded API slice rather than speculative skin behavior. A style changes files, caps, text look, dim and boxes; adding, removing
   or reordering a window's elements is still view code.
 
 ## Render quality (Retina)
