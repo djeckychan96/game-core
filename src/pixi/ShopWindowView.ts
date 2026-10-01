@@ -1,6 +1,8 @@
 import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { MotionHandle } from '../index';
 import { CLOSE_SIZE, ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 
@@ -91,7 +93,7 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
     const ribbon = this.sprite(t.shopRibbon, 1000, 116);
     ribbon.x = 3;
     this.gold.addChild(ribbon);
-    this.title = createLabel(this.theme, options.title ?? 'SPECIAL OFFER', { fontSize: 80, stroke: 11 });
+    this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.shop.special_offer', READY_UI_LEGACY_TEXT.shopTitle), { fontSize: 80, stroke: 11 });
     this.title.y = -6;
     this.gold.addChild(this.title);
 
@@ -157,7 +159,7 @@ export class ShopWindowView extends ModalWindow<ShopWindowParams> {
   private shopClose: UiButton | null = null;
 
   protected applyParams(params: ShopWindowParams): void {
-    if (params.title) {
+    if (params.title !== undefined) {
       this.title.text = params.title;
       fitLabelWidth(this.title, 900);
     }

@@ -2,6 +2,8 @@ import { type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { resolveWindowSkin, selectWindowSkin, skinNineSlice, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinConfirmLayout, type WindowSkinLook } from './skin';
 import { createFigmaLabel, createLabel, fitLabelWidth, placeFigmaLabel } from './text';
 import { UiButton } from './UiButton';
@@ -108,15 +110,15 @@ export class ConfirmWindowView extends ModalWindow {
     if (!look) {
       const t = this.textures;
       this.panel.addChildAt(this.sprite(t.confirmPanel, 968, 1006), 0);
-      this.title = createLabel(this.theme, options.title ?? 'ARE YOU SURE?', { fontSize: 74, stroke: 10 });
+      this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), { fontSize: 74, stroke: 10 });
       this.title.position.set(6, -417);
       fitLabelWidth(this.title, 760);
-      this.body = createLabel(this.theme, options.body ?? 'You will lose 1 heart', { fontSize: 74, stroke: 10 });
+      this.body = createLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.donorBody), { fontSize: 74, stroke: 10 });
       this.body.position.set(16, 157);
       fitLabelWidth(this.body, 880);
       this.panel.addChild(this.title, this.body);
 
-      this.confirmButton = this.createButton('confirm', t.confirmButton, options.confirmLabel ?? 'EXIT', onTap, 600, 206, 82, -9);
+      this.confirmButton = this.createButton('confirm', t.confirmButton, localizedText(options.confirmLabel, this.i18n, 'core.confirm.exit', READY_UI_LEGACY_TEXT.confirm.exit), onTap, 600, 206, 82, -9);
       if (this.confirmButton.labelText) fitLabelWidth(this.confirmButton.labelText, 520);
       this.confirmButton.y = 334;
       this.panel.addChild(this.confirmButton);
@@ -128,7 +130,7 @@ export class ConfirmWindowView extends ModalWindow {
 
     const { skin, layout: L, art: A } = look;
     this.surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface'), L.window.width, L.window.height);
-    this.title = createFigmaLabel(this.theme, options.title ?? 'ARE YOU SURE?', L.title.fontSize, skin.text);
+    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), L.title.fontSize, skin.text);
     placeFigmaLabel(this.title, { ...this.box(L.title), align: 'center' });
     if (this.closeButton) {
       this.closeButton.background.texture = A.windowClose;
@@ -149,12 +151,12 @@ export class ConfirmWindowView extends ModalWindow {
       onTap
     }));
     this.confirmButton.position.set(px(L, L.button.x + L.button.width / 2), py(L, L.button.y + L.button.height / 2));
-    this.confirmLabel = createFigmaLabel(this.theme, options.confirmLabel ?? 'EXIT', L.buttonLabel.fontSize, skin.text);
+    this.confirmLabel = createFigmaLabel(this.theme, localizedText(options.confirmLabel, this.i18n, 'core.confirm.exit', READY_UI_LEGACY_TEXT.confirm.exit), L.buttonLabel.fontSize, skin.text);
     const label = L.buttonLabel;
     placeFigmaLabel(this.confirmLabel, { x: label.x - L.button.width / 2, y: label.y - L.button.height / 2, width: label.width, height: label.height, align: 'center' });
     this.confirmButton.addChild(this.confirmLabel);
 
-    this.body = createFigmaLabel(this.theme, options.body ?? 'YOU WILL LOSE 1 HEART', L.body.fontSize, skin.text);
+    this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, skin.text);
     placeFigmaLabel(this.body, { ...this.box(L.body), align: 'center' });
     this.heart = this.art(A.lifeLostArt, L.heart);
     this.lifeDelta = createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, skin.text);

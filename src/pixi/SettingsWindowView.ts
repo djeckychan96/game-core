@@ -1,6 +1,8 @@
 import { Container, Rectangle, Sprite, type NineSliceSprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { createNineSlice } from './nineSlice';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import {
   resolveWindowSkin,
   selectWindowSkin,
@@ -132,7 +134,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     if (!look) {
       this.surface = this.sprite(t.settingsPanel, 968, 1102);
       this.panel.addChildAt(this.surface, 0);
-      this.title = createLabel(this.theme, options.title ?? 'SETTINGS', { fontSize: 122, stroke: 11 });
+      this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.settings.title', READY_UI_LEGACY_TEXT.settings.title), { fontSize: 122, stroke: 11 });
       this.title.y = -463;
       fitLabelWidth(this.title, 760);
       this.panel.addChild(this.title);
@@ -156,13 +158,13 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
         return { button, off, label: text };
       };
       this.toggles = {
-        sound: makeToggle('sound', t.settingsSound, options.soundLabel ?? 'SOUND'),
-        music: makeToggle('music', t.settingsMusic, options.musicLabel ?? 'MUSIC'),
-        haptic: makeToggle('haptic', t.settingsHaptic, options.hapticLabel ?? 'HAPTIC')
+        sound: makeToggle('sound', t.settingsSound, localizedText(options.soundLabel, this.i18n, 'core.settings.sound', READY_UI_LEGACY_TEXT.settings.sound)),
+        music: makeToggle('music', t.settingsMusic, localizedText(options.musicLabel, this.i18n, 'core.settings.music', READY_UI_LEGACY_TEXT.settings.music)),
+        haptic: makeToggle('haptic', t.settingsHaptic, localizedText(options.hapticLabel, this.i18n, 'core.settings.haptic', READY_UI_LEGACY_TEXT.settings.haptic))
       };
 
-      this.homeButton = this.createButton('home', t.settingsBtnHome, options.homeLabel ?? 'EXIT', () => this.finish('home'), 599, 207, 70, -12);
-      this.restartButton = this.createButton('restart', t.settingsBtnRestart, options.restartLabel ?? 'RESTART', () => this.finish('restart'), 599, 207, 70, -12);
+      this.homeButton = this.createButton('home', t.settingsBtnHome, localizedText(options.homeLabel, this.i18n, 'core.settings.exit', READY_UI_LEGACY_TEXT.settings.exit), () => this.finish('home'), 599, 207, 70, -12);
+      this.restartButton = this.createButton('restart', t.settingsBtnRestart, localizedText(options.restartLabel, this.i18n, 'core.settings.restart', READY_UI_LEGACY_TEXT.settings.restart), () => this.finish('restart'), 599, 207, 70, -12);
       this.homeLabel = this.homeButton.labelText;
       this.restartLabel = this.restartButton.labelText;
       this.restartIcon = this.sprite(t.settingsIconRestart, 170, 155);
@@ -180,7 +182,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     const { skin, layout: layouts, art: A } = look;
     const L = layouts.map;
     this.surface = createNineSlice(A.settingsPanel, skinNineSlice(skin, 'settingsPanel'), L.window.width, L.window.height);
-    this.title = createFigmaLabel(this.theme, options.title ?? 'SETTINGS', L.title.fontSize, skin.text);
+    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.settings.title', READY_UI_LEGACY_TEXT.settings.title), L.title.fontSize, skin.text);
     this.version = createFigmaLabel(this.theme, '', L.version.fontSize, skin.text);
     this.version.style.fill = this.theme.colors.versionText;
     if (this.closeButton) {
@@ -204,9 +206,9 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       return { button, off, label: text };
     };
     this.toggles = {
-      sound: makeToggle('sound', A.settingsSound, options.soundLabel ?? 'SOUND'),
-      music: makeToggle('music', A.settingsMusic, options.musicLabel ?? 'MUSIC'),
-      haptic: makeToggle('haptic', A.settingsHaptic, options.hapticLabel ?? 'HAPTIC')
+      sound: makeToggle('sound', A.settingsSound, localizedText(options.soundLabel, this.i18n, 'core.settings.sound', READY_UI_LEGACY_TEXT.settings.sound)),
+      music: makeToggle('music', A.settingsMusic, localizedText(options.musicLabel, this.i18n, 'core.settings.music', READY_UI_LEGACY_TEXT.settings.music)),
+      haptic: makeToggle('haptic', A.settingsHaptic, localizedText(options.hapticLabel, this.i18n, 'core.settings.haptic', READY_UI_LEGACY_TEXT.settings.haptic))
     };
 
     const makeAction = (id: 'home' | 'restart', texture: Texture, label: string, layout: ReadyUiSkinSettingsActionLayout, onTap: () => void): { button: UiButton; label: Text } => {
@@ -218,8 +220,8 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       button.addChild(text);
       return { button, label: text };
     };
-    const home = makeAction('home', A.settingsBtnHome, options.homeLabel ?? 'EXIT', layouts.gameplay.home, () => this.finish('home'));
-    const restart = makeAction('restart', A.settingsBtnRestart, options.restartLabel ?? 'RESTART', layouts.gameplay.restart, () => this.finish('restart'));
+    const home = makeAction('home', A.settingsBtnHome, localizedText(options.homeLabel, this.i18n, 'core.settings.exit', READY_UI_LEGACY_TEXT.settings.exit), layouts.gameplay.home, () => this.finish('home'));
+    const restart = makeAction('restart', A.settingsBtnRestart, localizedText(options.restartLabel, this.i18n, 'core.settings.restart', READY_UI_LEGACY_TEXT.settings.restart), layouts.gameplay.restart, () => this.finish('restart'));
     this.homeButton = home.button;
     this.homeLabel = home.label;
     this.restartButton = restart.button;

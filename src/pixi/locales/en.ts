@@ -1,0 +1,32 @@
+import type { TranslationCatalog } from '../../localization';
+
+export const READY_UI_EN = Object.freeze({
+  'core.confirm.title': 'ARE YOU SURE?',
+  'core.confirm.lose_life': 'You will lose 1 heart',
+  'core.confirm.exit': 'EXIT',
+  'core.lives.title': 'REFILL HEARTS!',
+  'core.lives.next': 'Next heart in',
+  'core.lives.refill': 'REFILL',
+  'core.lives.ad_action': 'GET',
+  'core.common.max': 'MAX',
+  'core.settings.title': 'SETTINGS',
+  'core.settings.sound': 'SOUND',
+  'core.settings.music': 'MUSIC',
+  'core.settings.haptic': 'HAPTIC',
+  'core.settings.exit': 'EXIT',
+  'core.settings.restart': 'RESTART',
+  'core.level_map.hard': 'HARD',
+  'core.result.level': 'LEVEL {level}',
+  'core.result.completed': 'COMPLETED!',
+  'core.result.failed': 'FAILED',
+  'core.result.rewards': 'REWARDS',
+  'core.result.continue': 'CONTINUE',
+  'core.result.retry': 'RETRY',
+  'core.result.exit': 'EXIT',
+  'core.shop.special_offer': 'SPECIAL OFFER',
+  'core.no_ads.word_no': 'NO',
+  'core.no_ads.word_ads': 'ADS',
+  'core.no_ads.description': 'Removes pop-up ads.\nRewarded ads still available',
+  'core.starter_pack.title': 'STARTER\nPACK',
+  'core.orientation.rotate_device': 'Rotate your device'
+}) satisfies TranslationCatalog;

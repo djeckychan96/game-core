@@ -4,6 +4,8 @@ import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName } from '
 import { WinConfettiEffect, type WinConfettiConfig } from './fx/WinConfettiEffect';
 import { WinStarsEffect } from './fx/WinStarsEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth, formatAmount } from './text';
 import { resolveTheme } from './theme';
@@ -159,21 +161,21 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.subtitleText.y = -304;
     this.panel.addChild(this.titleText, this.subtitleText);
 
-    this.rewardCaption = createLabel(this.theme, options.rewardsLabel ?? 'REWARDS', { fontSize: 38, stroke: 9 });
+    this.rewardCaption = createLabel(this.theme, localizedText(options.rewardsLabel, this.i18n, 'core.result.rewards', READY_UI_LEGACY_TEXT.result.rewards), { fontSize: 38, stroke: 9 });
     this.rewardCaption.y = -139;
     this.rewardCoin = this.sprite(t.coinBig, 196, 210);
     this.rewardAmount = createLabel(this.theme, '0', { fontSize: 88, stroke: 9 });
     this.rewardAmount.y = 119; // donor 101 overlapped the coin; Trail Arrow's fix moved it 18 lower
     this.panel.addChild(this.rewardCaption, this.rewardCoin, this.rewardAmount);
 
-    this.nextButton = this.createButton('next', t.btnGreen, options.nextLabel ?? 'CONTINUE', () => this.finish('next'));
+    this.nextButton = this.createButton('next', t.btnGreen, localizedText(options.nextLabel, this.i18n, 'core.result.continue', READY_UI_LEGACY_TEXT.result.continue), () => this.finish('next'));
     this.nextButton.position.set(-230, 310);
-    this.retryButton = this.createButton('retry', t.btnYellow, options.retryLabel ?? 'RETRY', () => this.finish('retry'));
+    this.retryButton = this.createButton('retry', t.btnYellow, localizedText(options.retryLabel, this.i18n, 'core.result.retry', READY_UI_LEGACY_TEXT.result.retry), () => this.finish('retry'));
     this.retryButton.position.set(230, 310);
     // fail: the win's CONTINUE size for the primary, the secondary at 0.85 of it, 26 units apart
-    this.failRetryButton = this.createButton('fail-retry', t.btnGreen, options.retryLabel ?? 'RETRY', () => this.finish('retry'));
+    this.failRetryButton = this.createButton('fail-retry', t.btnGreen, localizedText(options.retryLabel, this.i18n, 'core.result.retry', READY_UI_LEGACY_TEXT.result.retry), () => this.finish('retry'));
     this.failRetryButton.position.set(0, -48);
-    this.exitButton = this.createButton('exit', t.btnYellow, options.exitLabel ?? 'EXIT', () => this.finish('exit'), 373, 176, 53, -8);
+    this.exitButton = this.createButton('exit', t.btnYellow, localizedText(options.exitLabel, this.i18n, 'core.result.exit', READY_UI_LEGACY_TEXT.result.exit), () => this.finish('exit'), 373, 176, 53, -8);
     this.exitButton.position.set(0, 170);
     this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
     // the stars are hidden until they pop, so they are counted here, not measured at fit time
@@ -193,9 +195,14 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   protected applyParams(params: ResultWindowParams): void {
     this.params = params;
     const fail = params.outcome === 'fail';
-    this.titleText.text = params.title ?? `LEVEL ${params.level}`;
+    this.titleText.text = params.title ?? this.i18n?.t('core.result.level', { level: params.level }) ?? READY_UI_LEGACY_TEXT.result.level(params.level);
     fitLabelWidth(this.titleText, 760);
-    this.subtitleText.text = params.subtitle ?? (fail ? 'FAILED' : 'COMPLETED!');
+    this.subtitleText.text = localizedText(
+      params.subtitle,
+      this.i18n,
+      fail ? 'core.result.failed' : 'core.result.completed',
+      fail ? READY_UI_LEGACY_TEXT.result.failed : READY_UI_LEGACY_TEXT.result.completed
+    );
     fitLabelWidth(this.subtitleText, 760);
     this.rewardCaption.visible = !fail;
     this.rewardCoin.visible = !fail;

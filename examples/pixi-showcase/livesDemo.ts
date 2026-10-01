@@ -1,7 +1,8 @@
 // Figma Lives proof page: the Core LivesWindowView alone, driven by the host ticker like a game. Target of
 // `npm run showcase:lives` (scripts/lives-check.mjs). Query:
 //   ?donor=1         the default variant as every existing game gets it: required pack only, no `include`
-//   ?lang=ru         runtime Russian copy — the art carries no text
+//   ?legacy=1        omit the provider as well, for the exact pre-localization compatibility smoke
+//   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
 //   ?state=full      lives at the cap: MAX, REFILL disabled
 //   ?state=noad      no ad offer: REFILL alone, centred
 //   ?parity=1        flat background, no dim, the Figma values: the check diffs the capture against Figma's render
@@ -9,19 +10,17 @@
 import { Application, Container, Text } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import { LIVES_FIGMA_TEXTURES, LivesWindowView, READY_UI_STYLE_1, loadReadyUiAssets, type LivesWindowParams } from 'game-core/pixi';
+import { createShowcaseLocalization } from './localizationDemo';
 
 const params = new URLSearchParams(location.search);
 const parity = params.has('parity');
 const donor = params.has('donor');
+const legacy = params.has('legacy');
 const styled = params.has('skin');
 const state = params.get('state');
-// EN = the Figma copy. RU: title / next = SoliPix's LIVES_WORDS; REFILL / GET / MAX = demo copy (no game has them yet)
-const COPY = {
-  en: { title: 'REFILL HEARTS!', nextLifeLabel: 'NEXT HEART IN', refillLabel: 'REFILL NOW!', adLabel: 'GET', fullLabel: 'MAX' },
-  ru: { title: 'ЖИЗНИ', nextLifeLabel: 'Новая жизнь через', refillLabel: 'ПОПОЛНИТЬ!', adLabel: 'ВЗЯТЬ', fullLabel: 'МАКС' }
-};
-const copy = params.get('lang') === 'ru' ? COPY.ru : COPY.en;
+const i18n = createShowcaseLocalization();
 document.body.classList.toggle('parity', parity);
+document.documentElement.lang = i18n.locale;
 const SHOW: LivesWindowParams = state === 'full'
   ? { lives: 5, maxLives: 5, refillPrice: 900 }
   : { lives: 1, maxLives: 5, timerText: '24:15', refillPrice: 900, adOffer: state !== 'noad' }; // the Figma values
@@ -43,7 +42,7 @@ const textures = await loadReadyUiAssets(donor ? { baseUrl: './pixi-ui/' } : sty
 const events: string[] = [];
 
 const view = new LivesWindowView({
-  ui, motion, textures, id: 'lives', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }), ...copy,
+  ui, motion, textures, ...(!legacy ? { i18n } : {}), id: 'lives', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }),
   ...(parity ? { backdropAlpha: 0 } : {}),
   onRefill: (p) => events.push(`refill:${p.lives}`),
   onWatchAd: (p) => events.push(`ad:${p.lives}`),
@@ -64,6 +63,7 @@ const rectOf = (node: Container): Rect => {
 };
 const PARTS = ['title', 'countText', 'nextLabel', 'timerText', 'priceText', 'refillButton', 'adButton', 'closeButton'] as const;
 (window as unknown as { __lives: unknown }).__lives = {
+  i18n, view, provider: !legacy, skin: styled ? READY_UI_THEME.skin.id : null,
   events,
   show: () => view.show({ ...SHOW }),
   state: () => view.state,

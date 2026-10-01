@@ -1,5 +1,7 @@
 import { Container, Sprite, type Text } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth, formatAmount } from './text';
 
@@ -62,7 +64,7 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
     hero.position.set(-6, -310);
     this.panel.addChild(hero);
 
-    this.title = createLabel(this.theme, 'STARTER\nPACK', { fontSize: 84, stroke: 10 });
+    this.title = createLabel(this.theme, localizedText(undefined, this.i18n, 'core.starter_pack.title', READY_UI_LEGACY_TEXT.starterPackTitle), { fontSize: 84, stroke: 10 });
     this.title.position.set(-304, -577);
     this.title.rotation = (-14 * Math.PI) / 180;
     this.panel.addChild(this.title);
@@ -102,7 +104,7 @@ export class StarterPackWindowView extends ModalWindow<StarterPackWindowParams> 
 
   protected applyParams(params: StarterPackWindowParams): void {
     this.params = params;
-    this.title.text = params.title ?? 'STARTER\nPACK';
+    this.title.text = localizedText(params.title, this.i18n, 'core.starter_pack.title', READY_UI_LEGACY_TEXT.starterPackTitle);
     fitLabelWidth(this.title, HEADER_MAX_WIDTH);
     this.layoutTimer();
     this.coinsText.text = formatAmount(params.rewards.coins);

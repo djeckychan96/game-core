@@ -1,0 +1,32 @@
+import type { TranslationCatalog } from '../../localization';
+
+export const READY_UI_RU = Object.freeze({
+  'core.confirm.title': 'ВЫ УВЕРЕНЫ?',
+  'core.confirm.lose_life': 'Вы потеряете 1 жизнь',
+  'core.confirm.exit': 'ВЫХОД',
+  'core.lives.title': 'ЖИЗНИ',
+  'core.lives.next': 'Новая жизнь через',
+  'core.lives.refill': 'ПОПОЛНИТЬ!',
+  'core.lives.ad_action': 'ВЗЯТЬ',
+  'core.common.max': 'МАКС',
+  'core.settings.title': 'НАСТРОЙКИ',
+  'core.settings.sound': 'ЗВУК',
+  'core.settings.music': 'МУЗЫКА',
+  'core.settings.haptic': 'ВИБРО',
+  'core.settings.exit': 'ВЫХОД',
+  'core.settings.restart': 'ЗАНОВО',
+  'core.level_map.hard': 'СЛОЖНЫЙ',
+  'core.result.level': 'УРОВЕНЬ {level}',
+  'core.result.completed': 'ПРОЙДЕН!',
+  'core.result.failed': 'НЕ ПРОЙДЕН',
+  'core.result.rewards': 'НАГРАДА',
+  'core.result.continue': 'ДАЛЕЕ',
+  'core.result.retry': 'ЗАНОВО',
+  'core.result.exit': 'К УРОВНЯМ',
+  'core.shop.special_offer': 'ЗОЛОТО',
+  'core.no_ads.word_no': 'БЕЗ',
+  'core.no_ads.word_ads': 'РЕКЛАМЫ',
+  'core.no_ads.description': 'Убирает всплывающую рекламу.\nРеклама за награду остается',
+  'core.starter_pack.title': 'СТАРТОВЫЙ\nНАБОР',
+  'core.orientation.rotate_device': 'Поверните устройство'
+}) satisfies TranslationCatalog;

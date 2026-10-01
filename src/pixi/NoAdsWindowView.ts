@@ -1,5 +1,7 @@
 import { type Text } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import type { UiButton } from './UiButton';
 import { createLabel, fitLabelWidth } from './text';
 
@@ -38,11 +40,11 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
 
     this.panel.addChildAt(this.sprite(t.noAdsPanel, 975, 1355), 0);
 
-    const no = createLabel(this.theme, options.wordNo ?? 'NO', { fontSize: 108, stroke: 12 });
+    const no = createLabel(this.theme, localizedText(options.wordNo, this.i18n, 'core.no_ads.word_no', READY_UI_LEGACY_TEXT.noAds.no), { fontSize: 108, stroke: 12 });
     no.position.set(-452, -672);
     no.rotation = (-32 * Math.PI) / 180;
     fitLabelWidth(no, 320);
-    const ads = createLabel(this.theme, options.wordAds ?? 'ADS', { fontSize: 108, stroke: 12 });
+    const ads = createLabel(this.theme, localizedText(options.wordAds, this.i18n, 'core.no_ads.word_ads', READY_UI_LEGACY_TEXT.noAds.ads), { fontSize: 108, stroke: 12 });
     ads.position.set(-386, -584);
     ads.rotation = (-32 * Math.PI) / 180;
     fitLabelWidth(ads, 320);
@@ -60,7 +62,7 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
 
   protected applyParams(params: NoAdsWindowParams): void {
     this.params = params;
-    this.description.text = params.description ?? 'Removes pop-up ads.\nRewarded ads still available';
+    this.description.text = localizedText(params.description, this.i18n, 'core.no_ads.description', READY_UI_LEGACY_TEXT.noAds.description);
     fitLabelWidth(this.description, 760);
     this.buyButton.setLabel(params.price);
     if (this.buyButton.labelText) fitLabelWidth(this.buyButton.labelText, 520);

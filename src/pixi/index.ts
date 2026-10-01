@@ -77,6 +77,7 @@ export { DEFAULT_READY_UI_THEME, resolveTheme } from './theme';
 export type { ReadyUiTheme, ReadyUiThemeOverrides, ReadyUiTextTheme, ReadyUiColors, ReadyUiLevelMapTheme } from './theme';
 export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer, TEXT_SUPERSAMPLE } from './text';
 export type { LabelOptions } from './text';
+export { READY_UI_CATALOGS, READY_UI_EN, READY_UI_RU } from './locales';
 export { ClickRippleEffect, DEFAULT_CLICK_RIPPLE } from './fx';
 export type {
   ClickRippleConfig,

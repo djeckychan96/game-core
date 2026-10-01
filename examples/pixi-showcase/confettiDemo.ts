@@ -9,9 +9,12 @@
 import { Application } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import { ResultWindowView, WIN_CONFETTI_TEXTURES, loadReadyUiAssets, type ResultWindowParams } from 'game-core/pixi';
+import { createShowcaseLocalization } from './localizationDemo';
 
 type Tier = 'desktop' | 'mobile' | 'lowPerf';
 const params = new URLSearchParams(location.search);
+const i18n = createShowcaseLocalization();
+document.documentElement.lang = i18n.locale;
 const confettiOn = params.get('confetti') !== '0';
 const tierParam = params.get('tier');
 const tier: Tier = tierParam === 'desktop' || tierParam === 'mobile' || tierParam === 'lowPerf'
@@ -51,7 +54,7 @@ const FAIL: ResultWindowParams = { level: 12, outcome: 'fail', rewardCoins: 0 };
 let next: ResultWindowParams | null = null;
 
 const view = new ResultWindowView({
-  ui, motion, textures,
+  ui, motion, textures, i18n,
   confetti: confettiOn && fireworksOn ? { tier, ...(seedParam !== null ? { random: seeded(Number(seedParam) || 1) } : {}) } : false,
   onNext: () => events.push('next'),
   onRetry: () => events.push('retry'),

@@ -12,6 +12,24 @@ export type {
 } from './core/CoreRuntime';
 export { BUILD_INFO } from './buildInfo';
 export type { GameCoreBuildInfo } from './buildInfo';
+export {
+  LocalizationRuntime,
+  resolveSupportedLocale,
+  mergeLocalizationCatalogs,
+  validateLocalizationCatalogs
+} from './localization';
+export type {
+  TranslationParams,
+  TranslationCatalog,
+  LocalizationCatalogs,
+  LocalizationTextProvider,
+  LocalizationDiagnosticCode,
+  LocalizationDiagnostic,
+  LocalizationRuntimeOptions,
+  LocalizationCatalogIssueCode,
+  LocalizationCatalogIssue,
+  LocalizationCatalogValidationOptions
+} from './localization';
 export { MotionRuntime } from './motion/MotionRuntime';
 export type {
   MotionScope,

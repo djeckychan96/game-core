@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LocalizationRuntime } from '../../src/localization';
 import * as pixiEntry from '../../src/pixi/index';
+import { READY_UI_CATALOGS } from '../../src/pixi/locales';
 import { ORIENTATION_GUARD_QUERY, createOrientationGuard, type OrientationGuardOptions } from '../../src/pixi/OrientationGuard';
 
 // --- a device: a viewport size and a primary pointer, evaluated by a tiny media-query engine (only `and` + `(feature: value)`),
@@ -171,6 +173,16 @@ describe('OrientationGuard (portrait-only game)', () => {
     expect(element!.children[1]!.textContent).toBe('Rotate <b>device</b>');
     expect(element!.children[1]!.innerHTML).toBe('');
     expect(element!.style.zIndex).toBe('50');
+  });
+
+  it('uses optional localized copy while an explicit host text still wins', () => {
+    const i18n = new LocalizationRuntime({ rawLocale: 'en-US', supportedLocales: ['ru', 'en'], defaultLocale: 'ru', catalogs: READY_UI_CATALOGS });
+    const localized = setup(PHONE_LANDSCAPE, { i18n });
+    expect(localized.element!.attributes['aria-label']).toBe('Rotate your device');
+    expect(localized.element!.children[1]!.textContent).toBe('Rotate your device');
+
+    const explicit = setup(PHONE_LANDSCAPE, { i18n, text: 'Turn the phone' });
+    expect(explicit.element!.children[1]!.textContent).toBe('Turn the phone');
   });
 
   it('3. landscape touch: every pointer / touch / mouse / click / wheel event that hits the cover is swallowed', () => {

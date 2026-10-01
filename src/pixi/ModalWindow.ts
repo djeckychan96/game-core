@@ -2,6 +2,7 @@ import { Container, type FederatedPointerEvent, Graphics, Rectangle, Sprite, typ
 import type {
   EaseFn,
   MotionRuntime,
+  LocalizationTextProvider,
   UiRuntime,
   WindowCloseIntent,
   WindowCloseReason,
@@ -45,6 +46,8 @@ export interface ModalWindowOptions {
   motion: MotionRuntime;
   textures: ReadyUiTextures;
   theme?: ReadyUiThemeOverrides;
+  /** Optional structural localization provider. Explicit view copy still wins; omitted preserves every legacy default. */
+  i18n?: LocalizationTextProvider;
   /** UiRuntime window id; the close button registers as `<id>:close`. */
   id: string;
   /** default true */
@@ -101,6 +104,7 @@ export abstract class ModalWindow<TParams = void> extends Container {
   protected readonly ui: UiRuntime;
   protected readonly motion: MotionRuntime;
   protected readonly textures: ReadyUiTextures;
+  protected readonly i18n: LocalizationTextProvider | undefined;
   protected readonly backdrop: Graphics;
   protected readonly panel: Container;
   protected readonly closeButton: UiButton | null;
@@ -129,6 +133,7 @@ export abstract class ModalWindow<TParams = void> extends Container {
     this.ui = options.ui;
     this.motion = options.motion;
     this.textures = options.textures;
+    this.i18n = options.i18n;
     this.onDismiss = options.onDismiss ?? null;
     this.onHiddenHook = options.onHidden ?? null;
     this.closeOnBackdrop = options.closeOnBackdrop ?? true;

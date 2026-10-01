@@ -13,6 +13,10 @@
 // see them. It owns that element, its listeners and one MediaQueryList listener — no timer, no requestAnimationFrame, no
 // window / document listener. It does NOT pause the game (Gameplay Contract V1 `setPaused` has no arbitration between a
 // modal, an ad and this cover): `onChange` tells the host, and the host pauses through its own path.
+import type { LocalizationTextProvider } from '../index';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
+
 /** The orientation a game is laid out for. 'portrait' = a touch device in landscape gets the cover; 'any' = never. */
 export type GameOrientation = 'any' | 'portrait';
 
@@ -25,6 +29,8 @@ export interface OrientationGuardOptions {
   container?: HTMLElement;
   /** Default 'Поверните устройство'. Set as plain text. */
   text?: string;
+  /** Optional structural localization provider. */
+  i18n?: LocalizationTextProvider;
   /** Default 2147483647 — above any game layer. */
   zIndex?: number;
   /**
@@ -43,7 +49,6 @@ interface MediaQuerySource {
   removeListener?(listener: () => void): void;
 }
 
-const DEFAULT_TEXT = 'Поверните устройство';
 const SWALLOWED_EVENTS = [
   'pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'touchstart', 'touchmove', 'touchend', 'touchcancel',
   'mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu', 'wheel'
@@ -81,7 +86,7 @@ export class OrientationGuard {
       return;
     }
     const doc = container.ownerDocument;
-    const text = options.text ?? DEFAULT_TEXT;
+    const text = localizedText(options.text, options.i18n, 'core.orientation.rotate_device', READY_UI_LEGACY_TEXT.orientation);
     const element = doc.createElement('div');
     element.dataset.gameCore = 'orientation-guard';
     element.setAttribute('role', 'dialog');

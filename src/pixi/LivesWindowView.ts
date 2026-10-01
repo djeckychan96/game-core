@@ -2,6 +2,8 @@ import { CanvasTextMetrics, Container, Rectangle, Sprite, type Text, type Textur
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { resolveWindowSkin, selectWindowSkin, skinNineSlice, type ReadyUiSkin, type ReadyUiSkinBox, type WindowSkinLook } from './skin';
 import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel } from './text';
 import { UiButton } from './UiButton';
@@ -134,13 +136,13 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.look = look;
     this.onRefill = options.onRefill;
     this.onWatchAd = options.onWatchAd ?? null;
-    this.fullLabel = options.fullLabel ?? 'MAX';
+    this.fullLabel = localizedText(options.fullLabel, this.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.lives.full);
 
     if (look) {
       const { skin, layout: L, art: A } = look;
       const surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface'), L.window.width, L.window.height);
       surface.position.set(X(look, L.window.x + L.window.width / 2), Y(look, L.window.y + L.window.height / 2));
-      this.title = createFigmaLabel(this.theme, options.title ?? 'REFILL HEARTS!', L.title.fontSize, skin.text);
+      this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), L.title.fontSize, skin.text);
       placeFigmaLabel(this.title, { ...panelBox(look, L.title), align: 'center' });
       if (this.closeButton) {
         this.closeButton.background.texture = A.windowClose;
@@ -151,7 +153,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       inset.position.set(X(look, L.inset.x + L.inset.width / 2), Y(look, L.inset.y + L.inset.height / 2));
       const heart = sprite(A.lifeArt, panelBox(look, L.heart));
       this.countText = createFigmaLabel(this.theme, '5', L.count.fontSize, skin.text);
-      this.nextLabel = createFigmaLabel(this.theme, options.nextLifeLabel ?? 'NEXT HEART IN', L.nextLabel.fontSize, skin.text);
+      this.nextLabel = createFigmaLabel(this.theme, localizedText(options.nextLifeLabel, this.i18n, 'core.lives.next', READY_UI_LEGACY_TEXT.lives.styledNext), L.nextLabel.fontSize, skin.text);
       placeFigmaLabel(this.nextLabel, { ...panelBox(look, L.nextLabel), align: 'center' });
       this.timerText = createFigmaLabel(this.theme, '00:00', L.timer.fontSize, skin.text);
 
@@ -160,7 +162,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
         width: L.refill.width, height: L.refill.height, pressScale: 0.9, onTap: () => this.finish('refill')
       }));
       this.refillButton.position.set(X(look, L.refill.x + L.refill.width / 2), Y(look, L.refill.y + L.refill.height / 2));
-      const refillLabel = createFigmaLabel(this.theme, options.refillLabel ?? 'REFILL NOW!', L.refillLabel.fontSize, skin.text);
+      const refillLabel = createFigmaLabel(this.theme, localizedText(options.refillLabel, this.i18n, 'core.lives.refill', READY_UI_LEGACY_TEXT.lives.styledRefill), L.refillLabel.fontSize, skin.text);
       placeFigmaLabel(refillLabel, { ...buttonBox(L.refill, L.refillLabel), align: 'center' });
       this.priceText = createFigmaLabel(this.theme, '900', L.priceRow.fontSize, skin.text);
       this.priceCoin = sprite(A.priceIcon, { x: 0, y: 0, width: L.coin.width, height: L.coin.height });
@@ -171,7 +173,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
         width: L.ad.width, height: L.ad.height, pressScale: 0.9, onTap: () => this.finish('ad')
       }));
       this.adButton.position.set(X(look, L.ad.x + L.ad.width / 2), Y(look, L.ad.y + L.ad.height / 2));
-      const adLabel = createFigmaLabel(this.theme, options.adLabel ?? 'GET', L.adLabel.fontSize, skin.text);
+      const adLabel = createFigmaLabel(this.theme, localizedText(options.adLabel, this.i18n, 'core.lives.ad_action', READY_UI_LEGACY_TEXT.lives.adAction), L.adLabel.fontSize, skin.text);
       placeFigmaLabel(adLabel, { ...buttonBox(L.ad, L.adLabel), align: 'center' });
       const rewardLabel = createFigmaLabel(this.theme, options.adRewardLabel ?? '+1', L.rewardLabel.fontSize, skin.text);
       placeFigmaLabel(rewardLabel, { ...buttonBox(L.ad, L.rewardLabel), align: 'left' });
@@ -193,7 +195,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const t = this.textures;
     this.priceCoin = null;
     this.panel.addChildAt(this.sprite(t.panelPurple, 968, 1070), 0);
-    this.title = createLabel(this.theme, options.title ?? 'REFILL HEARTS!', { fontSize: 88, stroke: 11 });
+    this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), { fontSize: 88, stroke: 11 });
     this.title.y = -440;
     fitLabelWidth(this.title, 780);
     this.panel.addChild(this.title);
@@ -204,14 +206,14 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.panel.addChild(heart);
     this.countText = createLabel(this.theme, '1/5', { fontSize: 132, stroke: 10 });
     this.countText.position.set(-267, -30);
-    this.nextLabel = createLabel(this.theme, options.nextLifeLabel ?? 'Next heart in', { fontSize: 50, stroke: 7 });
+    this.nextLabel = createLabel(this.theme, localizedText(options.nextLifeLabel, this.i18n, 'core.lives.next', READY_UI_LEGACY_TEXT.lives.donorNext), { fontSize: 50, stroke: 7 });
     this.nextLabel.position.set(180, -69);
     this.timerText = createLabel(this.theme, '00:00', { fontSize: 92, stroke: 10 });
     this.timerText.position.set(180, 29);
     this.panel.addChild(this.countText, this.nextLabel, this.timerText);
 
     // REFILL: label above, price + coin below (donor button layout)
-    this.refillButton = this.createButton('refill', t.btnGreenShort, options.refillLabel ?? 'REFILL', () => this.finish('refill'), 371, 207, 52, -50);
+    this.refillButton = this.createButton('refill', t.btnGreenShort, localizedText(options.refillLabel, this.i18n, 'core.lives.refill', READY_UI_LEGACY_TEXT.lives.donorRefill), () => this.finish('refill'), 371, 207, 52, -50);
     if (this.refillButton.labelText) fitLabelWidth(this.refillButton.labelText, 300);
     const price = new Container();
     price.position.set(18, 0);

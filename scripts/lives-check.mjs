@@ -210,8 +210,8 @@ async function run(baseUrl) {
 
     // 2 + 3. shots per viewport and copy, the two states, real clicks
     const shots = [
-      ['iphone-390x844-en', 390, 844, 3, 'lang=en', true], ['iphone-390x844-ru', 390, 844, 3, 'lang=ru', false],
-      ['desktop-1280x800-en', 1280, 800, 2, 'lang=en', true], ['desktop-1280x800-ru', 1280, 800, 2, 'lang=ru', false],
+      ['iphone-390x844-en', 390, 844, 3, 'locale=en', true], ['iphone-390x844-ru', 390, 844, 3, 'locale=ru', false],
+      ['desktop-1280x800-en', 1280, 800, 2, 'locale=en', true], ['desktop-1280x800-ru', 1280, 800, 2, 'locale=ru', false],
       ['iphone-390x844-full', 390, 844, 3, 'state=full', false], ['iphone-390x844-noad', 390, 844, 3, 'state=noad', false],
       ['iphone-390x844-donor-default', 390, 844, 3, 'donor=1', false]
     ];

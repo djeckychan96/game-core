@@ -6,6 +6,7 @@
 import { Ticker } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import { HudView, SettingsWindowView, UiButton, createOrientationGuard, createReadyUiOverlay, resolveTheme } from 'game-core/pixi';
+import { createShowcaseLocalization } from './localizationDemo';
 
 // ---------- 1. DOM gameplay ----------
 const game = document.getElementById('game') as HTMLElement;
@@ -37,13 +38,15 @@ for (const type of ['pointerdown', 'click']) {
 const core = new CoreRuntime();
 const motion = new MotionRuntime();
 const ui = new UiRuntime({ motion });
+const i18n = createShowcaseLocalization();
+document.documentElement.lang = i18n.locale;
 core.registerRuntime('motion', motion);
 core.registerRuntime('ui', ui);
 const overlay = await createReadyUiOverlay({ container: game, core, ui }); // assets: default ./pixi-ui/
 // a portrait-only game: a phone held in landscape gets the "rotate" cover (a desktop window never does); a game with a
 // simulation pauses it here — `gameplay.setPaused(blocked, 'ui')` — and checks `guard.blocked` once at start
 const guardChanges: boolean[] = [];
-const guard = createOrientationGuard({ orientation: 'portrait', onChange: (blocked) => { guardChanges.push(blocked); } });
+const guard = createOrientationGuard({ orientation: 'portrait', i18n, onChange: (blocked) => { guardChanges.push(blocked); } });
 
 let frames = 0;
 let last = performance.now();
@@ -59,8 +62,8 @@ window.addEventListener('resize', layout);
 // ---------- 3. game-specific Ready UI ----------
 const theme = resolveTheme();
 const textures = overlay.textures;
-const settings = overlay.add(new SettingsWindowView({ ui, motion, textures, id: 'settings', closeOnBackdrop: false, onToggle: () => undefined, onHome: () => undefined, onRestart: () => undefined }));
-const hud = new HudView({ ui, motion, textures, id: 'hud', coins: 1250, lives: 4, maxLives: 5, onCoinsTap: () => { counters.pixiTaps++; }, onLivesTap: () => { counters.pixiTaps++; },
+const settings = overlay.add(new SettingsWindowView({ ui, motion, textures, i18n, id: 'settings', closeOnBackdrop: false, onToggle: () => undefined, onHome: () => undefined, onRestart: () => undefined }));
+const hud = new HudView({ ui, motion, textures, i18n, id: 'hud', coins: 1250, lives: 4, maxLives: 5, onCoinsTap: () => { counters.pixiTaps++; }, onLivesTap: () => { counters.pixiTaps++; },
   onSettingsTap: () => settings.show({ sound: true, music: true, version: 'ReadyUiOverlay demo', gameButtons: false }) });
 const bonus = new UiButton({ ui, id: 'bonus', theme, texture: textures.btnGreenShort, width: 240, height: 110, label: 'PIXI', onTap: () => { counters.pixiTaps++; } });
 overlay.root.addChildAt(hud, 0);
@@ -81,7 +84,7 @@ requestAnimationFrame(frame);
 setInterval(() => { status.textContent = `mode=${overlay.inputMode} blocking=${overlay.isBlocking} rotate=${guard.blocked} domClicks=${counters.domClicks} drags=${counters.drags} pixiTaps=${counters.pixiTaps}`; }, 250);
 
 (window as unknown as { __overlayDemo: unknown }).__overlayDemo = {
-  overlay, core, ui, hud, settings, bonus, counters, layout, guard, guardChanges,
+  overlay, core, ui, i18n, hud, settings, bonus, counters, layout, guard, guardChanges,
   get frames() { return frames; },
   tickers: () => ({ app: overlay.app.ticker?.started ?? false, // (the Application drops its ticker on destroy)
     system: Ticker.system.started, shared: Ticker.shared.started, systemAutoStart: Ticker.system.autoStart })

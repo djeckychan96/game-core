@@ -48,6 +48,7 @@
     "showcase:orientation": "node scripts/orientation-guard-check.mjs",
     "showcase:confirm": "node scripts/confirm-exit-check.mjs",
     "showcase:lives": "node scripts/lives-check.mjs",
+    "showcase:localization": "node scripts/localization-check.mjs",
     "showcase:qa": "node scripts/qa-panel-check.mjs",
     "showcase:confetti": "node scripts/confetti-check.mjs",
     "qa:isolation": "node scripts/qa-isolation-check.mjs",

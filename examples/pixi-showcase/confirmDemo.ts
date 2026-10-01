@@ -1,25 +1,25 @@
 // Figma confirm-exit proof page: the Core ConfirmWindowView alone, over the Figma screen fill, driven by the host
 // ticker like a game. Target of `npm run showcase:confirm` (scripts/confirm-exit-check.mjs). Query:
-//   ?lang=ru   the SoliPix runtime copy — the art carries no text
+//   ?locale=ru showcase/manual-QA locale override — production gets it from the ready platform
 //   ?parity=1  flat background, no dim: the check diffs the capture against Figma's render of modal/confirm-exit
 //   ?sheet=1   9-slice sheet: the Figma window shell and button surface at other sizes (no window)
 //   ?donor=1   the default variant as every existing game gets it: required pack only, no `include`
+//   ?legacy=1  omit the provider as well, for the exact pre-localization compatibility smoke
 //   ?skin=1    Style 1 chosen once in the game's Ready UI config (`theme: { skin }` + `loadReadyUiAssets({ skin })`), no variant
 import { Application, Container, Text } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import { CONFIRM_EXIT_FIGMA_TEXTURES, ConfirmWindowView, READY_UI_NINE_SLICES, READY_UI_STYLE_1, UiButton, createNineSlice, loadReadyUiAssets, resolveTheme } from 'game-core/pixi';
+import { createShowcaseLocalization } from './localizationDemo';
 
 const params = new URLSearchParams(location.search);
 const parity = params.has('parity');
 const sheet = params.has('sheet');
 const donor = params.has('donor');
+const legacy = params.has('legacy');
 const styled = params.has('skin');
-const COPY = {
-  en: { title: 'ARE YOU SURE?', body: 'YOU WILL LOSE 1 HEART', confirmLabel: 'EXIT' }, // the Figma copy
-  ru: { title: 'ВЫ УВЕРЕНЫ?', body: 'Вы потеряете 1 жизнь', confirmLabel: 'ВЫХОД' } // SoliPix (donor ru.json)
-};
-const copy = params.get('lang') === 'ru' ? COPY.ru : COPY.en;
+const i18n = createShowcaseLocalization();
 document.body.classList.toggle('parity', parity);
+document.documentElement.lang = i18n.locale;
 
 const app = new Application();
 // the production overlay's resolution rule: device pixel ratio clamped to 2
@@ -50,7 +50,7 @@ const rectOf = (node: Container): Rect => {
 let view: ConfirmWindowView | null = null;
 if (!sheet) {
   view = new ConfirmWindowView({
-    ui, motion, textures, id: 'exit-confirm', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }), ...copy,
+    ui, motion, textures, ...(!legacy ? { i18n } : {}), id: 'exit-confirm', ...(donor ? {} : styled ? { theme: READY_UI_THEME } : { variant: 'figma' as const }),
     ...(parity ? { backdropAlpha: 0 } : {}),
     onConfirm: () => events.push('confirm'),
     onDismiss: (reason) => events.push(`dismiss:${reason}`)
@@ -105,6 +105,7 @@ view?.show();
 // ---------- what the proof reads ----------
 const PARTS = ['surface', 'title', 'closeButton', 'glow', 'confirmButton', 'confirmLabel', 'body', 'heart', 'lifeDelta'] as const;
 (window as unknown as { __confirm: unknown }).__confirm = {
+  i18n, view, provider: !legacy, skin: styled ? READY_UI_THEME.skin.id : null,
   events,
   show: () => view?.show(),
   state: () => view?.state ?? 'sheet',

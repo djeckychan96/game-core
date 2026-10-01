@@ -126,6 +126,18 @@ screen on a 320 px phone, an iPhone and a desktop window; canvas text is re-rast
 the final on-screen density (`applyTextResolution`, see Render quality) so it stays crisp under
 scaling.
 
+### Localization
+
+Ready UI accepts an optional immutable `LocalizationTextProvider`. A host creates one runtime after
+`await platform.ready()` from `platform.environment.language()`, merges the exported
+`READY_UI_CATALOGS` with its `game.*` catalogs, and passes the same provider to Core and game UI.
+Views resolve text as explicit option/param → provider → exact legacy default; `UiButton` receives
+only final display strings. Locale and UI Skin V1 remain independent. The showcase-only manual QA
+selector is `?locale=ru|en`.
+
+See [LOCALIZATION.md](./LOCALIZATION.md) for boot order, fallback, diagnostics, catalog validation,
+game-catalog composition and the browser proof command.
+
 ### LevelMapView
 
 The Trail Arrow scroll ribbon: badges (`badge_base` / `badge_current` / `badge_locked`), gold

@@ -253,7 +253,7 @@ async function run(baseUrl) {
     for (const vp of [{ name: 'iphone-390x844', width: 390, height: 844, dpr: 3 }, { name: 'desktop-1280x800', width: 1280, height: 800, dpr: 2 }]) {
       for (const lang of ['en', 'ru']) {
         step(`${vp.name} ${lang}`);
-        const { context, page } = await openPage(browser, `${baseUrl}confirm.html?lang=${lang}`, vp, errors, `${vp.name}-${lang}`);
+        const { context, page } = await openPage(browser, `${baseUrl}confirm.html?locale=${lang}`, vp, errors, `${vp.name}-${lang}`);
         await settle(page);
         const file = `${vp.name}-${lang}.png`;
         await page.screenshot({ path: resolve(outDir, file) });
@@ -296,7 +296,7 @@ async function run(baseUrl) {
     {
       step('donor default variant 390 × 844');
       const net = [];
-      const { context, page } = await openPage(browser, `${baseUrl}confirm.html?donor=1&lang=ru`, { width: 390, height: 844, dpr: 3 }, errors, 'donor', null, net);
+      const { context, page } = await openPage(browser, `${baseUrl}confirm.html?donor=1&locale=ru`, { width: 390, height: 844, dpr: 3 }, errors, 'donor', null, net);
       await settle(page);
       await page.screenshot({ path: resolve(outDir, 'iphone-390x844-donor-default.png') });
       const scene = await page.evaluate(() => window.__confirm.scene());

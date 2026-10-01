@@ -7,8 +7,10 @@ import {
   Sprite,
   type Text
 } from 'pixi.js';
-import type { ButtonController, MotionHandle, MotionRuntime, MotionTweenOptions, UiRuntime } from '../index';
+import type { ButtonController, LocalizationTextProvider, MotionHandle, MotionRuntime, MotionTweenOptions, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { applyTextResolution, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
@@ -56,6 +58,8 @@ export interface LevelMapViewOptions extends LevelMapProgress {
   motion: MotionRuntime;
   textures: ReadyUiTextures;
   theme?: ReadyUiThemeOverrides;
+  /** Optional structural localization provider. */
+  i18n?: LocalizationTextProvider;
   /** Unique id per UiRuntime; buttons register as `<id>:node:<level>`. Default `level-map`. */
   id?: string;
   /** Settled tap on an open level (completed = replay, current = play). */
@@ -179,7 +183,7 @@ export class LevelMapView extends Container {
     this.onSelectLevel = options.onSelectLevel;
     this.onLockedTap = options.onLockedTap ?? null;
     this.onFocusChange = options.onFocusChange ?? null;
-    this.hardLabel = options.hardLabel ?? 'HARD';
+    this.hardLabel = localizedText(options.hardLabel, options.i18n, 'core.level_map.hard', READY_UI_LEGACY_TEXT.hard);
     this.buildWindow = Math.max(4, options.buildWindow ?? 40);
     this.scrollScope = `${this.id}:scroll`;
     this.pulseScope = `${this.id}:pulse`;

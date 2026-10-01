@@ -1,6 +1,8 @@
 import { Container, Rectangle, Sprite, type Text } from 'pixi.js';
-import type { MotionHandle, MotionRuntime, UiRuntime } from '../index';
+import type { LocalizationTextProvider, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
+import { localizedText } from './localization';
+import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
@@ -22,6 +24,8 @@ export interface HudViewOptions {
   motion: MotionRuntime;
   textures: ReadyUiTextures;
   theme?: ReadyUiThemeOverrides;
+  /** Optional structural localization provider. */
+  i18n?: LocalizationTextProvider;
   /** Unique id per UiRuntime; buttons register as `<id>:coins`, `<id>:lives`, `<id>:settings`. */
   id?: string;
   coins?: number;
@@ -207,7 +211,7 @@ export class HudView extends Container {
     this.id = options.id ?? 'hud';
     this.theme = resolveTheme(options.theme);
     this.motion = options.motion;
-    this.fullLivesLabel = options.fullLivesLabel ?? 'MAX';
+    this.fullLivesLabel = localizedText(options.fullLivesLabel, options.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.max);
     this.fxScope = `${this.id}:fx`;
     this.coinsValue = Math.max(0, options.coins ?? 0);
     this.starsValue = Math.max(0, options.stars ?? 0);

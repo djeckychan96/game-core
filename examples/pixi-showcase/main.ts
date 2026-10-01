@@ -33,6 +33,7 @@ import { createAdsDemo } from './adsDemo';
 import { DemoAnalyticsTransport, demoAnalyticsContext, eventLabel } from './analyticsDemo';
 import { DEMO_OFFER_CATALOG, DEMO_OFFER_CHAIN, REWARD_COINS, formatClock, offerLabel, offerToWindowParams } from './offerDemo';
 import { DemoPaymentsAdapter, demoPrice, type DemoSheetOutcome } from './purchaseDemo';
+import { createShowcaseLocalization } from './localizationDemo';
 
 interface SafeInsets {
   top: number;
@@ -74,6 +75,8 @@ const RIPPLE_PRESETS: Array<{ name: string; config: Partial<ClickRippleConfig> |
 
 async function boot(): Promise<void> {
   const demoParams = new URLSearchParams(window.location.search);
+  const i18n = createShowcaseLocalization();
+  document.documentElement.lang = i18n.locale;
   const settingsSkin = demoParams.get('skin') === 'style1' ? READY_UI_STYLE_1 : undefined;
   const settingsGameplay = demoParams.get('settings') === 'gameplay';
   const theme = resolveTheme(settingsSkin ? { skin: settingsSkin } : undefined);
@@ -122,7 +125,7 @@ async function boot(): Promise<void> {
 
   // --- windows (created once, shown on demand) ---
   const resultWindow = new ResultWindowView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     onNext: (params) => {
       // demo progression: a win on the current level unlocks the next one
       const level = state.levels[params.level - 1];
@@ -139,11 +142,11 @@ async function boot(): Promise<void> {
     onExit: (params) => map.scrollToLevel(params.level)
   });
   const shopWindow = new ShopWindowView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     onBuy: (item) => demoPurchase(item.id, 'shop') // real money → PurchaseRuntime, never a direct grant
   });
   const livesWindow = new LivesWindowView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     onRefill: (params) => {
       if (state.coins < params.refillPrice) return openShop();
       state.coins -= params.refillPrice;
@@ -154,18 +157,18 @@ async function boot(): Promise<void> {
     onWatchAd: () => { state.lives = Math.min(DEMO_MAX_LIVES, state.lives + 1); hud.setLives(state.lives, formatTimer(state.refillSeconds)); }
   });
   const settingsWindow = new SettingsWindowView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     ...(settingsSkin ? { theme: { skin: settingsSkin } } : {}),
     haptic: true,
     onToggle: (setting, enabled) => { settings[setting] = enabled; },
     onHome: () => { settingsActions.push('home'); toast('SETTINGS HOME — host continuation'); },
     onRestart: () => { settingsActions.push('restart'); toast('SETTINGS RESTART — host continuation'); }
   });
-  const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
+  const noAdsWindow = new NoAdsWindowView({ ui, motion, textures, i18n, onBuy: () => toast('NO ADS — purchase is the host\'s job') });
   // The starter-pack window is data-only. When it shows a chain offer, BUY runs the demo purchase
   // below (`shownOfferId`); the static demo (`openStarter`) just adds the coins like before.
   const starterWindow = new StarterPackWindowView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     onBuy: (params) => {
       const productId = shownOfferId;
       shownOfferId = null;
@@ -412,7 +415,7 @@ async function boot(): Promise<void> {
 
   // --- HUD ---
   const hud = new HudView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     coins: state.coins,
     lives: state.lives,
     maxLives: DEMO_MAX_LIVES,
@@ -425,7 +428,7 @@ async function boot(): Promise<void> {
 
   // --- Level map ---
   const map = new LevelMapView({
-    ui, motion, textures,
+    ui, motion, textures, i18n,
     levels: state.levels,
     currentLevel: state.currentLevel,
     onSelectLevel: (level) => { if (state.lives <= 0) return openLives(); openResult(level); },
@@ -691,7 +694,7 @@ async function boot(): Promise<void> {
 
   // dev hooks for automated visual checks (Playwright)
   (window as unknown as { __showcase: unknown }).__showcase = {
-    app, core, ui, motion, map, hud, state, settings, settingsActions,
+    app, core, ui, motion, i18n, map, hud, state, settings, settingsActions,
     resultWindow, shopWindow, livesWindow, settingsWindow, noAdsWindow, starterWindow,
     playButton, toolbar, offerStrip, starterIcon, noAdsIcon,
     ripple, ripplePresets: RIPPLE_PRESETS, setRipplePreset,
