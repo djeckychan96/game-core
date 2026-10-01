@@ -1,6 +1,6 @@
 import { Assets, type Texture } from 'pixi.js';
 import type { NineSliceSpec } from './nineSlice';
-import { skinAssetAlias, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from './skin';
+import { skinAssetAlias, skinFontAlias, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from './skin';
 import { READY_UI_STYLE_1 } from './skins/style1';
 
 const STYLE_1 = READY_UI_STYLE_1.assets;
@@ -169,7 +169,8 @@ export interface LoadReadyUiAssetsOptions {
   include?: readonly ReadyUiOptionalTextureName[];
   /**
    * The game's Ready UI style (e.g. READY_UI_STYLE_1): its assets load too — only this style's, each strictly — and
-   * land under `textures.skins[skin.id]` by role. Pass the same style as `theme: { skin }` to the windows. Default: none.
+   * land under `textures.skins[skin.id]` by role; a style with its own font (`skin.font`) registers it as well (strictly,
+   * even with `skipFont`, which only skips the kit font). Pass the same style as `theme: { skin }` to the views. Default: none.
    */
   skin?: ReadyUiSkin;
 }
@@ -235,6 +236,12 @@ export async function loadReadyUiAssets(options: LoadReadyUiAssetsOptions = {}):
         throw new Error(`loadReadyUiAssets: style '${skin.id}' "${role}" (${file}) was requested but did not load from ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`);
       }));
     }
+  }
+  if (skin?.font) {
+    const font = skin.font;
+    loads.push(Assets.load({ alias: skinFontAlias(skin.id), src: joinUrl(baseUrl, font.file), data: { family: font.family } }).catch((error: unknown) => {
+      throw new Error(`loadReadyUiAssets: style '${skin.id}' font "${font.family}" (${font.file}) was requested but did not load from ${baseUrl}: ${error instanceof Error ? error.message : String(error)}`);
+    }));
   }
   await Promise.all([...loads, ...optional, ...styled]);
   const textures = {} as ReadyUiTextures;

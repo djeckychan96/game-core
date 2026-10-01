@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Game Core · Style 2 LevelMap screen</title>
+    <link rel="icon" href="data:," />
+    <style>
+      /* the screen fill of screen_gameplay_pc (8:23174), under the cover-fit sky */
+      html, body { margin: 0; height: 100%; overflow: hidden; background: #1b85e8; }
+      canvas { display: block; }
+      #safe-probe { position: fixed; inset: 0; pointer-events: none; visibility: hidden;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+    </style>
+  </head>
+  <body>
+    <div id="safe-probe"></div>
+    <script type="module" src="./style2Demo.ts"></script>
+  </body>
+</html>

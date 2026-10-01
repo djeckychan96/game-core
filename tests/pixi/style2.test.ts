@@ -1,0 +1,464 @@
+import { describe, expect, it, vi } from 'vitest';
+import { Assets, Container, NineSliceSprite, Sprite, Text, Texture, TextureSource } from 'pixi.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { advance, createKit, pointer, type TestKit } from './setup';
+import * as pixiEntry from '../../src/pixi/index';
+import { LocalizationRuntime } from '../../src/localization';
+import { BottomNavView, type BottomNavItem, type BottomNavViewOptions } from '../../src/pixi/BottomNavView';
+import { HudView } from '../../src/pixi/HudView';
+import { LevelMapScreen, type LevelMapScreenOptions } from '../../src/pixi/LevelMapScreen';
+import { LevelMapView } from '../../src/pixi/LevelMapView';
+import { loadReadyUiAssets, type ReadyUiTextures } from '../../src/pixi/assets';
+import { READY_UI_CATALOGS } from '../../src/pixi/locales';
+import { READY_UI_SKINS, READY_UI_SKIN_VIEW_ROLES, requiredSkinRoles, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_STYLE_1 } from '../../src/pixi/skins/style1';
+import { READY_UI_STYLE_2 } from '../../src/pixi/skins/style2';
+import type { ReadyUiThemeOverrides } from '../../src/pixi/theme';
+
+const rootDir = resolve(__dirname, '../..');
+const labelled = (label: string): Texture => new Texture({ source: new TextureSource({ width: 2, height: 2, label }) });
+const STYLE_2_THEME: ReadyUiThemeOverrides = {
+  skin: READY_UI_STYLE_2,
+  levelMap: { badgeSize: 288, nodeScale: 1, levelGap: 402, focusBoost: 4 / 3, focusRatio: 1260 / 2344, contentScale: 1 }
+};
+
+/** One labelled texture per role of `skin` (as `loadReadyUiAssets({ skin })` files them), on top of the white required pack. */
+function styled(kit: TestKit, skin: ReadyUiSkin = READY_UI_STYLE_2, drop: readonly ReadyUiSkinRole[] = []): ReadyUiTextures {
+  const roles: ReadyUiSkinTextures = {};
+  for (const role of Object.keys(skin.assets) as ReadyUiSkinRole[]) if (!drop.includes(role)) roles[role] = labelled(`${skin.id}:${role}`);
+  return { ...kit.textures, skins: { [skin.id]: roles } };
+}
+
+function descendants<T>(root: Container, type: new (...args: never[]) => T): T[] {
+  const found: T[] = [];
+  const visit = (container: Container): void => {
+    for (const child of container.children) {
+      if (child instanceof type) found.push(child as T);
+      if (child instanceof Container) visit(child);
+    }
+  };
+  visit(root);
+  return found;
+}
+
+const labels = (root: Container): string[] => descendants(root, Sprite).filter((sprite) => sprite.visible).map((sprite) => sprite.texture.source.label);
+const texts = (root: Container): string[] => descendants(root, Text).filter((text) => text.visible).map((text) => text.text);
+
+function spriteByLabel(root: Container, label: string): Sprite {
+  const sprite = descendants(root, Sprite).find((entry) => entry.texture.source.label === label);
+  if (!sprite) throw new Error(`no sprite ${label}`);
+  return sprite;
+}
+
+function field<T>(view: object, name: string): T {
+  return (view as Record<string, unknown>)[name] as T;
+}
+
+/** A settled tap on a pointer-driven container. */
+function tap(target: Container, kit: TestKit): void {
+  target.emit('pointerdown', pointer(1, 1) as never);
+  advance(kit.core, 80);
+  target.emit('pointerup', pointer(1, 1) as never);
+  advance(kit.core, 200);
+}
+
+const NAV_ITEMS: BottomNavItem[] = [
+  { id: 'shop', icon: 'iconShop', label: 'SHOP' },
+  { id: 'home', icon: 'iconHome', label: 'HOME' },
+  { id: 'events', label: 'EVENTS', locked: true }
+];
+
+function createNav(kit: TestKit, overrides: Partial<BottomNavViewOptions> = {}) {
+  const selected: string[] = [];
+  const locked: string[] = [];
+  const nav = new BottomNavView({
+    ui: kit.ui,
+    textures: styled(kit),
+    theme: STYLE_2_THEME,
+    items: NAV_ITEMS,
+    selectedId: 'shop',
+    onSelect: (id) => selected.push(id),
+    onLockedTap: (id) => locked.push(id),
+    width: 1422,
+    height: 800,
+    ...overrides
+  });
+  return { nav, selected, locked };
+}
+
+function createScreen(kit: TestKit, overrides: Partial<LevelMapScreenOptions> = {}) {
+  const played: number[] = [];
+  const nav: string[] = [];
+  const screen = new LevelMapScreen({
+    ui: kit.ui,
+    motion: kit.motion,
+    textures: styled(kit),
+    theme: STYLE_2_THEME,
+    map: { levels: 60, currentLevel: 38, onSelectLevel: () => {} },
+    hud: { coins: 120, lives: 3, maxLives: 5, stars: 45 },
+    nav: { items: NAV_ITEMS, selectedId: 'shop', onSelect: (id) => nav.push(id) },
+    onPlay: (level) => played.push(level),
+    width: 1422,
+    height: 800,
+    ...overrides
+  });
+  return { screen, played, nav };
+}
+
+describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
+  it('is a selectable data package next to Style 1: exported, in the catalog, valid, its files and its font shipped', () => {
+    expect(pixiEntry.READY_UI_STYLE_2).toBe(READY_UI_STYLE_2);
+    expect(READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1, 'style-2': READY_UI_STYLE_2 });
+    expect(READY_UI_STYLE_2.id).toBe('style-2');
+    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
+    expect(() => validateReadyUiSkin(READY_UI_STYLE_2)).not.toThrow();
+    const assetsDir = resolve(rootDir, 'assets/pixi-ui');
+    for (const [role, asset] of Object.entries(READY_UI_STYLE_2.assets)) expect(existsSync(resolve(assetsDir, asset.file)), `${role} -> ${asset.file}`).toBe(true);
+    expect(existsSync(resolve(assetsDir, READY_UI_STYLE_2.font.file))).toBe(true);
+    expect(readFileSync(resolve(assetsDir, 'fonts/Carlito-OFL.txt'), 'utf8')).toMatch(/Reserved Font Name "Carlito"[\s\S]*SIL OPEN FONT LICENSE Version 1.1/);
+    // every Style 2 file lives under its own folder: nothing of Style 1 or the donor pack is replaced
+    for (const asset of Object.values(READY_UI_STYLE_2.assets)) expect(asset.file.startsWith('style2/')).toBe(true);
+  });
+
+  it('roles a style must ship follow its layout: Style 1 unchanged, Style 2 without gear / HARD / glow art', () => {
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'hud')).toEqual(['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar']);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'levelMap')).toEqual(['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR']);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'hud')).toEqual(['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudStar']);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'levelMap')).toEqual(['levelNodeNormal', 'levelLock', 'levelRail', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground']);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'bottomNav')).toEqual(['navPanel', 'navSelected', 'navLock']);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'levelMapScreen')).toEqual(['playButton']);
+    // a role the layout draws is still strict: dropping the locked-node art breaks the package
+    const broken = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, levelNodeLocked: undefined } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(broken)).toThrow("ReadyUiSkin 'style-2' covers 'levelMap' but has no asset for role 'levelNodeLocked'");
+    const noCaps = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, navSelected: { file: 'style2/nav_selected.webp' } } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(noCaps)).toThrow("ReadyUiSkin 'style-2': role 'navSelected' is drawn as a 9-slice but has no nineSlice caps");
+    expect(Object.keys(READY_UI_SKIN_VIEW_ROLES)).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
+  });
+
+  it('loads only when chosen, strictly, with its font; the donor path requests no Style 2 file', async () => {
+    const requested: string[] = [];
+    const load = vi.spyOn(Assets, 'load').mockImplementation((async (input: unknown) => {
+      const entries = Array.isArray(input) ? input : [input];
+      for (const entry of entries as Array<{ src: string }>) requested.push(entry.src);
+      return labelled('loaded');
+    }) as never);
+    const get = vi.spyOn(Assets, 'get').mockImplementation((() => labelled('got')) as never);
+    try {
+      const donor = await loadReadyUiAssets({ baseUrl: './ui/' });
+      expect(donor.skins).toBeUndefined();
+      expect(requested.some((src) => src.includes('style2/') || src.includes('Carlito'))).toBe(false);
+
+      requested.length = 0;
+      const style1 = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_1 });
+      expect(Object.keys(style1.skins ?? {})).toEqual(['style-1']);
+      expect(requested.some((src) => src.includes('style2/') || src.includes('Carlito'))).toBe(false);
+
+      requested.length = 0;
+      const style2 = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 });
+      expect(Object.keys(style2.skins ?? {})).toEqual(['style-2']);
+      expect(Object.keys(style2.skins!['style-2']!).sort()).toEqual(Object.keys(READY_UI_STYLE_2.assets).sort());
+      expect(requested).toEqual(expect.arrayContaining(['./ui/fonts/Carlito-Bold.woff', './ui/style2/level_node_open.webp', './ui/style2/bg_sky.webp', './ui/style2/nav_selected.webp']));
+      expect(load).toHaveBeenCalledWith({ alias: 'game-core-ui:skin:style-2:font', src: './ui/fonts/Carlito-Bold.woff', data: { family: 'Carlito' } });
+
+      load.mockImplementation((async (input: unknown) => {
+        const entry = input as { src?: string };
+        if (!Array.isArray(input) && entry.src?.endsWith('Carlito-Bold.woff')) throw new Error('404');
+        return labelled('loaded');
+      }) as never);
+      await expect(loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 })).rejects.toThrow(
+        `loadReadyUiAssets: style 'style-2' font "Carlito" (fonts/Carlito-Bold.woff) was requested but did not load from ./ui/: 404`
+      );
+    } finally {
+      load.mockRestore();
+      get.mockRestore();
+    }
+  });
+});
+
+describe('Style 2 — HudView', () => {
+  it('draws the Style 2 roles with runtime values: no gear, no count in the heart, #3f598c Carlito counters, Figma bar pitch', () => {
+    const kit = createKit();
+    const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: STYLE_2_THEME, coins: 1234, lives: 2, maxLives: 5, stars: 17, onLivesTap: () => {}, onCoinsTap: () => {}, width: 1422, height: 800 });
+    hud.setLives(2, '12:34');
+    expect(labels(hud)).toEqual(expect.arrayContaining(['style-2:hudCapsule', 'style-2:hudHeart', 'style-2:hudCoin', 'style-2:hudPlus', 'style-2:hudStar']));
+    expect(labels(hud).some((label) => label.includes('Gear'))).toBe(false);
+    expect(field(hud, 'gear')).toBeNull();
+    // runtime values only; the heart shows no count (Figma), the capsule shows the timer
+    expect(texts(hud)).toEqual(expect.arrayContaining(['12:34', '1\u2009234', '17']));
+    expect(texts(hud)).not.toContain('2');
+    const counter = descendants(hud, Text).find((text) => text.text === '1\u2009234')!;
+    expect(counter.style.fill).toBe(0x3f598c);
+    expect(counter.style.fontFamily).toBe('Carlito');
+    expect(counter.style.stroke).toBeFalsy();
+    const badges = field<Container>(hud, 'row').children;
+    expect(badges.map((badge) => badge.x)).toEqual([0, 610, 1220]);
+    // Figma size at the frame's height (no area rule): the row is unscaled at 1422 × 800
+    expect(field<Container>(hud, 'row').scale.x).toBeCloseTo(800 / 2344, 6);
+    // full lives: MAX, no plus
+    hud.setLives(5);
+    expect(texts(hud)).toContain('MAX');
+    hud.destroy();
+  });
+
+  it('a Style 2 HUD with a gear asked for fails clearly; Style 1 and the donor keep their gear', () => {
+    const kit = createKit();
+    expect(() => new HudView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: STYLE_2_THEME, settings: true }))
+      .toThrow("HudView: style 'style-2' has no settings gear art — pass settings: false");
+    const style1 = new HudView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 'h1' });
+    expect(field(style1, 'gear')).not.toBeNull();
+    const donor = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, id: 'h0' });
+    expect(field(donor, 'gear')).not.toBeNull();
+    style1.destroy();
+    donor.destroy();
+  });
+
+  it('a missing Style 2 HUD texture fails clearly', () => {
+    const kit = createKit();
+    expect(() => new HudView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_2, ['hudCapsule']), theme: STYLE_2_THEME }))
+      .toThrow("HudView style 'style-2': no hudCapsule (style2/hud_capsule.webp) in textures — load them with loadReadyUiAssets({ skin })");
+  });
+});
+
+describe('Style 2 — LevelMapView', () => {
+  function createMap(kit: TestKit) {
+    const levels = [
+      { index: 1, stars: 3 },
+      { index: 2, stars: 1, hard: true },
+      { index: 3 },
+      { index: 4, hard: true },
+      { index: 5 }
+    ];
+    return new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: STYLE_2_THEME, levels, currentLevel: 3, buildWindow: 8, onSelectLevel: () => {}, width: 1422, height: 800 });
+  }
+  const node = (map: LevelMapView, level: number): Container => map.getNodeContainer(level)!;
+
+  it('open nodes are orange, locked ones blue with the lock and their own number box; stars are runtime', () => {
+    const kit = createKit();
+    const map = createMap(kit);
+    expect(map.getNodeState(1)).toBe('completed');
+    expect(map.getNodeState(3)).toBe('current');
+    expect(map.getNodeState(5)).toBe('locked');
+    // completed: orange + the earned stars (L, C, R) at the Figma crown
+    expect(labels(node(map, 1))).toEqual(['style-2:levelNodeNormal', 'style-2:levelStarGoldL', 'style-2:levelStarGold', 'style-2:levelStarGoldR']);
+    const [l, c, r] = READY_UI_STYLE_2.levelMap.stars;
+    expect([spriteByLabel(node(map, 1), 'style-2:levelStarGoldL').position.x, spriteByLabel(node(map, 1), 'style-2:levelStarGoldL').position.y]).toEqual([l.x, l.y]);
+    expect(spriteByLabel(node(map, 1), 'style-2:levelStarGold').width).toBeCloseTo(c.size, 6);
+    expect(spriteByLabel(node(map, 1), 'style-2:levelStarGoldR').position.x).toBe(r.x);
+    // the current level: orange, no stars (it is not completed yet)
+    expect(labels(node(map, 3))).toEqual(['style-2:levelNodeNormal']);
+    const art = spriteByLabel(node(map, 3), 'style-2:levelNodeNormal');
+    expect([art.width, art.height]).toEqual([288, 288]);
+    // locked: blue + lock, the locked number box
+    expect(labels(node(map, 5))).toEqual(['style-2:levelNodeLocked', 'style-2:levelLock']);
+    const lock = spriteByLabel(node(map, 5), 'style-2:levelLock');
+    expect([lock.x, lock.y, lock.width, lock.height]).toEqual([0, 100, 86.4, 86.4]);
+    const lockedNumber = descendants(node(map, 5), Text)[0]!;
+    expect([lockedNumber.text, lockedNumber.style.fontSize, lockedNumber.y]).toEqual(['5', 75, 31]);
+    const openNumber = descendants(node(map, 3), Text)[0]!;
+    expect([openNumber.text, openNumber.style.fontSize, openNumber.y]).toEqual(['3', 105, 60.375]);
+    expect(openNumber.style.fontFamily).toBe('Carlito');
+    expect(openNumber.style.stroke).toBeFalsy();
+    expect(openNumber.style.dropShadow).toBeFalsy();
+    // two-digit numbers keep the Figma size (no donor shrink), only the width fit
+    map.destroy();
+  });
+
+  it('no HARD art in Style 2: a hard level draws like a normal one; the background is the sky, no glow, the Figma rail', () => {
+    const kit = createKit();
+    const map = createMap(kit);
+    expect(labels(node(map, 2))).toEqual(['style-2:levelNodeNormal', 'style-2:levelStarGoldL']);
+    expect(labels(node(map, 4))).toEqual(['style-2:levelNodeLocked', 'style-2:levelLock']);
+    expect(texts(map)).not.toContain('HARD');
+    expect(field(map, 'shine')).toBeNull();
+    const background = field<Sprite>(map, 'background');
+    expect(background.texture.source.label).toBe('style-2:levelMapBackground');
+    expect(labels(map)).toContain('style-2:levelRail');
+    expect(spriteByLabel(map, 'style-2:levelRail').width).toBe(80);
+    expect(labels(map).some((label) => label.includes('Glow') || label.includes('Hard'))).toBe(false);
+    map.destroy();
+  });
+
+  it('behaviour is the shared code: focus, snap and the level ordering follow theme.levelMap, taps settle through the controller', () => {
+    const kit = createKit();
+    const selected: string[] = [];
+    const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: STYLE_2_THEME, levels: 60, currentLevel: 38, onSelectLevel: (level, state) => selected.push(`${level}:${state}`), width: 1422, height: 800 });
+    expect(map.focusLevel).toBe(38);
+    expect(map.levelY(39) - map.levelY(38)).toBe(-402);
+    expect(map.levelScreenY(38)).toBeCloseTo(800 * (1260 / 2344), 6);
+    map.scrollToLevel(36, false);
+    expect(map.focusLevel).toBe(36);
+    expect(map.selectedLevel).toBe(36);
+    map.scrollToLevel(45, false);
+    expect(map.selectedLevel).toBe(38);
+    map.scrollToLevel(38, false);
+    tap(node(map, 37), kit);
+    expect(selected).toEqual(['37:completed']);
+    map.destroy();
+  });
+});
+
+describe('BottomNavView — generic items, host routing', () => {
+  it('needs a style that covers it (no donor art) and well-formed items', () => {
+    const kit = createKit();
+    expect(() => new BottomNavView({ ui: kit.ui, textures: kit.textures, items: NAV_ITEMS, onSelect: () => {} }))
+      .toThrow("BottomNavView needs a Ready UI style that covers 'bottomNav' (theme.skin): Core has no donor bottom navigation art");
+    expect(() => createNav(kit, { items: [] })).toThrow('BottomNavView: no items');
+    expect(() => createNav(kit, { items: [{ id: 'a' }, { id: 'a' }] })).toThrow("BottomNavView: duplicate item id 'a'");
+    expect(() => createNav(kit, { selectedId: 'nope' })).toThrow("BottomNavView: no item 'nope' to select");
+    expect(() => createNav(kit, { items: [{ id: 'x', icon: 'iconHome' }], selectedId: null, textures: styled(kit, READY_UI_STYLE_2, ['iconHome']) }))
+      .toThrow("BottomNavView: item 'x' names icon role 'iconHome', which style 'style-2' did not load");
+  });
+
+  it('selected state: the raised background, the Figma icon / label boxes; normal and locked states', () => {
+    const kit = createKit();
+    const { nav } = createNav(kit);
+    const shop = nav.getItemContainer('shop')!;
+    const home = nav.getItemContainer('home')!;
+    const events = nav.getItemContainer('events')!;
+    const background = (item: Container) => descendants(item, NineSliceSprite)[0]!;
+    expect(background(shop).visible).toBe(true);
+    expect(background(home).visible).toBe(false);
+    expect([background(shop).x, background(shop).y, background(shop).width]).toEqual([-182.169, -28, 365]);
+    // the selected background reaches the viewport bottom: from -28 to the panel's bottom (286, no inset)
+    expect(background(shop).height).toBeCloseTo(286 + 28, 6);
+    expect(spriteByLabel(shop, 'style-2:iconShop').width).toBeCloseTo(288, 6);
+    expect(spriteByLabel(shop, 'style-2:iconShop').y).toBe(34);
+    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(220, 6);
+    expect(spriteByLabel(home, 'style-2:iconHome').y).toBe(86);
+    const shopLabel = descendants(shop, Text)[0]!;
+    const homeLabel = descendants(home, Text)[0]!;
+    expect([shopLabel.text, shopLabel.style.fontSize, shopLabel.style.fill, shopLabel.style.fontFamily]).toEqual(['SHOP', 60, 0xffffff, 'Carlito']);
+    expect([homeLabel.text, homeLabel.style.fontSize]).toEqual(['HOME', 40]);
+    // locked: the style's lock instead of the icon, no label
+    expect(labels(events)).toEqual(['style-2:navLock']);
+    expect(texts(events)).toEqual([]);
+    expect(spriteByLabel(events, 'style-2:navLock').width).toBeCloseTo(220.3, 6);
+    // slots: pitch 664 around the centre
+    expect([shop.x, home.x, events.x]).toEqual([-664, 0, 664]);
+    // the host moves the selection
+    nav.setSelected('home');
+    expect(nav.selectedId).toBe('home');
+    expect(background(shop).visible).toBe(false);
+    expect(background(home).visible).toBe(true);
+    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(288, 6);
+    expect(descendants(home, Text)[0]!.style.fontSize).toBe(60);
+    nav.setLocked('events', false);
+    expect(labels(events)).toEqual([]);
+    expect(texts(events)).toEqual(['EVENTS']);
+    nav.destroy();
+  });
+
+  it('callback semantics: a tap reports the id and never selects by itself; a locked item only reports onLockedTap; a cancelled press reports nothing', () => {
+    const kit = createKit();
+    const { nav, selected, locked } = createNav(kit);
+    tap(nav.getItemContainer('home')!, kit);
+    expect(selected).toEqual(['home']);
+    expect(nav.selectedId).toBe('shop');
+    tap(nav.getItemContainer('shop')!, kit);
+    expect(selected).toEqual(['home', 'shop']);
+    tap(nav.getItemContainer('events')!, kit);
+    expect(selected).toEqual(['home', 'shop']);
+    expect(locked).toEqual(['events']);
+    const home = nav.getItemContainer('home')!;
+    home.emit('pointerdown', pointer(1, 1) as never);
+    advance(kit.core, 40);
+    kit.core.cancelAll();
+    home.emit('pointerup', pointer(1, 1) as never);
+    advance(kit.core, 200);
+    expect(selected).toEqual(['home', 'shop']);
+    nav.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+
+  it('labels: explicit text wins, then the provider through labelKey, else no label', () => {
+    const kit = createKit();
+    const i18n = new LocalizationRuntime({ rawLocale: 'ru', supportedLocales: ['en', 'ru'], defaultLocale: 'en', catalogs: { en: { ...READY_UI_CATALOGS.en, 'game.nav.home': 'HOME' }, ru: { ...READY_UI_CATALOGS.ru, 'game.nav.home': 'ДОМ' } } });
+    const nav = new BottomNavView({
+      ui: kit.ui, textures: styled(kit), theme: STYLE_2_THEME, i18n,
+      items: [{ id: 'a', icon: 'iconShop', label: 'МАГАЗИН', labelKey: 'game.nav.home' }, { id: 'b', icon: 'iconHome', labelKey: 'game.nav.home' }, { id: 'c', icon: 'iconHome' }],
+      onSelect: () => {}
+    });
+    expect(texts(nav.getItemContainer('a')!)).toEqual(['МАГАЗИН']);
+    expect(texts(nav.getItemContainer('b')!)).toEqual(['ДОМ']);
+    expect(texts(nav.getItemContainer('c')!)).toEqual([]);
+    nav.destroy();
+  });
+
+  it('responsive: the panel top sits 286 units above the bottom inset and reaches through it; slots shrink to fit', () => {
+    const kit = createKit();
+    const { nav } = createNav(kit);
+    nav.resize(390, 844, { insets: { bottom: 34 } });
+    const s = Math.min(390 / 1080, 844 / 2344);
+    expect(nav.top).toBeCloseTo(844 - 34 - 286 * s, 6);
+    expect(nav.barHeight).toBeCloseTo(34 + 286 * s, 6);
+    const panel = field<NineSliceSprite>(nav, 'panel');
+    expect(panel.height).toBeCloseTo(10 + 286 + 34 / s, 6);
+    expect(panel.width).toBeCloseTo(390 / s, 6);
+    const pitch = 390 / s / 3;
+    expect(nav.getItemContainer('home')!.x).toBeCloseTo(0, 6);
+    expect(nav.getItemContainer('events')!.x).toBeCloseTo(pitch, 6);
+    expect(nav.getItemContainer('shop')!.scale.x).toBeCloseTo(Math.min(1, pitch / 365), 6);
+    nav.destroy();
+  });
+});
+
+describe('LevelMapScreen — the minimal composition', () => {
+  it('needs a style that covers it; composes map (with the sky), PLAY, navigation, HUD bottom to top', () => {
+    const kit = createKit();
+    expect(() => new LevelMapScreen({ ui: kit.ui, motion: kit.motion, textures: kit.textures, map: { levels: 3, currentLevel: 1, onSelectLevel: () => {} }, nav: { items: NAV_ITEMS, onSelect: () => {} }, onPlay: () => {} }))
+      .toThrow("LevelMapScreen needs a Ready UI style that covers 'levelMapScreen' (theme.skin)");
+    const { screen } = createScreen(kit);
+    expect(screen.children).toEqual([screen.map, screen.play, screen.nav, screen.hud]);
+    expect(screen.play.background.texture.source.label).toBe('style-2:playButton');
+    expect([screen.play.background.width, screen.play.background.height]).toEqual([550, 280]);
+    screen.destroy();
+  });
+
+  it('PLAY shows the runtime level, follows the focus and launches the playable level; captions are localized', () => {
+    const kit = createKit();
+    const { screen, played } = createScreen(kit);
+    expect(texts(screen.play)).toEqual(['PLAY', 'Level 38']);
+    screen.map.scrollToLevel(35, false);
+    expect(texts(screen.play)).toEqual(['PLAY', 'Level 35']);
+    tap(screen.play, kit);
+    expect(played).toEqual([35]);
+    // a locked focus still launches the playable level
+    screen.map.scrollToLevel(50, false);
+    expect(texts(screen.play)).toEqual(['PLAY', 'Level 38']);
+    tap(screen.play, kit);
+    expect(played).toEqual([35, 38]);
+    screen.destroy();
+
+    const ru = new LocalizationRuntime({ rawLocale: 'ru', supportedLocales: ['en', 'ru'], defaultLocale: 'en', catalogs: READY_UI_CATALOGS });
+    const { screen: localized } = createScreen(createKit(), { i18n: ru });
+    expect(texts(localized.play)).toEqual(['ИГРАТЬ', 'Уровень 38']);
+    localized.destroy();
+    const { screen: explicit } = createScreen(createKit(), { playLabel: 'GO', levelLabel: 'Stage {level}' });
+    expect(texts(explicit.play)).toEqual(['GO', 'Stage 38']);
+    explicit.destroy();
+  });
+
+  it('layout: the Figma frame at 1422 × 800 — HUD at 60, the nav at the bottom, PLAY 296 units above it, the map down to PLAY', () => {
+    const kit = createKit();
+    const { screen } = createScreen(kit);
+    const s = 800 / 2344;
+    expect(screen.nav.top).toBeCloseTo(800 - 286 * s, 6);
+    expect(screen.play.x).toBeCloseTo(711, 6);
+    expect(screen.play.y).toBeCloseTo(1762 * s, 6);
+    expect(screen.play.scale.x).toBeCloseTo(s, 6);
+    expect(screen.map.levelScreenY(38)).toBeCloseTo(1260 * s, 6);
+    expect(screen.map.levelScreenY(40) - screen.map.levelScreenY(38)).toBeCloseTo(-804 * s, 6);
+    const playTop = 1762 * s - 140 * s;
+    expect(field<number>(screen.map, 'mapBottom')).toBeCloseTo(playTop, 6);
+    expect(field<Container>(screen.hud, 'row').x).toBeGreaterThan(0);
+    // phone portrait: the parts keep their order, PLAY above the nav, inside the width
+    screen.resize(320, 568, { insets: { top: 20, bottom: 20 } });
+    expect(screen.play.y + 140 * screen.play.scale.y).toBeLessThanOrEqual(screen.nav.top - 100 * Math.min(320 / 1080, 568 / 2344));
+    expect(screen.play.x).toBeCloseTo(160, 6);
+    expect(screen.hud.barHeight).toBeLessThan(screen.play.y);
+    screen.destroy();
+    expect(kit.uiErrors).toEqual([]);
+    expect(kit.motionErrors).toEqual([]);
+  });
+});

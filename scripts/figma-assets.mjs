@@ -4,9 +4,10 @@
 //   node scripts/figma-assets.mjs docs/figma/confirm-exit            writes assets/pixi-ui/<asset.file>, prints a report
 //   node scripts/figma-assets.mjs docs/figma/confirm-exit --check    re-renders and fails if a committed texture differs
 //
-// Input: <dir>/figma.json `assets[]` — each asset is one or more Figma SVG exports composed at Figma offsets
-// (`layers[].at`, units) on a `size` canvas (units), rasterised at `scale` px per unit. The file name carries the
-// scale (`@2x` / `@0.5x`), which Pixi reads as the texture resolution, so `texture.width` stays in design units.
+// Input: <dir>/figma.json `assets[]` — each asset is one or more Figma SVG exports (`svg`) or Figma's own transparent
+// PNG renders (`image` + `size`) composed at Figma offsets (`layers[].at`, units; a negative offset crops) on a `size`
+// canvas (units), rasterised at `scale` px per unit; `flipX` mirrors a layer in its own box. The file name carries
+// the scale (`@2x` / `@0.5x`), which Pixi reads as the texture resolution, so `texture.width` stays in design units.
 //
 // 9-slice assets (`nineSlice`): the Figma @stretch insets (box units) plus the art's `pad` (stroke / shadow bleed
 // outside the box) give the texture caps. The raster is then MEASURED: the columns / rows identical to the centre
@@ -14,7 +15,9 @@
 // stretch area), the cap grows to the measured one plus a uniform `gutter` (so filtering at the seam samples the
 // same colour on both sides) and the report says so — the texture never stretches art.
 // The texture keeps the caps plus `strip` units of the uniform centre; the report proves the crop is lossless by
-// rebuilding the full size from it and diffing against the full raster.
+// rebuilding the full size from it and diffing against the full raster. `nineSlice.tolerance` (default 0) is the
+// per-channel noise allowed in "identical" rows / columns and in that rebuild: Figma's PNG renders dither gradients
+// and shadows by ±1..3, so a raster from Figma (not from an SVG) is measured with that tolerance.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -60,7 +63,15 @@ async function renderAsset({ asset, layers, tolerance, committed }) {
       img.src = layer.image;
     }
     await img.decode();
-    ctx.drawImage(img, layer.at[0] * S, layer.at[1] * S, lw, lh);
+    if (layer.flipX) {
+      ctx.save();
+      ctx.translate(layer.at[0] * S + lw, layer.at[1] * S);
+      ctx.scale(-1, 1);
+      ctx.drawImage(img, 0, 0, lw, lh);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, layer.at[0] * S, layer.at[1] * S, lw, lh);
+    }
   }
   const data = ctx.getImageData(0, 0, pw, ph).data;
   const same = (a, b) => {
@@ -154,11 +165,12 @@ try {
   const tmp = mkdtempSync(join(tmpdir(), 'figma-assets-'));
   for (const asset of spec.assets) {
     const layers = asset.layers.map((l) => l.svg
-      ? { at: l.at, svg: readFileSync(join(dir, l.svg), 'utf8') }
-      : { at: l.at, size: l.size, image: `data:image/png;base64,${readFileSync(join(dir, l.image)).toString('base64')}` });
+      ? { at: l.at, svg: readFileSync(join(dir, l.svg), 'utf8'), flipX: l.flipX === true }
+      : { at: l.at, size: l.size, image: `data:image/png;base64,${readFileSync(join(dir, l.image)).toString('base64')}`, flipX: l.flipX === true });
+    const tolerance = asset.nineSlice?.tolerance ?? TOLERANCE;
     const out = join(outRoot, asset.file);
     const committed = check ? 'data:image/webp;base64,' + readFileSync(out).toString('base64') : null;
-    const result = await page.evaluate(renderAsset, { asset, layers, tolerance: TOLERANCE, committed });
+    const result = await page.evaluate(renderAsset, { asset, layers, tolerance, committed });
     if (!check) {
       const png = join(tmp, `${asset.key}.png`);
       writeFileSync(png, Buffer.from(result.png, 'base64'));
@@ -169,7 +181,7 @@ try {
     } else if (result.committedMaxDelta > COMMITTED_TOLERANCE) {
       failed = true;
     }
-    if (result.rebuildMaxDelta > 0) failed = true;
+    if (result.rebuildMaxDelta > tolerance) failed = true;
     report.push({ key: asset.key, file: asset.file, scale: asset.scale, ...result });
   }
 } finally {

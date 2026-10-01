@@ -4,6 +4,8 @@ import type { ReadyUiTheme } from './theme';
 export interface LabelOptions {
   /** Font size in the container's local units. */
   fontSize: number;
+  /** Font family; default the theme's (a style with its own font passes it). */
+  fontFamily?: string;
   fill?: number;
   /** false = no stroke; a number overrides the theme's stroke ratio in local units. */
   stroke?: boolean | number;
@@ -16,7 +18,7 @@ export interface LabelOptions {
 /** A themed outlined label: white Fira Sans Black with the donor's dark rounded stroke. */
 export function createLabel(theme: ReadyUiTheme, text: string, options: LabelOptions): Text {
   const style: TextStyleOptions = {
-    fontFamily: theme.text.fontFamily,
+    fontFamily: options.fontFamily ?? theme.text.fontFamily,
     fontSize: options.fontSize,
     fill: options.fill ?? theme.text.fill,
     align: options.align ?? 'center'
@@ -47,27 +49,30 @@ export interface FigmaTextSlot {
 export const FIGMA_TEXT_STROKE_OUTSIDE = 4;
 export const FIGMA_TEXT_SHADOW_Y = 4;
 
+/** A style's text look: OUTSIDE stroke and shadow offset (0 = none), and optionally its own font and fill. */
+export interface FigmaTextLook {
+  strokeOutside: number;
+  shadowY: number;
+  fontFamily?: string;
+  fill?: number;
+}
+
 /**
- * The Figma text look (theme font / fill / stroke color; the OUTSIDE stroke and shadow offset of the style, Figma's
- * 4 / 4 by default). Pixi strokes centred on the outline and fills over it, so a stroke of 2 × `strokeOutside` leaves
- * exactly the Figma OUTSIDE width; the shadow pass draws stroke + fill like Figma's drop shadow of a stroked text.
+ * The Figma text look (theme font / fill / stroke color unless the look brings its own font / fill; the OUTSIDE
+ * stroke and shadow offset of the style, Figma's 4 / 4 by default). Pixi strokes centred on the outline and fills over
+ * it, so a stroke of 2 × `strokeOutside` leaves exactly the Figma OUTSIDE width; the shadow pass draws stroke + fill
+ * like Figma's drop shadow of a stroked text. A look without stroke / shadow (0) gets neither.
  */
 export function createFigmaLabel(
   theme: ReadyUiTheme,
   text: string,
   fontSize: number,
-  look: { strokeOutside: number; shadowY: number } = { strokeOutside: FIGMA_TEXT_STROKE_OUTSIDE, shadowY: FIGMA_TEXT_SHADOW_Y }
+  look: FigmaTextLook = { strokeOutside: FIGMA_TEXT_STROKE_OUTSIDE, shadowY: FIGMA_TEXT_SHADOW_Y }
 ): Text {
-  return new Text({
-    text,
-    style: {
-      fontFamily: theme.text.fontFamily,
-      fontSize,
-      fill: theme.text.fill,
-      stroke: { color: theme.text.strokeColor, width: look.strokeOutside * 2, join: 'round' },
-      dropShadow: { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: look.shadowY }
-    }
-  });
+  const style: TextStyleOptions = { fontFamily: look.fontFamily ?? theme.text.fontFamily, fontSize, fill: look.fill ?? theme.text.fill };
+  if (look.strokeOutside > 0) style.stroke = { color: theme.text.strokeColor, width: look.strokeOutside * 2, join: 'round' };
+  if (look.shadowY > 0) style.dropShadow = { color: theme.text.strokeColor, alpha: 1, blur: 0, angle: Math.PI / 2, distance: look.shadowY };
+  return new Text({ text, style });
 }
 
 /**

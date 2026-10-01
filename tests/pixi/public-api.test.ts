@@ -11,7 +11,7 @@ const rootDir = resolve(__dirname, '../..');
 describe('game-core/pixi public entry', () => {
   it('exports the Ready UI kit', () => {
     for (const name of [
-      'LevelMapView', 'HudView', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView', 'ConfirmWindowView',
+      'LevelMapView', 'HudView', 'BottomNavView', 'LevelMapScreen', 'READY_UI_STYLE_1', 'READY_UI_STYLE_2', 'requiredSkinRoles', 'UiButton', 'ModalWindow', 'ResultWindowView', 'LivesWindowView', 'ShopWindowView', 'ConfirmWindowView',
       'loadReadyUiAssets', 'createReadyUiTextures', 'READY_UI_ASSET_FILES', 'READY_UI_FONT_FILE', 'READY_UI_FONT_FAMILY',
       'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES', 'WIN_CONFETTI_TEXTURES', 'LIVES_FIGMA_TEXTURES',
       'READY_UI_CATALOGS',

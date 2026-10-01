@@ -36,7 +36,7 @@ export interface HudViewOptions {
   stars?: number;
   /** Text on the lives capsule when lives are full. Default `MAX`. */
   fullLivesLabel?: string;
-  /** Show the gear button on the right. Default true. */
+  /** Show the gear button on the right. Default true — false under a style without gear art (asking for it there throws). */
   settings?: boolean;
   /** Draw the donor's soft top shadow under the bar so it reads over any map art. Default true. */
   shadow?: boolean;
@@ -90,9 +90,16 @@ interface HudArt {
   heart: Texture;
   coin: Texture;
   plus: Texture;
-  gear: Texture;
-  gearBack: Texture;
+  /** Absent for a style without gear art. */
+  gear?: Texture;
+  gearBack?: Texture;
   star: Texture;
+}
+
+/** The style's text for the counters: its font and the HUD text colour (none = the theme's). */
+interface HudText {
+  fontFamily?: string;
+  fill?: number;
 }
 
 /** Design box of one badge: the icon square over the capsule's left edge up to the capsule's right edge. */
@@ -129,6 +136,7 @@ class ResourceBadge extends Container {
     theme: ReadyUiTheme;
     art: HudArt;
     layout: ReadyUiSkinHudLayout;
+    text: HudText;
     icon: 'coin' | 'heart' | 'star';
     onTap: (() => void) | null;
   }) {
@@ -177,14 +185,17 @@ class ResourceBadge extends Container {
     this.icon.scale.set(k);
     host.addChild(this.icon);
 
-    // the heart shows the count inside the icon; the coin shows it on the capsule
+    // the heart shows the count inside the icon (unless the style's heart has none); the coin shows it on the capsule
+    const heartCount = options.icon === 'heart' ? layout.heartCount : null;
     this.countText = createLabel(theme, '0', {
-      fontSize: options.icon === 'heart' ? layout.heartCount.fontSize : layout.resourceCount.fontSize,
-      stroke: options.icon === 'heart' ? layout.heartCount.stroke : false
+      fontSize: heartCount ? heartCount.fontSize : layout.resourceCount.fontSize,
+      stroke: heartCount ? heartCount.stroke : false,
+      ...options.text
     });
-    this.capsuleText = createLabel(theme, '', { fontSize: layout.capsuleText.fontSize, stroke: false });
+    this.capsuleText = createLabel(theme, '', { fontSize: layout.capsuleText.fontSize, stroke: false, ...options.text });
     if (options.icon === 'heart') {
-      this.countText.position.set(layout.heartCount.x, layout.heartCount.y);
+      if (heartCount) this.countText.position.set(heartCount.x, heartCount.y);
+      else this.countText.visible = false;
       this.capsuleText.position.set(layout.capsuleText.x, layout.capsuleText.y);
     } else {
       this.countText.position.set(layout.resourceCount.x, layout.resourceCount.y);
@@ -253,14 +264,15 @@ export class HudView extends Container {
     const selectedSkin = selectSkinView('hud', this.theme.skin);
     const styled = selectedSkin ? resolveSkinView('HudView', 'hud', selectedSkin, options.textures) : null;
     this.hudLayout = styled?.layout ?? DONOR_HUD_LAYOUT;
+    // resolveSkinView guarantees every role the style's layout draws (requiredSkinRoles); the gear only when it has one
     this.art = styled ? {
-      capsule: styled.art.hudCapsule,
-      heart: styled.art.hudHeart,
-      coin: styled.art.hudCoin,
-      plus: styled.art.hudPlus,
-      gear: styled.art.hudGear,
-      gearBack: styled.art.hudGearBack,
-      star: styled.art.hudStar
+      capsule: styled.art.hudCapsule!,
+      heart: styled.art.hudHeart!,
+      coin: styled.art.hudCoin!,
+      plus: styled.art.hudPlus!,
+      ...(styled.art.hudGear ? { gear: styled.art.hudGear } : {}),
+      ...(styled.art.hudGearBack ? { gearBack: styled.art.hudGearBack } : {}),
+      star: styled.art.hudStar!
     } : {
       capsule: options.textures.hudCapsule,
       heart: options.textures.hudHeart,
@@ -270,6 +282,9 @@ export class HudView extends Container {
       gearBack: options.textures.hudGearBack,
       star: options.textures.starGold
     };
+    const text: HudText = {};
+    if (styled?.skin.font) text.fontFamily = styled.skin.font.family;
+    if (this.hudLayout.textFill !== undefined) text.fill = this.hudLayout.textFill;
     this.fullLivesLabel = localizedText(options.fullLivesLabel, options.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.max);
     this.fxScope = `${this.id}:fx`;
     this.coinsValue = Math.max(0, options.coins ?? 0);
@@ -297,6 +312,7 @@ export class HudView extends Container {
       theme: this.theme,
       art: this.art,
       layout: this.hudLayout,
+      text,
       icon: 'heart',
       onTap: options.onLivesTap ?? null
     });
@@ -306,6 +322,7 @@ export class HudView extends Container {
       theme: this.theme,
       art: this.art,
       layout: this.hudLayout,
+      text,
       icon: 'coin',
       onTap: options.onCoinsTap ?? null
     });
@@ -319,6 +336,7 @@ export class HudView extends Container {
         theme: this.theme,
         art: this.art,
         layout: this.hudLayout,
+        text,
         icon: 'star',
         onTap: options.onStarsTap ?? null
       });
@@ -328,19 +346,23 @@ export class HudView extends Container {
     }
 
     this.gear = null;
-    if (options.settings ?? true) {
+    const gearLayout = this.hudLayout.gear;
+    if (options.settings ?? gearLayout !== null) {
+      if (!gearLayout || !this.art.gear || !this.art.gearBack) {
+        throw new Error(`HudView: style '${styled?.skin.id ?? '?'}' has no settings gear art — pass settings: false`);
+      }
       const gear = new UiButton({
         ui: options.ui,
         id: `${this.id}:settings`,
         theme: this.theme,
         texture: this.art.gearBack,
-        width: this.hudLayout.gear.backWidth,
-        height: this.hudLayout.gear.backHeight,
+        width: gearLayout.backWidth,
+        height: gearLayout.backHeight,
         icon: this.art.gear,
-        iconSize: this.hudLayout.gear.size,
+        iconSize: gearLayout.size,
         pressScale: 0.9,
         onTap: options.onSettingsTap ?? (() => {}),
-        minHitSize: this.hudLayout.gear.minHitSize
+        minHitSize: gearLayout.minHitSize
       });
       if (!options.onSettingsTap) gear.setEnabled(false);
       this.addChild(gear);
@@ -437,9 +459,11 @@ export class HudView extends Container {
     const rowBounds = this.row.getLocalBounds();
     const gearBounds = this.gear ? this.gear.getLocalBounds() : null;
     const baseArea = Math.max(1, rowBounds.width * rowBounds.height);
-    const targetArea = (vw * vh) / (portrait ? this.hudLayout.responsive.portraitAreaRatio : this.hudLayout.responsive.landscapeAreaRatio);
-    const areaScale = Math.sqrt(targetArea / baseArea);
-    const rowContent = rowBounds.width + (gearBounds ? this.hudLayout.margins.rowGap + gearBounds.width * this.hudLayout.gear.rowWidthFactor : 0);
+    // the donor's area rule; a style without one keeps its design size and only shrinks to fit the width
+    const responsive = this.hudLayout.responsive;
+    const areaScale = responsive ? Math.sqrt(((vw * vh) / (portrait ? responsive.portraitAreaRatio : responsive.landscapeAreaRatio)) / baseArea) : 1;
+    const gearWidthFactor = this.hudLayout.gear?.rowWidthFactor ?? 1;
+    const rowContent = rowBounds.width + (gearBounds ? this.hudLayout.margins.rowGap + gearBounds.width * gearWidthFactor : 0);
     const rowAvail = vw - this.hudLayout.margins.left - this.hudLayout.margins.right;
     const rowScale = Math.min(areaScale, rowAvail / Math.max(1, rowContent));
     this.rowScale = rowScale;

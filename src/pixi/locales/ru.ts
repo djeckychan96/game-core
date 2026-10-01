@@ -16,6 +16,8 @@ export const READY_UI_RU = Object.freeze({
   'core.settings.exit': 'ВЫХОД',
   'core.settings.restart': 'ЗАНОВО',
   'core.level_map.hard': 'СЛОЖНЫЙ',
+  'core.level_map.play': 'ИГРАТЬ',
+  'core.level_map.level': 'Уровень {level}',
   'core.result.level': 'УРОВЕНЬ {level}',
   'core.result.completed': 'ПРОЙДЕН!',
   'core.result.failed': 'НЕ ПРОЙДЕН',

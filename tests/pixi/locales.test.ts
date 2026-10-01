@@ -9,6 +9,8 @@ const CORE_KEYS = [
   'core.confirm.lose_life',
   'core.confirm.title',
   'core.level_map.hard',
+  'core.level_map.level',
+  'core.level_map.play',
   'core.lives.ad_action',
   'core.lives.next',
   'core.lives.refill',

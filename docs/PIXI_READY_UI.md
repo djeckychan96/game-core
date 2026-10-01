@@ -10,7 +10,7 @@ geometry come from Trail Arrow 1:1 and now live physically inside this package
 ```
 game-core
 ├── "game-core"        renderer-agnostic: CoreRuntime, FxRuntime, MotionRuntime, UiRuntime
-└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, UiButton, ModalWindow,
+└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, BottomNavView, LevelMapScreen, UiButton, ModalWindow,
                        ResultWindowView, LivesWindowView, ShopWindowView, SettingsWindowView,
                        NoAdsWindowView, StarterPackWindowView, assets loader, theme;
                        Pixi FX (src/pixi/fx): ClickRippleEffect
@@ -182,6 +182,29 @@ over the badge's own layout scale and a badge runs one pulse at a time: a burst 
 (reward coins flying in one by one) restarts the pop instead of stacking tweens whose captured
 bases would compound and leave the icon enlarged.
 
+### BottomNavView
+
+A generic bottom navigation bar (no donor art: it needs a style that covers `bottomNav`, today Style 2). Items are
+host data — `{ id, icon?: Texture | role, label? | labelKey?, locked? }` — and routing stays with the host:
+
+| Option / member | Meaning |
+| --- | --- |
+| `items`, `selectedId` | stable ids; the icon a texture or a style role (`'iconShop'`); `label` wins over `labelKey` (through `i18n`), neither = no label |
+| `onSelect(id)` | settled tap on an item that is not locked, selected or not — the view never changes its own selection |
+| `onLockedTap(id)` | settled tap on a locked item (it shows the style's lock instead of its icon and label) |
+| `setSelected(id \| null)`, `setLocked(id, locked)`, `selectedId`, `isLocked(id)` | the host's routing result / unlocks |
+| `resize(w, h, { insets, pixelRatio })`, `top`, `barHeight` | the panel `panelHeight` units above the bottom inset, reaching through it; slots `pitch` apart, shrinking on a narrow screen |
+
+### LevelMapScreen
+
+The minimal level-map screen composition: `LevelMapView` (with the style's background), PLAY, `BottomNavView` and
+`HudView`, bottom to top, laid out together — the HUD at the top, the nav at the bottom edge, PLAY the style's
+distance above the nav, the map from the top inset down to PLAY. PLAY shows `core.level_map.play` and
+`core.level_map.level` with the map's playable level under the focus (`map.selectedLevel`, refreshed on every focus
+change) and calls `onPlay(level)`. Options are grouped per part (`map`, `hud`, `nav`); the parts stay reachable
+(`screen.map`, `screen.hud`, `screen.nav`, `screen.play`). It owns no game state, routing or timer — not a screen
+framework. Needs a style that covers `levelMapScreen`.
+
 ### UiButton
 
 Sprite background + optional label/icon; Pixi pointer events → `ButtonController`, press progress
@@ -325,18 +348,26 @@ new HudView({ ...readyUi, id: 'hud' });
 new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel });
 ```
 
-| Window | Style 1 (`READY_UI_STYLE_1`, id `style-1`) |
-| --- | --- |
-| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) |
-| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) |
-| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts |
-| HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics |
-| LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers |
-| Result, Shop, NoAds, StarterPack | not covered — donor look |
+| View | Style 1 (`READY_UI_STYLE_1`, id `style-1`) | Style 2 (`READY_UI_STYLE_2`, id `style-2`) |
+| --- | --- | --- |
+| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) | not covered — donor |
+| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) | not covered — donor |
+| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts | not covered — donor |
+| HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
+| LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
+| BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |
+| Result, Shop, NoAds, StarterPack | not covered — donor look | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
-  covered view draws; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset.
+  view can draw; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset. A window needs all of its roles; for
+  the non-modal views the style's layout says which optional parts exist (no gear, no HARD badge, no glow, its own
+  locked-node art or map background), and `requiredSkinRoles(skin, view)` is what it must ship.
+- A style may bring its own font (`skin.font`): `loadReadyUiAssets({ skin })` registers it strictly and the style's
+  views use it for their runtime text (Style 2: Carlito Bold, the OFL metric twin of Figma's Calibri Bold).
+- Behaviour never moves into a style: drag / fling / snap / focus / culling and the level spacing stay in the shared
+  view code and `theme.levelMap` (the host's numbers; Style 2's Figma spacing is in
+  docs/figma/style2-level-map-screen/README.md).
 - Only the chosen style's files load, each strictly, cached as `game-core-ui:skin:<id>:<role>` (one
   role in two styles never collides) and returned under `textures.skins[id]`. The required pack stays
   the 71 textures; without `skin` nothing else is requested and `textures` has no `skins` key.
@@ -426,6 +457,16 @@ is pending) that moves the chain into the 24 h cooldown and credits the coins, N
 EXPIRE → tier 1 A → EXPIRE → tier 1 B (the variant flips), and the window closing by itself when
 its offer expires; it checks the exact event log and writes `showcase-shots/offer-*.png`.
 
+```bash
+SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:style2   # the Style 2 LevelMap screen proof
+```
+
+`examples/pixi-showcase/style2.html` (`?figma=1` = the Figma frame's sample values as host data) and
+`scripts/style2-level-map-check.mjs`: region parity against Figma's render of 8:23174 at 1422 × 800, 1280 × 800 next
+to Figma, 390 × 844 and 320 × 568 shots, a slow drag that snaps back, a fling that projects past its release, a held
+drag that snaps to the nearest level, culling, real clicks on a completed / a locked level, PLAY, HOME and the locked
+nav item, and no Style 2 request from the donor / Style 1 pages. Writes `showcase-shots/style2/`.
+
 ## Tests
 
 `tests/pixi/` runs the kit headlessly in Vitest (a tiny fake canvas 2D context behind Pixi's
@@ -450,3 +491,7 @@ background and top shadow (`bg/`), the Figma top bar (`hud/`), buttons (`button/
 (`icons/`), the victory ribbon and purple panels (`window/`), shop awning/cards/coins (`shop/`),
 settings panel/toggles/buttons (`settings/`), the no-ads and starter-pack panels, heroes, icons
 and the bulb (`offer/`), and Fira Sans Black. No runtime dependency on `trail_arrow/` remains.
+
+Style 2 (`style2/`, ~510 KB, loaded only with `skin: READY_UI_STYLE_2`) is Figma's own transparent renders of the
+static leaf visuals of `theme_light_3` 8:23174 plus the raw sky image, and `fonts/Carlito-Bold.woff` (OFL 1.1,
+`fonts/Carlito-OFL.txt`); provenance and commands in docs/figma/style2-level-map-screen/README.md.

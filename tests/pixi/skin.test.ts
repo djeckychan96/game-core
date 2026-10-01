@@ -6,7 +6,7 @@ import { ConfirmWindowView, type ConfirmWindowViewOptions } from '../../src/pixi
 import { LivesWindowView, type LivesWindowParams, type LivesWindowViewOptions } from '../../src/pixi/LivesWindowView';
 import { SettingsWindowView, type SettingsWindowParams, type SettingsWindowViewOptions } from '../../src/pixi/SettingsWindowView';
 import { READY_UI_NINE_SLICES, READY_UI_OPTIONAL_ASSET_FILES, loadReadyUiAssets, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
-import { READY_UI_SKIN_VIEW_ROLES, READY_UI_SKIN_WINDOW_ROLES, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_SKIN_VIEW_ROLES, READY_UI_SKIN_WINDOW_ROLES, requiredSkinRoles, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
 import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from '../../src/pixi/skins/style1';
 import { resolveTheme } from '../../src/pixi/theme';
 import type { UiButton } from '../../src/pixi/UiButton';
@@ -121,7 +121,7 @@ function restyle(id: string, change: (skin: { -readonly [K in keyof ReadyUiSkin]
 describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings, HUD and LevelMap', () => {
   it('is exported from game-core/pixi: Style 1, the catalog and the per-window roles; the package states its coverage', () => {
     expect(pixiEntry.READY_UI_STYLE_1).toBe(READY_UI_STYLE_1);
-    expect(pixiEntry.READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1 });
+    expect(pixiEntry.READY_UI_SKINS['style-1']).toBe(READY_UI_STYLE_1);
     expect(pixiEntry.READY_UI_SKIN_WINDOW_ROLES).toBe(READY_UI_SKIN_WINDOW_ROLES);
     expect(pixiEntry.READY_UI_SKIN_VIEW_ROLES).toBe(READY_UI_SKIN_VIEW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
@@ -129,14 +129,15 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'settings']);
     expect('hud' in READY_UI_STYLE_1).toBe(true);
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
-    expect(ROLES.sort()).toEqual([...new Set(Object.values(READY_UI_SKIN_VIEW_ROLES).flat())].sort());
+    // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles)
+    expect(ROLES.sort()).toEqual([...new Set(READY_UI_STYLE_1.covers.flatMap((view) => requiredSkinRoles(READY_UI_STYLE_1, view)))].sort());
     expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 1090 });
     expect(READY_UI_STYLE_1.windows.settings.gameplay.window).toEqual({ width: 960, height: 1576 });
   });
 
   it('owns the files and caps: the pre-style kit names (READY_UI_OPTIONAL_ASSET_FILES / READY_UI_NINE_SLICES) are the same values', () => {
     for (const [role, name] of Object.entries(STYLE_1_INCLUDE_NAMES) as Array<[ReadyUiSkinRole, ReadyUiOptionalTextureName]>) {
-      expect(READY_UI_OPTIONAL_ASSET_FILES[name], role).toBe(READY_UI_STYLE_1.assets[role]?.file);
+      expect(READY_UI_OPTIONAL_ASSET_FILES[name], role).toBe((READY_UI_STYLE_1.assets as ReadyUiSkin['assets'])[role]?.file);
     }
     expect(READY_UI_NINE_SLICES).toEqual({
       windowBase: READY_UI_STYLE_1.assets.windowSurface.nineSlice,

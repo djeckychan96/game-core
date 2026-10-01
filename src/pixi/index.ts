@@ -29,6 +29,10 @@ export type {
 } from './LevelMapView';
 export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
+export { BottomNavView } from './BottomNavView';
+export type { BottomNavItem, BottomNavViewOptions, BottomNavInsets, BottomNavResizeOptions } from './BottomNavView';
+export { LevelMapScreen } from './LevelMapScreen';
+export type { LevelMapScreenOptions, LevelMapScreenInsets, LevelMapScreenResizeOptions } from './LevelMapScreen';
 export { UiButton } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
@@ -58,7 +62,8 @@ export {
 } from './assets';
 export type { ReadyUiTextures, ReadyUiTextureName, ReadyUiOptionalTextureName, LoadReadyUiAssetsOptions } from './assets';
 export { READY_UI_STYLE_1 } from './skins/style1';
-export { READY_UI_SKINS, READY_UI_SKIN_WINDOW_ROLES, READY_UI_SKIN_VIEW_ROLES } from './skin';
+export { READY_UI_STYLE_2 } from './skins/style2';
+export { READY_UI_SKINS, READY_UI_SKIN_WINDOW_ROLES, READY_UI_SKIN_VIEW_ROLES, requiredSkinRoles } from './skin';
 export type {
   ReadyUiSkin,
   ReadyUiSkinWindow,
@@ -72,6 +77,11 @@ export type {
   ReadyUiSkinLivesLayout,
   ReadyUiSkinHudLayout,
   ReadyUiSkinLevelMapLayout,
+  ReadyUiSkinBottomNavLayout,
+  ReadyUiSkinBottomNavItemLayout,
+  ReadyUiSkinLevelMapScreenLayout,
+  ReadyUiSkinIconBox,
+  ReadyUiSkinFont,
   ReadyUiSkinLayouts,
   ReadyUiSkinTextures
 } from './skin';
@@ -80,7 +90,7 @@ export type { NineSliceSpec, NineSliceInsets } from './nineSlice';
 export { DEFAULT_READY_UI_THEME, resolveTheme } from './theme';
 export type { ReadyUiTheme, ReadyUiThemeOverrides, ReadyUiTextTheme, ReadyUiColors, ReadyUiLevelMapTheme } from './theme';
 export { createLabel, fitLabelWidth, applyTextResolution, formatAmount, formatTimer, TEXT_SUPERSAMPLE } from './text';
-export type { LabelOptions } from './text';
+export type { LabelOptions, FigmaTextLook } from './text';
 export { READY_UI_CATALOGS, READY_UI_EN, READY_UI_RU } from './locales';
 export { ClickRippleEffect, DEFAULT_CLICK_RIPPLE } from './fx';
 export type {
