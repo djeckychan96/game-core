@@ -10,8 +10,11 @@ import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from './skins/style1';
  * for every style. A window the style does not cover keeps its donor look.
  */
 
-/** The windows a style can cover. */
+/** The modal windows a style can cover. */
 export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings';
+
+/** Non-modal Core views whose visuals may come from the same selected skin. */
+export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap';
 
 /** The roles each covered window draws with, in the view's order. A covering style must give every one an asset. */
 export const READY_UI_SKIN_WINDOW_ROLES = {
@@ -20,7 +23,13 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
   settings: ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart']
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
-export type ReadyUiSkinRole = (typeof READY_UI_SKIN_WINDOW_ROLES)[ReadyUiSkinWindow][number];
+export const READY_UI_SKIN_VIEW_ROLES = {
+  ...READY_UI_SKIN_WINDOW_ROLES,
+  hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
+  levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR']
+} as const satisfies Record<ReadyUiSkinView, readonly string[]>;
+
+export type ReadyUiSkinRole = (typeof READY_UI_SKIN_VIEW_ROLES)[ReadyUiSkinView][number];
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
 const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel'];
@@ -132,6 +141,44 @@ export interface ReadyUiSkinSettingsLayouts {
   readonly gameplay: ReadyUiSkinSettingsGameplayLayout;
 }
 
+/** Style-owned visual geometry for HudView. Interaction and responsive fitting remain shared. */
+export interface ReadyUiSkinHudLayout {
+  readonly capsule: ReadyUiSkinBox;
+  readonly iconSize: number;
+  readonly starIconSize: number;
+  readonly plus: ReadyUiSkinBox;
+  readonly badgeGap: number;
+  readonly heartCount: { readonly x: number; readonly y: number; readonly fontSize: number; readonly stroke: number };
+  readonly capsuleText: { readonly x: number; readonly y: number; readonly fontSize: number };
+  readonly resourceCount: { readonly x: number; readonly y: number; readonly fontSize: number };
+  readonly gear: { readonly size: number; readonly backWidth: number; readonly backHeight: number; readonly rowWidthFactor: number; readonly minHitSize: number };
+  readonly margins: { readonly left: number; readonly right: number; readonly top: number; readonly settingsTop: number; readonly rowGap: number; readonly bottom: number };
+  readonly responsive: { readonly portraitAreaRatio: number; readonly landscapeAreaRatio: number };
+  /** Default for this skin; an explicit HudView `shadow` option still wins. */
+  readonly shadow: boolean;
+}
+
+/** Style-owned art boxes for LevelMapView. Scrolling, focus, culling and level spacing remain in theme.levelMap. */
+export interface ReadyUiSkinLevelMapLayout {
+  readonly normalNode: { readonly width: number; readonly height: number };
+  readonly hardNode: { readonly width: number; readonly height: number };
+  readonly number: { readonly x: number; readonly y: number; readonly width: number; readonly fontSize: number };
+  readonly lock: ReadyUiSkinBox;
+  readonly hardBadge: ReadyUiSkinBox & { readonly textY: number; readonly fontSize: number };
+  readonly rail: { readonly width: number };
+  readonly currentGlow: { readonly width: number; readonly height: number };
+  /** Figma shows HARD on locked nodes; donor compatibility keeps its old open-only rule. */
+  readonly showHardWhenLocked: boolean;
+  /** Earned rating stars (left, centre, right) as boxes in node units: Core's crown composition fitted to this node's art. */
+  readonly stars: readonly [
+    { readonly x: number; readonly y: number; readonly size: number },
+    { readonly x: number; readonly y: number; readonly size: number },
+    { readonly x: number; readonly y: number; readonly size: number }
+  ];
+  /** The HARD badge covers the rim the crown sits on: a HARD node's crown rests on the badge's top edge, in front of it. */
+  readonly starsOnHardBadge: boolean;
+}
+
 export interface ReadyUiSkinLayouts {
   readonly confirm?: ReadyUiSkinConfirmLayout;
   readonly lives?: ReadyUiSkinLivesLayout;
@@ -141,8 +188,8 @@ export interface ReadyUiSkinLayouts {
 export interface ReadyUiSkin {
   /** Stable id: the key of its textures (`textures.skins[id]`) and of its Pixi Assets cache entries. Never reused. */
   readonly id: string;
-  /** The windows this style draws; every other window keeps its donor look. Each one listed needs its layout and assets. */
-  readonly covers: readonly ReadyUiSkinWindow[];
+  /** The Core views this style draws; every other view keeps its donor look. Each one listed needs layout + assets. */
+  readonly covers: readonly ReadyUiSkinView[];
   /** The design frame the layouts are measured in; a covered window keeps its share of it (contain-fit). */
   readonly frame: { readonly width: number; readonly height: number };
   /** Semantic role → asset. Only these files load for the style (`loadReadyUiAssets({ skin })`). */
@@ -152,6 +199,8 @@ export interface ReadyUiSkin {
   /** The dim layer behind a covered window. */
   readonly backdrop: { readonly color: number; readonly alpha: number };
   readonly windows: ReadyUiSkinLayouts;
+  readonly hud?: ReadyUiSkinHudLayout;
+  readonly levelMap?: ReadyUiSkinLevelMapLayout;
 }
 
 /** A skin's role textures, as `loadReadyUiAssets({ skin })` puts them under `textures.skins[skin.id]`. */
@@ -162,19 +211,67 @@ export const READY_UI_SKINS = {
   [READY_UI_STYLE_1.id]: READY_UI_STYLE_1
 } as const satisfies Record<string, ReadyUiSkin>;
 
-/** Checks a style package: every covered window has its layout and an asset (with caps where it stretches) per role. */
+/** Checks a style package: every covered view has its layout and an asset (with caps where it stretches) per role. */
 export function validateReadyUiSkin(skin: ReadyUiSkin): void {
   if (typeof skin?.id !== 'string' || !skin.id) throw new Error('ReadyUiSkin: a style needs a non-empty string id');
-  for (const window of skin.covers) {
-    const roles: readonly ReadyUiSkinRole[] | undefined = READY_UI_SKIN_WINDOW_ROLES[window];
-    if (!roles) throw new Error(`ReadyUiSkin '${skin.id}' covers '${String(window)}', which no style can cover yet (${Object.keys(READY_UI_SKIN_WINDOW_ROLES).join(', ')})`);
-    if (!skin.windows[window]) throw new Error(`ReadyUiSkin '${skin.id}' covers '${window}' but has no windows.${window} layout`);
+  for (const view of skin.covers) {
+    const roles: readonly ReadyUiSkinRole[] | undefined = READY_UI_SKIN_VIEW_ROLES[view];
+    if (!roles) throw new Error(`ReadyUiSkin '${skin.id}' covers '${String(view)}', which no style can cover yet (${Object.keys(READY_UI_SKIN_VIEW_ROLES).join(', ')})`);
+    const layout = view === 'hud' ? skin.hud : view === 'levelMap' ? skin.levelMap : skin.windows[view];
+    if (!layout) {
+      const location = view === 'hud' || view === 'levelMap' ? view : `windows.${view}`;
+      throw new Error(`ReadyUiSkin '${skin.id}' covers '${view}' but has no ${location} layout`);
+    }
     for (const role of roles) {
       const asset = skin.assets[role];
-      if (!asset?.file) throw new Error(`ReadyUiSkin '${skin.id}' covers '${window}' but has no asset for role '${role}'`);
+      if (!asset?.file) throw new Error(`ReadyUiSkin '${skin.id}' covers '${view}' but has no asset for role '${role}'`);
       if (NINE_SLICE_ROLES.includes(role) && !asset.nineSlice) throw new Error(`ReadyUiSkin '${skin.id}': role '${role}' is drawn as a 9-slice but has no nineSlice caps`);
     }
   }
+}
+
+export type ReadyUiSkinStandaloneView = 'hud' | 'levelMap';
+
+export interface ReadyUiSkinViewLayouts {
+  readonly hud: ReadyUiSkinHudLayout;
+  readonly levelMap: ReadyUiSkinLevelMapLayout;
+}
+
+export interface SkinViewLook<V extends ReadyUiSkinStandaloneView> {
+  skin: ReadyUiSkin;
+  layout: ReadyUiSkinViewLayouts[V];
+  art: Record<(typeof READY_UI_SKIN_VIEW_ROLES)[V][number], Texture>;
+}
+
+/** Explicit theme selection only: absent or uncovered means the unchanged donor view. */
+export function selectSkinView(view: ReadyUiSkinStandaloneView, themeSkin: ReadyUiSkin | undefined): ReadyUiSkin | null {
+  return themeSkin?.covers.includes(view) ? themeSkin : null;
+}
+
+/** Resolves a non-modal skinned view strictly; a selected skin never falls back to donor art silently. */
+export function resolveSkinView<V extends ReadyUiSkinStandaloneView>(
+  owner: string,
+  view: V,
+  skin: ReadyUiSkin,
+  textures: ReadyUiTextures
+): SkinViewLook<V> {
+  validateReadyUiSkin(skin);
+  const layout = skin[view] as ReadyUiSkinViewLayouts[V] | undefined;
+  if (!skin.covers.includes(view) || !layout) throw new Error(`${owner}: ReadyUiSkin '${skin.id}' does not cover '${view}'`);
+  const loaded = textures.skins?.[skin.id];
+  const roles = READY_UI_SKIN_VIEW_ROLES[view] as readonly ReadyUiSkinRole[];
+  const art: Record<string, Texture> = {};
+  const missing: ReadyUiSkinRole[] = [];
+  for (const role of roles) {
+    const texture = loaded?.[role];
+    if (texture) art[role] = texture;
+    else missing.push(role);
+  }
+  if (missing.length) {
+    const list = missing.map((role) => `${role} (${skin.assets[role]?.file ?? '?'})`).join(', ');
+    throw new Error(`${owner} style '${skin.id}': no ${list} in textures — load them with loadReadyUiAssets({ skin })`);
+  }
+  return { skin, layout, art: art as SkinViewLook<V>['art'] };
 }
 
 /**

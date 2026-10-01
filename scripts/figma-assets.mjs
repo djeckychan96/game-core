@@ -40,13 +40,25 @@ async function renderAsset({ asset, layers, tolerance, committed }) {
   full.height = ph;
   const ctx = full.getContext('2d', { willReadFrequently: true });
   for (const layer of layers) {
-    // resize the SVG's own box so Chrome rasterises the vector at the target density (not a scaled bitmap)
-    const m = /<svg width="([\d.]+)" height="([\d.]+)"/.exec(layer.svg);
-    const lw = Number(m[1]) * S;
-    const lh = Number(m[2]) * S;
-    const svg = layer.svg.replace(m[0], `<svg width="${lw}" height="${lh}"`);
     const img = new Image();
-    img.src = 'data:image/svg+xml;base64,' + btoa(svg);
+    let lw;
+    let lh;
+    if (layer.svg) {
+      // resize the SVG's own box so Chrome rasterises the vector at the target density (not a scaled bitmap)
+      const root = /<svg\b[^>]*>/.exec(layer.svg)?.[0];
+      const width = root && /\bwidth="([\d.]+)"/.exec(root)?.[1];
+      const height = root && /\bheight="([\d.]+)"/.exec(root)?.[1];
+      if (!root || !width || !height) throw new Error('SVG layer needs numeric root width and height');
+      lw = Number(width) * S;
+      lh = Number(height) * S;
+      const scaledRoot = root.replace(/\bwidth="[\d.]+"/, `width="${lw}"`).replace(/\bheight="[\d.]+"/, `height="${lh}"`);
+      const svg = layer.svg.replace(root, scaledRoot);
+      img.src = 'data:image/svg+xml;base64,' + btoa(svg);
+    } else {
+      lw = layer.size[0] * S;
+      lh = layer.size[1] * S;
+      img.src = layer.image;
+    }
     await img.decode();
     ctx.drawImage(img, layer.at[0] * S, layer.at[1] * S, lw, lh);
   }
@@ -141,7 +153,9 @@ try {
   await page.setContent('<!doctype html><title>figma-assets</title>');
   const tmp = mkdtempSync(join(tmpdir(), 'figma-assets-'));
   for (const asset of spec.assets) {
-    const layers = asset.layers.map((l) => ({ at: l.at, svg: readFileSync(join(dir, l.svg), 'utf8') }));
+    const layers = asset.layers.map((l) => l.svg
+      ? { at: l.at, svg: readFileSync(join(dir, l.svg), 'utf8') }
+      : { at: l.at, size: l.size, image: `data:image/png;base64,${readFileSync(join(dir, l.image)).toString('base64')}` });
     const out = join(outRoot, asset.file);
     const committed = check ? 'data:image/webp;base64,' + readFileSync(out).toString('base64') : null;
     const result = await page.evaluate(renderAsset, { asset, layers, tolerance: TOLERANCE, committed });

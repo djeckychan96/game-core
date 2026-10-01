@@ -2,11 +2,12 @@ import type { ReadyUiOptionalTextureName } from '../assets';
 import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
 
 /**
- * Style 1 — the Figma "HAMSTER PIXEL FLOW" windows (file CNcGCBj8IvUXrPd01FbChm), accepted on Confirm, Lives and Settings.
+ * Style 1 — the Figma "HAMSTER PIXEL FLOW" Ready UI.
  *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
- * docs/figma/lives), plus the current runtime surface of `settings`. NOT COVERED — donor look for now: Result, HUD,
- * LevelMap, Shop, NoAds, StarterPack.
+ * docs/figma/lives), the current runtime surface of `settings`, plus HUD and LevelMap from the canonical level-select
+ * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301). NOT COVERED — donor look: Result, Shop,
+ * NoAds, StarterPack.
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -16,7 +17,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -53,12 +54,74 @@ export const READY_UI_STYLE_1 = {
     settingsOff: { file: 'settings/deactivated.webp' },
     settingsBtnHome: { file: 'settings/btn_home.webp' },
     settingsBtnRestart: { file: 'settings/btn_restart.webp' },
-    settingsIconRestart: { file: 'settings/icon_restart.webp' }
+    settingsIconRestart: { file: 'settings/icon_restart.webp' },
+    /** Exact Figma HUD exports already shipped by the donor pack; Style 1 selects them by semantic role. */
+    hudCapsule: { file: 'hud/capsule.webp' },
+    hudHeart: { file: 'hud/heart.webp' },
+    hudCoin: { file: 'hud/coin.webp' },
+    hudPlus: { file: 'hud/plus.webp' },
+    hudGear: { file: 'hud/gear.webp' },
+    hudGearBack: { file: 'hud/gear_back.webp' },
+    /** No Figma completed-state art exists; retain the established rating-star art and semantics. */
+    hudStar: { file: 'level/star_gold.webp' },
+    levelNodeNormal: { file: 'level/style1_node_blue.webp' },
+    levelNodeHard: { file: 'level/style1_node_violet.webp' },
+    levelLock: { file: 'level/style1_lock.webp' },
+    levelHardBadge: { file: 'level/style1_hard.webp' },
+    levelRail: { file: 'level/style1_rail.webp' },
+    /**
+     * Group 268's transparent export (its 818.6 × 521.6 render bounds at 0.6×), already shipped by the donor pack.
+     * The MCP raster of 1:1336 is fully opaque — the screen background baked in — so it is not used.
+     */
+    levelCurrentGlow: { file: 'level/shine.webp' },
+    levelStarGold: { file: 'level/star_gold.webp' },
+    levelStarGoldL: { file: 'level/star_gold_l.webp' },
+    levelStarGoldR: { file: 'level/star_gold_r.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
   /** overlay/dim 820:77657 / 85:9387 */
   backdrop: { color: 0x080b0d, alpha: 0.8 },
+  hud: {
+    capsule: { x: 109, y: 0, width: 218, height: 72 },
+    iconSize: 128,
+    starIconSize: 112,
+    plus: { x: 36, y: 36, width: 53, height: 57 },
+    badgeGap: 290,
+    heartCount: { x: 0, y: -2, fontSize: 54, stroke: 5 },
+    capsuleText: { x: 131, y: -3, fontSize: 40 },
+    resourceCount: { x: 131, y: -3, fontSize: 40 },
+    gear: { size: 100, backWidth: 145, backHeight: 126.875, rowWidthFactor: 1.45, minHitSize: 160 },
+    margins: { left: 60, right: 48, top: 83, settingsTop: 75, rowGap: 40, bottom: 12 },
+    responsive: { portraitAreaRatio: 20, landscapeAreaRatio: 50 },
+    shadow: false
+  },
+  levelMap: {
+    normalNode: { width: 260, height: 269 },
+    hardNode: { width: 258, height: 266 },
+    number: { x: 1, y: -3.5, width: 95, fontSize: 84 },
+    /** Exact render box of Group 182: logical 92 × 104 plus stroke/shadow bleed. */
+    lock: { x: 0, y: 106, width: 100, height: 116 },
+    /** Exact render box of the violet HARD component, centred at (5, -102) over the node. */
+    hardBadge: { x: 5, y: -102, width: 236, height: 82, textY: -3, fontSize: 40 },
+    /** Rectangle 28 is 30 wide; its exact export is 64 wide including the two side shadows. */
+    rail: { width: 64 },
+    /** Group 268 render bounds: 720 × 376 logical content plus blur bleed. */
+    currentGlow: { width: 819, height: 522 },
+    showHardWhenLocked: true,
+    /**
+     * No completed-node art in Figma: Core's rating crown, with the donor star slots' position and size relative to the
+     * donor badge circle (centre 0, 44.3; outer radius 108.2 units) re-fitted to Ellipse 4 (centre 0, -4.5; outer
+     * radius 128.6). Side stars sit centred on the top rim, the centre star above it, all clear of the number.
+     */
+    stars: [
+      { x: -104.5, y: -84.8, size: 129.1 },
+      { x: 0, y: -152.4, size: 150.6 },
+      { x: 104.5, y: -84.8, size: 129.1 }
+    ],
+    /** The violet HARD surface sits across the top rim (Figma), so a HARD node's crown rests on it. */
+    starsOnHardBadge: true
+  },
   windows: {
     /** Figma `screen/confirm-exit`: window-local boxes (the `ui/window/base` box sits at 60, 675 of the frame). */
     confirm: {

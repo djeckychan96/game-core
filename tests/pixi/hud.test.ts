@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { Sprite, Texture, TextureSource } from 'pixi.js';
 import { advance, createKit, pointer } from './setup';
 import { HudView } from '../../src/pixi/HudView';
+import type { ReadyUiTextures } from '../../src/pixi/assets';
+import type { ReadyUiSkinRole, ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_STYLE_1 } from '../../src/pixi/skins/style1';
 import type { UiButton } from '../../src/pixi/UiButton';
 
 function badgeButton(hud: HudView, which: 'lives' | 'coins'): UiButton {
@@ -9,7 +13,93 @@ function badgeButton(hud: HudView, which: 'lives' | 'coins'): UiButton {
   return badge.button;
 }
 
+const labelled = (label: string): Texture => new Texture({ source: new TextureSource({ width: 2, height: 2, label }) });
+
+function style1Textures(textures: ReadyUiTextures): ReadyUiTextures {
+  const roles = {} as ReadyUiSkinTextures & Record<string, Texture>;
+  for (const role of Object.keys(READY_UI_STYLE_1.assets) as ReadyUiSkinRole[]) roles[role] = labelled(`style-1:${role}`);
+  for (const role of ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar']) {
+    roles[role] ??= labelled(`style-1:${role}`);
+  }
+  return { ...textures, skins: { [READY_UI_STYLE_1.id]: roles } };
+}
+
+function spriteTextures(root: { children: readonly unknown[] }): Texture[] {
+  const found: Texture[] = [];
+  const visit = (node: { children?: readonly unknown[] }): void => {
+    if (node instanceof Sprite) found.push(node.texture);
+    for (const child of node.children ?? []) visit(child as { children?: readonly unknown[] });
+  };
+  visit(root);
+  return found;
+}
+
 describe('HudView', () => {
+  it('uses Style 1 HUD roles only when that skin is explicitly selected', () => {
+    const kit = createKit();
+    const textures = style1Textures(kit.textures);
+    const styled = new HudView({
+      ui: kit.ui,
+      motion: kit.motion,
+      textures,
+      theme: { skin: READY_UI_STYLE_1 },
+      coins: 80,
+      lives: 5,
+      maxLives: 5,
+      stars: 12,
+      shadow: false,
+      onCoinsTap: () => {},
+      onLivesTap: () => {},
+      onSettingsTap: () => {}
+    });
+    const styledSprites = spriteTextures(styled).map((texture) => texture.source.label);
+    expect(styledSprites).toEqual(expect.arrayContaining([
+      'style-1:hudCapsule',
+      'style-1:hudHeart',
+      'style-1:hudCoin',
+      'style-1:hudPlus',
+      'style-1:hudGear',
+      'style-1:hudGearBack',
+      'style-1:hudStar'
+    ]));
+
+    const donorKit = createKit();
+    const donor = new HudView({
+      ui: donorKit.ui,
+      motion: donorKit.motion,
+      textures: donorKit.textures,
+      coins: 80,
+      lives: 5,
+      stars: 12,
+      shadow: false,
+      onCoinsTap: () => {},
+      onLivesTap: () => {},
+      onSettingsTap: () => {}
+    });
+    const donorSprites = spriteTextures(donor);
+    expect(donorSprites).toEqual(expect.arrayContaining([
+      donorKit.textures.hudCapsule,
+      donorKit.textures.hudHeart,
+      donorKit.textures.hudCoin,
+      donorKit.textures.hudPlus,
+      donorKit.textures.hudGear,
+      donorKit.textures.hudGearBack,
+      donorKit.textures.starGold
+    ]));
+    expect(donorSprites.some((texture) => texture.source.label.startsWith('style-1:'))).toBe(false);
+    styled.destroy();
+    donor.destroy();
+  });
+
+  it('fails clearly when explicit Style 1 HUD textures were not loaded completely', () => {
+    const kit = createKit();
+    const textures = style1Textures(kit.textures);
+    delete (textures.skins?.[READY_UI_STYLE_1.id] as Record<string, Texture>).hudCoin;
+    expect(() => new HudView({ ui: kit.ui, motion: kit.motion, textures, theme: { skin: READY_UI_STYLE_1 } }))
+      .toThrow("HudView style 'style-1': no hudCoin (hud/coin.webp) in textures — load them with loadReadyUiAssets({ skin })");
+    expect(kit.ui.getStats().buttons).toBe(0);
+  });
+
   it('shows coins, lives and the refill timer; full lives read MAX and hide the plus', () => {
     const kit = createKit();
     const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, coins: 12450, lives: 3, maxLives: 5, onCoinsTap: () => {}, onLivesTap: () => {} });

@@ -58,16 +58,20 @@ export {
 } from './assets';
 export type { ReadyUiTextures, ReadyUiTextureName, ReadyUiOptionalTextureName, LoadReadyUiAssetsOptions } from './assets';
 export { READY_UI_STYLE_1 } from './skins/style1';
-export { READY_UI_SKINS, READY_UI_SKIN_WINDOW_ROLES } from './skin';
+export { READY_UI_SKINS, READY_UI_SKIN_WINDOW_ROLES, READY_UI_SKIN_VIEW_ROLES } from './skin';
 export type {
   ReadyUiSkin,
   ReadyUiSkinWindow,
+  ReadyUiSkinView,
+  ReadyUiSkinStandaloneView,
   ReadyUiSkinRole,
   ReadyUiSkinAsset,
   ReadyUiSkinBox,
   ReadyUiSkinTextBox,
   ReadyUiSkinConfirmLayout,
   ReadyUiSkinLivesLayout,
+  ReadyUiSkinHudLayout,
+  ReadyUiSkinLevelMapLayout,
   ReadyUiSkinLayouts,
   ReadyUiSkinTextures
 } from './skin';

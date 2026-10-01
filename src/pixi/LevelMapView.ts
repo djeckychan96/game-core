@@ -11,7 +11,8 @@ import type { ButtonController, LocalizationTextProvider, MotionHandle, MotionRu
 import type { ReadyUiTextures } from './assets';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import { applyTextResolution, createLabel, fitLabelWidth } from './text';
+import { resolveSkinView, selectSkinView, type SkinViewLook } from './skin';
+import { applyTextResolution, createFigmaLabel, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
 export type LevelNodeState = 'completed' | 'current' | 'locked';
@@ -123,6 +124,7 @@ export class LevelMapView extends Container {
   private readonly ui: UiRuntime;
   private readonly motion: MotionRuntime;
   private readonly textures: ReadyUiTextures;
+  private readonly styled: SkinViewLook<'levelMap'> | null;
   private readonly onSelectLevel: (level: number, state: 'completed' | 'current') => void;
   private readonly onLockedTap: ((level: number) => void) | null;
   private readonly onFocusChange: ((info: LevelMapFocusInfo) => void) | null;
@@ -180,6 +182,8 @@ export class LevelMapView extends Container {
     this.ui = options.ui;
     this.motion = options.motion;
     this.textures = options.textures;
+    const selectedSkin = selectSkinView('levelMap', this.theme.skin);
+    this.styled = selectedSkin ? resolveSkinView('LevelMapView', 'levelMap', selectedSkin, options.textures) : null;
     this.onSelectLevel = options.onSelectLevel;
     this.onLockedTap = options.onLockedTap ?? null;
     this.onFocusChange = options.onFocusChange ?? null;
@@ -206,13 +210,15 @@ export class LevelMapView extends Container {
     this.content.mask = this.maskShape;
     this.addChild(this.content);
 
-    this.shine = new Sprite(this.textures.shine);
+    this.shine = new Sprite(this.styled?.art.levelCurrentGlow ?? this.textures.shine);
     this.shine.anchor.set(0.5);
     this.shine.eventMode = 'none';
-    // donor: 983 × 626 logical, scaled by nodeScale, sitting behind the focused node
-    this.shine.width = 983;
-    this.shine.height = 626;
-    this.shine.scale.set(this.shine.scale.x * this.theme.levelMap.nodeScale, this.shine.scale.y * this.theme.levelMap.nodeScale);
+    // The glow is visual skin data; its focus position and pulse remain shared behavior.
+    this.shine.width = this.styled?.layout.currentGlow.width ?? 983;
+    this.shine.height = this.styled?.layout.currentGlow.height ?? 626;
+    if (!this.styled) {
+      this.shine.scale.set(this.shine.scale.x * this.theme.levelMap.nodeScale, this.shine.scale.y * this.theme.levelMap.nodeScale);
+    }
     this.content.addChild(this.shine);
 
     this.track = new Container();
@@ -509,9 +515,9 @@ export class LevelMapView extends Container {
     const gap = this.theme.levelMap.levelGap;
     const nodeScale = this.theme.levelMap.nodeScale;
     for (let i = lo; i < hi; i++) {
-      const seg = new Sprite(this.textures.rail);
+      const seg = new Sprite(this.styled?.art.levelRail ?? this.textures.rail);
       seg.anchor.set(0.5);
-      seg.width = 64 * nodeScale; // donor rail: 64 logical px wide, one segment per gap
+      seg.width = (this.styled?.layout.rail.width ?? 64) * nodeScale;
       seg.height = gap + 20;
       seg.position.set(0, (this.levelY(i) + this.levelY(i + 1)) / 2);
       seg.eventMode = 'none';
@@ -545,17 +551,35 @@ export class LevelMapView extends Container {
     const inner = new Container();
     root.addChild(inner);
 
-    const baseTex = state === 'current' ? this.textures.badgeCurrent : state === 'locked' ? this.textures.badgeLocked : this.textures.badgeBase;
+    const styled = this.styled;
+    const baseTex = styled
+      ? (data?.hard ? styled.art.levelNodeHard : styled.art.levelNodeNormal)
+      : state === 'current' ? this.textures.badgeCurrent : state === 'locked' ? this.textures.badgeLocked : this.textures.badgeBase;
     const badge = new Sprite(baseTex);
     badge.anchor.set(0.5);
-    badge.scale.set(D / Math.max(1, baseTex.width));
+    if (styled) {
+      const box = data?.hard ? styled.layout.hardNode : styled.layout.normalNode;
+      badge.width = box.width;
+      badge.height = box.height;
+    } else {
+      badge.scale.set(D / Math.max(1, baseTex.width));
+    }
     inner.addChild(badge);
 
     // side stars are pre-tilted PNGs from Figma; only earned stars are drawn (the empty
     // slots are baked into the badge art itself)
     const stars: Sprite[] = [];
     const earned = state === 'completed' ? clamp(data?.stars ?? 0, 0, 3) : 0;
-    const starSpecs = [
+    const styleStars = styled?.layout.stars;
+    // a style whose HARD badge covers the rim the crown sits on: a HARD node's crown rests on the badge's top edge
+    // (side stars centred on it, as on the rim) and draws in front of the badge. Earned stars imply an open node.
+    const crownOnBadge = Boolean(styled?.layout.starsOnHardBadge && data?.hard && earned > 0);
+    const crownY = crownOnBadge ? styled!.layout.hardBadge.y - styled!.layout.hardBadge.height / 2 - styleStars![0].y : 0;
+    const starSpecs = styled ? [
+      { ...styleStars![0], tex: styled.art.levelStarGoldL },
+      { ...styleStars![1], tex: styled.art.levelStarGold },
+      { ...styleStars![2], tex: styled.art.levelStarGoldR }
+    ] : [
       { x: -68 * k, y: -18 * k, size: 84 * k, tex: this.textures.starGoldL },
       { x: 0, y: -62 * k, size: 98 * k, tex: this.textures.starGold },
       { x: 68 * k, y: -18 * k, size: 84 * k, tex: this.textures.starGoldR }
@@ -566,7 +590,7 @@ export class LevelMapView extends Container {
       const star = new Sprite(spec.tex);
       star.anchor.set(0.5);
       star.scale.set(spec.size / Math.max(1, spec.tex.width));
-      star.position.set(spec.x, spec.y);
+      star.position.set(spec.x, spec.y + crownY);
       inner.addChild(star);
       stars.push(star);
     }
@@ -574,32 +598,55 @@ export class LevelMapView extends Container {
     const digits = String(level).length;
     const numK = digits >= 3 ? 0.74 : digits === 2 ? 0.92 : 1;
     const locked = state === 'locked';
-    const fontSize = (locked ? 70 : 84) * numK * k;
-    const label = createLabel(this.theme, String(level), { fontSize, stroke: fontSize * 0.095 });
-    label.position.set(0, ((locked ? 6 : 27) + (digits >= 3 ? 7 : digits === 2 ? 3 : 0)) * k);
+    const fontSize = styled ? styled.layout.number.fontSize * numK : (locked ? 70 : 84) * numK * k;
+    const label = styled
+      ? createFigmaLabel(this.theme, String(level), fontSize, styled.skin.text)
+      : createLabel(this.theme, String(level), { fontSize, stroke: fontSize * 0.095 });
+    if (styled) {
+      label.anchor.set(0.5);
+      label.position.set(styled.layout.number.x, styled.layout.number.y);
+      fitLabelWidth(label, styled.layout.number.width);
+    } else {
+      label.position.set(0, ((locked ? 6 : 27) + (digits >= 3 ? 7 : digits === 2 ? 3 : 0)) * k);
+    }
     inner.addChild(label);
 
     let lock: Sprite | null = null;
     if (locked) {
-      lock = new Sprite(this.textures.lock);
+      lock = new Sprite(styled?.art.levelLock ?? this.textures.lock);
       lock.anchor.set(0.5);
-      lock.scale.set((64 * k) / Math.max(1, this.textures.lock.width));
-      lock.position.set(0, 78 * k);
+      if (styled) {
+        lock.width = styled.layout.lock.width;
+        lock.height = styled.layout.lock.height;
+        lock.position.set(styled.layout.lock.x, styled.layout.lock.y);
+      } else {
+        lock.scale.set((64 * k) / Math.max(1, this.textures.lock.width));
+        lock.position.set(0, 78 * k);
+      }
       inner.addChild(lock);
     }
 
-    if (data?.hard && !locked) {
-      const pillW = 190 * k;
-      const pill = new Sprite(this.textures.pillHard);
+    if (data?.hard && (!locked || styled?.layout.showHardWhenLocked)) {
+      const pillW = styled?.layout.hardBadge.width ?? 190 * k;
+      const pill = new Sprite(styled?.art.levelHardBadge ?? this.textures.pillHard);
       pill.anchor.set(0.5);
-      pill.scale.set(pillW / Math.max(1, this.textures.pillHard.width));
-      const text = createLabel(this.theme, this.hardLabel.toUpperCase(), { fontSize: 36 * k, stroke: 4 * k });
-      text.y = -2 * k;
+      if (styled) {
+        pill.width = styled.layout.hardBadge.width;
+        pill.height = styled.layout.hardBadge.height;
+      } else {
+        pill.scale.set(pillW / Math.max(1, this.textures.pillHard.width));
+      }
+      const text = styled
+        ? createFigmaLabel(this.theme, this.hardLabel.toUpperCase(), styled.layout.hardBadge.fontSize, styled.skin.text)
+        : createLabel(this.theme, this.hardLabel.toUpperCase(), { fontSize: 36 * k, stroke: 4 * k });
+      if (styled) text.anchor.set(0.5);
+      text.y = styled?.layout.hardBadge.textY ?? -2 * k;
       fitLabelWidth(text, pillW * 0.88);
       const pillRoot = new Container();
       pillRoot.addChild(pill, text);
-      pillRoot.position.set(0, 95 * k);
+      pillRoot.position.set(styled?.layout.hardBadge.x ?? 0, styled?.layout.hardBadge.y ?? 95 * k);
       inner.addChild(pillRoot);
+      if (crownOnBadge) for (const star of stars) inner.addChild(star);
     }
 
     const hitR = D * 0.56;

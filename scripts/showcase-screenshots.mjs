@@ -10,6 +10,8 @@ import { resolve } from 'node:path';
 import { chromium, devices } from 'playwright';
 
 const url = process.env.SHOWCASE_URL ?? 'http://127.0.0.1:5180/';
+const proofUrl = new URL(url);
+if (!proofUrl.searchParams.has('skin')) proofUrl.searchParams.set('skin', 'style1');
 const outDir = process.env.SHOTS_DIR ?? resolve(process.cwd(), 'showcase-shots');
 mkdirSync(outDir, { recursive: true });
 
@@ -32,7 +34,7 @@ async function run() {
       errors.push(`[${label}] ${text}`);
     });
     page.on('pageerror', (error) => errors.push(`[${label}] pageerror ${error.message}`));
-    await page.goto(url, { waitUntil: 'load' });
+    await page.goto(proofUrl.href, { waitUntil: 'load' });
     await page.waitForFunction(() => Boolean(window.__showcase), null, { timeout: 30000 });
     // The OfferRuntime demo activates the welcome offer on the first tick and pops its window once
     // per session (donor behaviour); these shots start from the bare map, so close it first.

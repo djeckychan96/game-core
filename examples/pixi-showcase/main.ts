@@ -416,6 +416,7 @@ async function boot(): Promise<void> {
   // --- HUD ---
   const hud = new HudView({
     ui, motion, textures, i18n,
+    ...(settingsSkin ? { theme: { skin: settingsSkin } } : {}),
     coins: state.coins,
     lives: state.lives,
     maxLives: DEMO_MAX_LIVES,
@@ -429,6 +430,7 @@ async function boot(): Promise<void> {
   // --- Level map ---
   const map = new LevelMapView({
     ui, motion, textures, i18n,
+    ...(settingsSkin ? { theme: { skin: settingsSkin } } : {}),
     levels: state.levels,
     currentLevel: state.currentLevel,
     onSelectLevel: (level) => { if (state.lives <= 0) return openLives(); openResult(level); },

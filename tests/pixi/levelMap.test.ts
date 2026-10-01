@@ -1,7 +1,39 @@
 import { describe, expect, it } from 'vitest';
-import { Container } from 'pixi.js';
+import { Container, Sprite, Text, Texture, TextureSource } from 'pixi.js';
 import { advance, createKit, pointer, type TestKit } from './setup';
 import { LevelMapView, type LevelMapViewOptions } from '../../src/pixi/LevelMapView';
+import type { ReadyUiTextures } from '../../src/pixi/assets';
+import type { ReadyUiSkinRole, ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_STYLE_1 } from '../../src/pixi/skins/style1';
+
+const labelled = (label: string): Texture => new Texture({ source: new TextureSource({ width: 2, height: 2, label }) });
+
+function style1Textures(textures: ReadyUiTextures): ReadyUiTextures {
+  const roles = {} as ReadyUiSkinTextures & Record<string, Texture>;
+  for (const role of Object.keys(READY_UI_STYLE_1.assets) as ReadyUiSkinRole[]) roles[role] = labelled(`style-1:${role}`);
+  for (const role of ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR']) {
+    roles[role] ??= labelled(`style-1:${role}`);
+  }
+  return { ...textures, skins: { [READY_UI_STYLE_1.id]: roles } };
+}
+
+function descendants<T>(root: Container, type: new (...args: never[]) => T): T[] {
+  const found: T[] = [];
+  const visit = (container: Container): void => {
+    for (const child of container.children) {
+      if (child instanceof type) found.push(child as T);
+      if (child instanceof Container) visit(child);
+    }
+  };
+  visit(root);
+  return found;
+}
+
+function spriteByLabel(root: Container, label: string): Sprite {
+  const sprite = descendants(root, Sprite).find((entry) => entry.texture.source.label === label);
+  if (!sprite) throw new Error(`no sprite ${label}`);
+  return sprite;
+}
 
 function createMap(kit: TestKit, overrides: Partial<LevelMapViewOptions> = {}) {
   const selected: Array<{ level: number; state: string }> = [];
@@ -42,6 +74,122 @@ function tapNode(map: LevelMapView, level: number, kit: TestKit): void {
 }
 
 describe('LevelMapView', () => {
+  it('draws Style 1 normal, locked and HARD nodes while donor/no-skin keeps its exact textures', () => {
+    const kit = createKit();
+    const levels = [
+      { index: 1, stars: 3 },
+      { index: 2, hard: true },
+      { index: 3, hard: true }
+    ];
+    const { map } = createMap(kit, {
+      textures: style1Textures(kit.textures),
+      theme: { skin: READY_UI_STYLE_1 },
+      levels,
+      currentLevel: 2,
+      buildWindow: 4,
+      background: false
+    });
+    const completed = descendants(node(map, 1), Sprite).map((sprite) => sprite.texture.source.label);
+    const current = descendants(node(map, 2), Sprite).map((sprite) => sprite.texture.source.label);
+    const locked = descendants(node(map, 3), Sprite).map((sprite) => sprite.texture.source.label);
+    expect(completed).toEqual(expect.arrayContaining([
+      'style-1:levelNodeNormal',
+      'style-1:levelStarGoldL',
+      'style-1:levelStarGold',
+      'style-1:levelStarGoldR'
+    ]));
+    expect(current).toEqual(expect.arrayContaining(['style-1:levelNodeHard', 'style-1:levelHardBadge']));
+    expect(locked).toEqual(expect.arrayContaining(['style-1:levelNodeHard', 'style-1:levelLock', 'style-1:levelHardBadge']));
+    expect(descendants(map, Sprite).map((sprite) => sprite.texture.source.label)).toEqual(expect.arrayContaining([
+      'style-1:levelRail',
+      'style-1:levelCurrentGlow'
+    ]));
+    expect(descendants(node(map, 3), Text).map((text) => text.text)).toEqual(expect.arrayContaining(['3', 'HARD']));
+    const normalArt = spriteByLabel(node(map, 1), 'style-1:levelNodeNormal');
+    const hardArt = spriteByLabel(node(map, 2), 'style-1:levelNodeHard');
+    const lockArt = spriteByLabel(node(map, 3), 'style-1:levelLock');
+    const hardBadge = spriteByLabel(node(map, 3), 'style-1:levelHardBadge');
+    const glow = spriteByLabel(map, 'style-1:levelCurrentGlow');
+    const rail = spriteByLabel(map, 'style-1:levelRail');
+    expect([normalArt.width, normalArt.height]).toEqual([260, 269]);
+    expect([hardArt.width, hardArt.height]).toEqual([258, 266]);
+    expect([lockArt.x, lockArt.y, lockArt.width, lockArt.height]).toEqual([0, 106, 100, 116]);
+    expect(hardBadge.parent).not.toBeNull();
+    const hardBadgeParent = hardBadge.parent!;
+    expect([hardBadgeParent.x, hardBadgeParent.y, hardBadge.width, hardBadge.height]).toEqual([5, -102, 236, 82]);
+    expect([glow.width, glow.height]).toEqual([819, 522]);
+    expect(rail.width).toBeCloseTo(64 * map.theme.levelMap.nodeScale, 6);
+    expect(map.levelY(2) - map.levelY(1)).toBe(-map.theme.levelMap.levelGap);
+    map.destroy();
+
+    const donorKit = createKit();
+    const donor = new LevelMapView({
+      ui: donorKit.ui,
+      motion: donorKit.motion,
+      textures: donorKit.textures,
+      levels,
+      currentLevel: 2,
+      buildWindow: 4,
+      background: false,
+      onSelectLevel: () => {}
+    });
+    expect(descendants(node(donor, 1), Sprite).map((sprite) => sprite.texture)).toEqual(expect.arrayContaining([
+      donorKit.textures.badgeBase,
+      donorKit.textures.starGoldL,
+      donorKit.textures.starGold,
+      donorKit.textures.starGoldR
+    ]));
+    expect(descendants(node(donor, 2), Sprite).map((sprite) => sprite.texture)).toEqual(expect.arrayContaining([
+      donorKit.textures.badgeCurrent,
+      donorKit.textures.pillHard
+    ]));
+    expect(descendants(node(donor, 3), Sprite).map((sprite) => sprite.texture)).toEqual(expect.arrayContaining([
+      donorKit.textures.badgeLocked,
+      donorKit.textures.lock
+    ]));
+    expect(descendants(node(donor, 3), Text).map((text) => text.text)).not.toContain('HARD');
+    donor.destroy();
+  });
+
+  it('seats the Style 1 rating crown on the node rim, and on the HARD badge of a HARD node, clear of the number', () => {
+    const kit = createKit();
+    const { map } = createMap(kit, {
+      textures: style1Textures(kit.textures),
+      theme: { skin: READY_UI_STYLE_1 },
+      levels: [{ index: 1, stars: 3 }, { index: 2, stars: 3, hard: true }, { index: 3 }],
+      currentLevel: 3,
+      buildWindow: 4,
+      background: false
+    });
+    const layout = READY_UI_STYLE_1.levelMap;
+    const crown = (level: number) => ['L', '', 'R'].map((side) => spriteByLabel(node(map, level), `style-1:levelStarGold${side}`));
+    // Ellipse 4 of the blue node export: centre (130, 130) of the 260 × 269 box, outer radius 126.279 + 4.558 / 2
+    const rim = { y: 130 - 269 / 2, radius: 126.279 + 4.55814 / 2 };
+    const numberTop = layout.number.y - layout.number.fontSize / 2;
+
+    const normal = crown(1);
+    normal.forEach((star, i) => {
+      expect([star.x, star.y]).toEqual([layout.stars[i]!.x, layout.stars[i]!.y]);
+      expect(star.width).toBeCloseTo(layout.stars[i]!.size, 9);
+    });
+    for (const side of [normal[0]!, normal[2]!]) expect(Math.abs(Math.hypot(side.x, side.y - rim.y) - rim.radius)).toBeLessThan(4);
+    expect(normal[1]!.y + normal[1]!.height / 2).toBeLessThan(numberTop);
+    expect(normal[1]!.y + normal[1]!.height / 2).toBeLessThan(rim.y);
+
+    const hard = crown(2);
+    const badge = spriteByLabel(node(map, 2), 'style-1:levelHardBadge').parent!;
+    const badgeTop = layout.hardBadge.y - layout.hardBadge.height / 2;
+    // the crown keeps its shape and moves up until its side stars sit centred on the badge's top edge
+    hard.forEach((star, i) => {
+      expect(star.x).toBe(layout.stars[i]!.x);
+      expect(star.y - badgeTop).toBeCloseTo(layout.stars[i]!.y - layout.stars[0].y, 9);
+    });
+    const inner = badge.parent!;
+    for (const star of hard) expect(inner.getChildIndex(star)).toBeGreaterThan(inner.getChildIndex(badge));
+    expect(hard[1]!.y + hard[1]!.height / 2).toBeLessThan(layout.hardBadge.y + layout.hardBadge.textY - layout.hardBadge.fontSize / 2);
+    map.destroy();
+  });
+
   it('maps progress to completed / current / locked nodes with stars', () => {
     const kit = createKit();
     const { map } = createMap(kit);

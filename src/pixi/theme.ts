@@ -51,8 +51,8 @@ export interface ReadyUiTheme {
   designWidth: number;
   designHeight: number;
   /**
-   * The game's Ready UI style (e.g. READY_UI_STYLE_1): the windows it covers draw with it, every other window keeps
-   * its donor look. Absent = every window donor. Its files load with `loadReadyUiAssets({ skin })`.
+   * The game's Ready UI style (e.g. READY_UI_STYLE_1): the views it covers draw with it, every other view keeps
+   * its donor look. Absent = every view donor. Its files load with `loadReadyUiAssets({ skin })`.
    */
   skin?: ReadyUiSkin;
 }

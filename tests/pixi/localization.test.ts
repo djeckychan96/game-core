@@ -84,6 +84,17 @@ describe('Ready UI localization dependency', () => {
       expect(field<{ capsuleText: Text }>(hud, 'lives').capsuleText.text).toBe('МАКС');
       const map = new LevelMapView({ ...kit, id: 'localized-map', i18n: i18n('ru'), levels: [{ index: 1, hard: true }], currentLevel: 1, onSelectLevel: () => undefined });
       expect(field<string>(map, 'hardLabel')).toBe('СЛОЖНЫЙ');
+      const styledMap = new LevelMapView({
+        ...kit,
+        id: 'localized-style-map',
+        textures: styledTextures(kit),
+        theme: { skin: READY_UI_STYLE_1 },
+        i18n: i18n('ru'),
+        levels: [{ index: 1 }, { index: 2, hard: true }],
+        currentLevel: 1,
+        onSelectLevel: () => undefined
+      });
+      expect(allTexts(styledMap)).toContain('СЛОЖНЫЙ');
     }
     {
       const kit = createKit();

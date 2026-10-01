@@ -1,0 +1,42 @@
+{
+  "assets": [
+    {
+      "key": "style1-node-blue",
+      "file": "level/style1_node_blue.webp",
+      "scale": 1,
+      "size": [260, 269],
+      "layers": [{ "svg": "node-blue.svg", "at": [0, 0] }]
+    },
+    {
+      "key": "style1-node-violet",
+      "file": "level/style1_node_violet.webp",
+      "scale": 1,
+      "size": [258, 266],
+      "layers": [{ "svg": "node-violet.svg", "at": [0, 0] }]
+    },
+    {
+      "key": "style1-lock",
+      "file": "level/style1_lock.webp",
+      "scale": 1,
+      "size": [100, 116],
+      "layers": [{ "svg": "lock.svg", "at": [0, 0] }]
+    },
+    {
+      "key": "style1-hard",
+      "file": "level/style1_hard.webp",
+      "scale": 1,
+      "size": [236, 82],
+      "layers": [
+        { "svg": "hard-front.svg", "at": [1, 1] },
+        { "svg": "hard-back.svg", "at": [5, 5] }
+      ]
+    },
+    {
+      "key": "style1-rail",
+      "file": "level/style1_rail.webp",
+      "scale": 1,
+      "size": [64, 1445],
+      "layers": [{ "image": "rail.png", "at": [0, 0], "size": [64, 1445] }]
+    }
+  ]
+}

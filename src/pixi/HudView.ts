@@ -1,8 +1,9 @@
-import { Container, Rectangle, Sprite, type Text } from 'pixi.js';
+import { Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { LocalizationTextProvider, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
+import { resolveSkinView, selectSkinView, type ReadyUiSkinHudLayout } from './skin';
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
@@ -69,8 +70,38 @@ const ROW_GAP = 40;
 const PORTRAIT_AREA_RATIO = 20;
 const LANDSCAPE_AREA_RATIO = 50;
 
+const DONOR_HUD_LAYOUT: ReadyUiSkinHudLayout = {
+  capsule: { x: CAPSULE_X, y: 0, width: CAPSULE_W, height: CAPSULE_H },
+  iconSize: ICON_BOX,
+  starIconSize: STAR_ICON,
+  plus: { x: PLUS_X, y: PLUS_Y, width: PLUS_W, height: PLUS_H },
+  badgeGap: BADGE_GAP,
+  heartCount: { x: 0, y: -2, fontSize: 54, stroke: 5 },
+  capsuleText: { x: 131, y: -3, fontSize: 40 },
+  resourceCount: { x: 131, y: -3, fontSize: 40 },
+  gear: { size: GEAR_SIZE, backWidth: GEAR_SIZE * GEAR_BACK_RATIO, backHeight: GEAR_SIZE * GEAR_BACK_RATIO * (140 / 160), rowWidthFactor: GEAR_BACK_RATIO, minHitSize: 160 },
+  margins: { left: LEFT_MARGIN, right: RIGHT_MARGIN, top: TOP_MARGIN, settingsTop: SETTINGS_TOP_MARGIN, rowGap: ROW_GAP, bottom: 12 },
+  responsive: { portraitAreaRatio: PORTRAIT_AREA_RATIO, landscapeAreaRatio: LANDSCAPE_AREA_RATIO },
+  shadow: true
+};
+
+interface HudArt {
+  capsule: Texture;
+  heart: Texture;
+  coin: Texture;
+  plus: Texture;
+  gear: Texture;
+  gearBack: Texture;
+  star: Texture;
+}
+
 /** Design box of one badge: the icon square over the capsule's left edge up to the capsule's right edge. */
-const BADGE_BOUNDS = new Rectangle(-ICON_BOX / 2, -ICON_BOX / 2, CAPSULE_X + CAPSULE_W / 2 + ICON_BOX / 2, Math.max(ICON_BOX, PLUS_Y + PLUS_H / 2 + ICON_BOX / 2));
+function badgeBounds(layout: ReadyUiSkinHudLayout): Rectangle {
+  const iconHalf = layout.iconSize / 2;
+  const capsuleRight = layout.capsule.x + layout.capsule.width / 2;
+  const plusBottom = layout.plus.y + layout.plus.height / 2;
+  return new Rectangle(-iconHalf, -iconHalf, capsuleRight + iconHalf, Math.max(layout.iconSize, plusBottom + iconHalf));
+}
 
 /**
  * A resource badge: capsule + icon over its left edge + counter + optional "+" button.
@@ -88,6 +119,7 @@ class ResourceBadge extends Container {
   readonly countText: Text;
   readonly capsuleText: Text;
   readonly plus: Sprite | null;
+  private readonly capsuleWidth: number;
   /** The one running pulse on this badge (a new pulse cancels it, so pulses never stack). */
   pulse: MotionHandle | null = null;
 
@@ -95,13 +127,15 @@ class ResourceBadge extends Container {
     ui: UiRuntime;
     id: string;
     theme: ReadyUiTheme;
-    textures: ReadyUiTextures;
+    art: HudArt;
+    layout: ReadyUiSkinHudLayout;
     icon: 'coin' | 'heart' | 'star';
     onTap: (() => void) | null;
   }) {
     super();
-    const { theme, textures } = options;
-    this.boundsArea = BADGE_BOUNDS;
+    const { theme, art, layout } = options;
+    this.capsuleWidth = layout.capsule.width;
+    this.boundsArea = badgeBounds(layout);
 
     // Tappable badges are a UiButton whose (hidden) background spans capsule + icon; the visuals
     // are its children, so the settled press scales the whole badge from the icon center.
@@ -112,56 +146,59 @@ class ResourceBadge extends Container {
         ui: options.ui,
         id: options.id,
         theme,
-        texture: textures.hudCapsule,
-        width: CAPSULE_X + CAPSULE_W / 2 + ICON_BOX / 2,
-        height: ICON_BOX,
+        texture: art.capsule,
+        width: layout.capsule.x + layout.capsule.width / 2 + layout.iconSize / 2,
+        height: layout.iconSize,
         onTap: options.onTap,
         pressScale: 0.94
       });
       button.background.visible = false;
-      button.background.x = (CAPSULE_X + CAPSULE_W / 2 - ICON_BOX / 2) / 2;
-      button.hitArea = new Rectangle(-ICON_BOX / 2, -ICON_BOX / 2, CAPSULE_X + CAPSULE_W / 2 + ICON_BOX / 2, ICON_BOX);
+      button.background.x = (layout.capsule.x + layout.capsule.width / 2 - layout.iconSize / 2) / 2;
+      button.hitArea = badgeBounds(layout);
       this.addChild(button);
       this.button = button;
       host = button;
     }
 
-    const capsule = new Sprite(textures.hudCapsule);
+    const capsule = new Sprite(art.capsule);
     capsule.anchor.set(0.5);
-    capsule.width = CAPSULE_W;
-    capsule.height = CAPSULE_H;
-    capsule.x = CAPSULE_X;
+    capsule.width = layout.capsule.width;
+    capsule.height = layout.capsule.height;
+    capsule.position.set(layout.capsule.x, layout.capsule.y);
     host.addChild(capsule);
 
-    const iconTex = options.icon === 'coin' ? textures.hudCoin : options.icon === 'star' ? textures.starGold : textures.hudHeart;
+    const iconTex = options.icon === 'coin' ? art.coin : options.icon === 'star' ? art.star : art.heart;
     this.icon = new Sprite(iconTex);
     this.icon.anchor.set(0.5);
     // the star art has no transparent padding: 112 gives the same visible size as the 128 icons
-    const box = options.icon === 'star' ? STAR_ICON : ICON_BOX;
+    const box = options.icon === 'star' ? layout.starIconSize : layout.iconSize;
     const k = box / Math.max(1, Math.max(iconTex.width, iconTex.height));
     this.iconScale = k;
     this.icon.scale.set(k);
     host.addChild(this.icon);
 
     // the heart shows the count inside the icon; the coin shows it on the capsule
-    this.countText = createLabel(theme, '0', { fontSize: options.icon === 'heart' ? 54 : 40, stroke: options.icon === 'heart' ? 5 : false });
-    this.capsuleText = createLabel(theme, '', { fontSize: 40, stroke: false });
+    this.countText = createLabel(theme, '0', {
+      fontSize: options.icon === 'heart' ? layout.heartCount.fontSize : layout.resourceCount.fontSize,
+      stroke: options.icon === 'heart' ? layout.heartCount.stroke : false
+    });
+    this.capsuleText = createLabel(theme, '', { fontSize: layout.capsuleText.fontSize, stroke: false });
     if (options.icon === 'heart') {
-      this.countText.position.set(0, -2);
-      this.capsuleText.position.set(131, -3);
+      this.countText.position.set(layout.heartCount.x, layout.heartCount.y);
+      this.capsuleText.position.set(layout.capsuleText.x, layout.capsuleText.y);
     } else {
-      this.countText.position.set(131, -3);
+      this.countText.position.set(layout.resourceCount.x, layout.resourceCount.y);
       this.capsuleText.visible = false;
     }
     host.addChild(this.countText, this.capsuleText);
 
     this.plus = null;
     if (options.onTap && options.icon !== 'star') {
-      const plus = new Sprite(textures.hudPlus);
+      const plus = new Sprite(art.plus);
       plus.anchor.set(0.5);
-      plus.width = PLUS_W;
-      plus.height = PLUS_H;
-      plus.position.set(PLUS_X, PLUS_Y);
+      plus.width = layout.plus.width;
+      plus.height = layout.plus.height;
+      plus.position.set(layout.plus.x, layout.plus.y);
       host.addChild(plus);
       this.plus = plus;
     }
@@ -174,7 +211,7 @@ class ResourceBadge extends Container {
 
   setCapsuleText(text: string): void {
     this.capsuleText.text = text;
-    fitLabelWidth(this.capsuleText, CAPSULE_W * 0.7);
+    fitLabelWidth(this.capsuleText, this.capsuleWidth * 0.7);
   }
 }
 
@@ -187,6 +224,8 @@ export class HudView extends Container {
   readonly id: string;
   readonly theme: ReadyUiTheme;
   private readonly motion: MotionRuntime;
+  private readonly hudLayout: ReadyUiSkinHudLayout;
+  private readonly art: HudArt;
   private readonly row: Container;
   private readonly shadow: Sprite | null;
   private readonly lives: ResourceBadge;
@@ -211,6 +250,26 @@ export class HudView extends Container {
     this.id = options.id ?? 'hud';
     this.theme = resolveTheme(options.theme);
     this.motion = options.motion;
+    const selectedSkin = selectSkinView('hud', this.theme.skin);
+    const styled = selectedSkin ? resolveSkinView('HudView', 'hud', selectedSkin, options.textures) : null;
+    this.hudLayout = styled?.layout ?? DONOR_HUD_LAYOUT;
+    this.art = styled ? {
+      capsule: styled.art.hudCapsule,
+      heart: styled.art.hudHeart,
+      coin: styled.art.hudCoin,
+      plus: styled.art.hudPlus,
+      gear: styled.art.hudGear,
+      gearBack: styled.art.hudGearBack,
+      star: styled.art.hudStar
+    } : {
+      capsule: options.textures.hudCapsule,
+      heart: options.textures.hudHeart,
+      coin: options.textures.hudCoin,
+      plus: options.textures.hudPlus,
+      gear: options.textures.hudGear,
+      gearBack: options.textures.hudGearBack,
+      star: options.textures.starGold
+    };
     this.fullLivesLabel = localizedText(options.fullLivesLabel, options.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.max);
     this.fxScope = `${this.id}:fx`;
     this.coinsValue = Math.max(0, options.coins ?? 0);
@@ -219,7 +278,7 @@ export class HudView extends Container {
     this.livesValue = Math.max(0, Math.min(this.maxLivesValue, options.lives ?? this.maxLivesValue));
 
     this.shadow = null;
-    if (options.shadow ?? true) {
+    if (options.shadow ?? this.hudLayout.shadow) {
       const shadow = new Sprite(options.textures.topShadow);
       shadow.anchor.set(0.5, 0);
       shadow.eventMode = 'none';
@@ -236,7 +295,8 @@ export class HudView extends Container {
       ui: options.ui,
       id: `${this.id}:lives`,
       theme: this.theme,
-      textures: options.textures,
+      art: this.art,
+      layout: this.hudLayout,
       icon: 'heart',
       onTap: options.onLivesTap ?? null
     });
@@ -244,11 +304,12 @@ export class HudView extends Container {
       ui: options.ui,
       id: `${this.id}:coins`,
       theme: this.theme,
-      textures: options.textures,
+      art: this.art,
+      layout: this.hudLayout,
       icon: 'coin',
       onTap: options.onCoinsTap ?? null
     });
-    this.coins.x = BADGE_GAP;
+    this.coins.x = this.hudLayout.badgeGap;
     this.row.addChild(this.lives, this.coins);
     this.stars = null;
     if (options.stars !== undefined) {
@@ -256,11 +317,12 @@ export class HudView extends Container {
         ui: options.ui,
         id: `${this.id}:stars`,
         theme: this.theme,
-        textures: options.textures,
+        art: this.art,
+        layout: this.hudLayout,
         icon: 'star',
         onTap: options.onStarsTap ?? null
       });
-      stars.x = BADGE_GAP * 2;
+      stars.x = this.hudLayout.badgeGap * 2;
       this.row.addChild(stars);
       this.stars = stars;
     }
@@ -271,14 +333,14 @@ export class HudView extends Container {
         ui: options.ui,
         id: `${this.id}:settings`,
         theme: this.theme,
-        texture: options.textures.hudGearBack,
-        width: GEAR_SIZE * GEAR_BACK_RATIO,
-        height: GEAR_SIZE * GEAR_BACK_RATIO * (140 / 160),
-        icon: options.textures.hudGear,
-        iconSize: GEAR_SIZE,
+        texture: this.art.gearBack,
+        width: this.hudLayout.gear.backWidth,
+        height: this.hudLayout.gear.backHeight,
+        icon: this.art.gear,
+        iconSize: this.hudLayout.gear.size,
         pressScale: 0.9,
         onTap: options.onSettingsTap ?? (() => {}),
-        minHitSize: 160
+        minHitSize: this.hudLayout.gear.minHitSize
       });
       if (!options.onSettingsTap) gear.setEnabled(false);
       this.addChild(gear);
@@ -375,24 +437,24 @@ export class HudView extends Container {
     const rowBounds = this.row.getLocalBounds();
     const gearBounds = this.gear ? this.gear.getLocalBounds() : null;
     const baseArea = Math.max(1, rowBounds.width * rowBounds.height);
-    const targetArea = (vw * vh) / (portrait ? PORTRAIT_AREA_RATIO : LANDSCAPE_AREA_RATIO);
+    const targetArea = (vw * vh) / (portrait ? this.hudLayout.responsive.portraitAreaRatio : this.hudLayout.responsive.landscapeAreaRatio);
     const areaScale = Math.sqrt(targetArea / baseArea);
-    const rowContent = rowBounds.width + (gearBounds ? ROW_GAP + gearBounds.width * GEAR_BACK_RATIO : 0);
-    const rowAvail = vw - LEFT_MARGIN - RIGHT_MARGIN;
+    const rowContent = rowBounds.width + (gearBounds ? this.hudLayout.margins.rowGap + gearBounds.width * this.hudLayout.gear.rowWidthFactor : 0);
+    const rowAvail = vw - this.hudLayout.margins.left - this.hudLayout.margins.right;
     const rowScale = Math.min(areaScale, rowAvail / Math.max(1, rowContent));
     this.rowScale = rowScale;
 
     this.row.scale.set(rowScale * s);
-    this.row.position.set(left + (LEFT_MARGIN - rowBounds.x * rowScale) * s, top + (TOP_MARGIN - rowBounds.y * rowScale) * s);
+    this.row.position.set(left + (this.hudLayout.margins.left - rowBounds.x * rowScale) * s, top + (this.hudLayout.margins.top - rowBounds.y * rowScale) * s);
     if (this.gear && gearBounds) {
       this.gear.setIdleScale(rowScale * s);
       this.gear.position.set(
-        w - right - (RIGHT_MARGIN + (gearBounds.x + gearBounds.width) * rowScale) * s,
-        top + (SETTINGS_TOP_MARGIN - gearBounds.y * rowScale) * s
+        w - right - (this.hudLayout.margins.right + (gearBounds.x + gearBounds.width) * rowScale) * s,
+        top + (this.hudLayout.margins.settingsTop - gearBounds.y * rowScale) * s
       );
     }
     // the row's top edge sits at TOP_MARGIN, so the bar ends at its bottom edge (+12 units), whatever rowBounds.y is
-    this.heightPx = top + (TOP_MARGIN + rowBounds.height * rowScale + 12) * s;
+    this.heightPx = top + (this.hudLayout.margins.top + rowBounds.height * rowScale + this.hudLayout.margins.bottom) * s;
     if (this.shadow) {
       this.shadow.width = w * 1.05;
       this.shadow.height = this.heightPx * 2.1;
@@ -414,15 +476,15 @@ export class HudView extends Container {
   }
 
   private refreshCoins(): void {
-    this.coins.setCount(formatAmount(this.coinsValue), CAPSULE_W * 0.72);
+    this.coins.setCount(formatAmount(this.coinsValue), this.hudLayout.capsule.width * 0.72);
   }
 
   private refreshStars(): void {
-    this.stars?.setCount(formatAmount(this.starsValue), CAPSULE_W * 0.72);
+    this.stars?.setCount(formatAmount(this.starsValue), this.hudLayout.capsule.width * 0.72);
   }
 
   private refreshLives(): void {
-    this.lives.setCount(String(this.livesValue), ICON_BOX * 0.7);
+    this.lives.setCount(String(this.livesValue), this.hudLayout.iconSize * 0.7);
     const full = this.livesValue >= this.maxLivesValue;
     this.lives.setCapsuleText(full ? this.fullLivesLabel : this.timerText);
     if (this.lives.plus) this.lives.plus.visible = !full;
