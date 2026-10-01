@@ -352,7 +352,7 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 | --- | --- | --- |
 | ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) | not covered — donor |
 | LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) | not covered — donor |
-| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts | not covered — donor |
+| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts | covered — `theme_light_3` 8:17493: Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |
@@ -360,9 +360,10 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
-  view can draw; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset. A window needs all of its roles; for
-  the non-modal views the style's layout says which optional parts exist (no gear, no HARD badge, no glow, its own
-  locked-node art or map background), and `requiredSkinRoles(skin, view)` is what it must ship.
+  view can draw; `READY_UI_SKIN_WINDOW_ROLES` remains the modal-window subset. Confirm / Lives need all of their roles; for
+  Settings and the non-modal views the style's layout says which optional parts exist (no haptic toggle, OFF button
+  art, a home icon; no gear, no HARD badge, no glow, its own locked-node art or map background), and
+  `requiredSkinRoles(skin, view)` is what it must ship.
 - A style may bring its own font (`skin.font`): `loadReadyUiAssets({ skin })` registers it strictly and the style's
   views use it for their runtime text (Style 2: Carlito Bold, the OFL metric twin of Figma's Calibri Bold).
 - Behaviour never moves into a style: drag / fling / snap / focus / culling and the level spacing stay in the shared
@@ -467,6 +468,16 @@ to Figma, 390 × 844 and 320 × 568 shots, a slow drag that snaps back, a fling 
 drag that snaps to the nearest level, culling, real clicks on a completed / a locked level, PLAY, HOME and the locked
 nav item, and no Style 2 request from the donor / Style 1 pages. Writes `showcase-shots/style2/`.
 
+```bash
+SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:style2-settings   # the Style 2 Settings proof
+```
+
+`examples/pixi-showcase/settings2.html` (`?figma=1` = the Figma sample copy as host text, `?map=1`, `?locale=ru`,
+`?sound=0` / `?music=0`) and `scripts/style2-settings-check.mjs`: region parity against Figma's render of 8:17493 at
+1080 × 2344, 390 × 844 next to Figma, EN / RU / OFF / map, 320 × 568 and 1280 × 800 shots, real taps on Sound,
+Restart level, Return home and ×, and no Style 2 Settings request from the donor / Style 1 pages. Writes
+`showcase-shots/style2-settings/`.
+
 ## Tests
 
 `tests/pixi/` runs the kit headlessly in Vitest (a tiny fake canvas 2D context behind Pixi's
@@ -492,6 +503,7 @@ background and top shadow (`bg/`), the Figma top bar (`hud/`), buttons (`button/
 settings panel/toggles/buttons (`settings/`), the no-ads and starter-pack panels, heroes, icons
 and the bulb (`offer/`), and Fira Sans Black. No runtime dependency on `trail_arrow/` remains.
 
-Style 2 (`style2/`, ~510 KB, loaded only with `skin: READY_UI_STYLE_2`) is Figma's own transparent renders of the
-static leaf visuals of `theme_light_3` 8:23174 plus the raw sky image, and `fonts/Carlito-Bold.woff` (OFL 1.1,
-`fonts/Carlito-OFL.txt`); provenance and commands in docs/figma/style2-level-map-screen/README.md.
+Style 2 (`style2/`, ~740 KB, loaded only with `skin: READY_UI_STYLE_2`) is Figma's own transparent renders of the
+static leaf visuals of `theme_light_3` 8:23174 plus the raw sky image, the Settings art of 8:17493 (`settings_*`),
+and `fonts/Carlito-Bold.woff` (OFL 1.1, `fonts/Carlito-OFL.txt`); provenance and commands in
+docs/figma/style2-level-map-screen/README.md and docs/figma/style2-settings/README.md.

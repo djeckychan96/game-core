@@ -21,7 +21,10 @@ export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNa
 export const READY_UI_SKIN_WINDOW_ROLES = {
   confirm: ['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary'],
   lives: ['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon'],
-  settings: ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart']
+  settings: [
+    'settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart',
+    'settingsSoundOff', 'settingsMusicOff', 'settingsHapticOff', 'settingsIconHome'
+  ]
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 /**
@@ -114,29 +117,41 @@ export interface ReadyUiSkinLivesLayout {
   readonly rewardLabel: ReadyUiSkinTextBox;
 }
 
+/** A Settings text box; `fill` = this text's colour (absent: the style's text fill, the theme's version colour for the version). */
+export interface ReadyUiSkinSettingsTextBox extends ReadyUiSkinTextBox {
+  readonly fill?: number;
+}
+
 /** One current Settings toggle: the button and label are window-local; `off` is button-local. */
 export interface ReadyUiSkinSettingsToggleLayout {
   readonly button: ReadyUiSkinBox;
-  readonly label: ReadyUiSkinTextBox;
+  readonly label: ReadyUiSkinSettingsTextBox;
   readonly off: ReadyUiSkinBox;
 }
 
 /** A current Settings game action: the button is window-local; label/icon are button-local. */
 export interface ReadyUiSkinSettingsActionLayout {
   readonly button: ReadyUiSkinBox;
-  readonly label: ReadyUiSkinTextBox;
+  readonly label: ReadyUiSkinSettingsTextBox;
   readonly icon?: ReadyUiSkinBox;
+  /**
+   * Figma's hugging icon + label row (auto-layout): `label` is the sample text's box; the runtime text's advance
+   * replaces its width and the icon and label shift together so the row stays centred. A text wider than `maxWidth`
+   * shrinks to it.
+   */
+  readonly hug?: { readonly maxWidth: number };
 }
 
 /** The Settings surface shared by the map and gameplay layouts. Every box is window-local. */
 export interface ReadyUiSkinSettingsBaseLayout {
   readonly window: { readonly width: number; readonly height: number };
-  readonly title: ReadyUiSkinTextBox;
+  readonly title: ReadyUiSkinSettingsTextBox;
   readonly close: ReadyUiSkinBox;
   readonly sound: ReadyUiSkinSettingsToggleLayout;
   readonly music: ReadyUiSkinSettingsToggleLayout;
-  readonly haptic: ReadyUiSkinSettingsToggleLayout;
-  readonly version: ReadyUiSkinTextBox;
+  /** `null` = this style has no haptic toggle (no `settingsHaptic` art; asking SettingsWindowView for one throws). */
+  readonly haptic: ReadyUiSkinSettingsToggleLayout | null;
+  readonly version: ReadyUiSkinSettingsTextBox;
 }
 
 export type ReadyUiSkinSettingsMapLayout = ReadyUiSkinSettingsBaseLayout;
@@ -149,6 +164,12 @@ export interface ReadyUiSkinSettingsGameplayLayout extends ReadyUiSkinSettingsBa
 export interface ReadyUiSkinSettingsLayouts {
   readonly map: ReadyUiSkinSettingsMapLayout;
   readonly gameplay: ReadyUiSkinSettingsGameplayLayout;
+  /**
+   * OFF also swaps a toggle's button art for its own OFF role (`settingsSoundOff` / `settingsMusicOff` /
+   * `settingsHapticOff`: a muted button) under the `settingsOff` mark; absent = the ON art stays and only the mark
+   * shows OFF.
+   */
+  readonly offButtons?: boolean;
 }
 
 /** Style-owned visual geometry for HudView. Interaction and responsive fitting remain shared. */
@@ -306,9 +327,10 @@ function viewLayout(skin: ReadyUiSkin, view: ReadyUiSkinView): unknown {
 }
 
 /**
- * The roles `skin` must ship for `view`: every role of a modal window; for the non-modal views the parts its layout
- * draws (no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the
- * locked node art, `background` → the map background). BottomNav item icons are never required.
+ * The roles `skin` must ship for `view`: every role of Confirm / Lives; for Settings and the non-modal views the parts
+ * its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
+ * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
+ * art, `background` → the map background). BottomNav item icons are never required.
  */
 export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): readonly ReadyUiSkinRole[] {
   if (view === 'hud') {
@@ -330,6 +352,16 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
+  if (view === 'settings') {
+    const layouts = skin.windows.settings;
+    const haptic = layouts?.map.haptic !== null || layouts?.gameplay.haptic !== null;
+    const roles: ReadyUiSkinRole[] = ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic'];
+    if (haptic) roles.push('settingsHaptic');
+    roles.push('settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart');
+    if (layouts?.offButtons) roles.push('settingsSoundOff', 'settingsMusicOff', ...(haptic ? ['settingsHapticOff' as const] : []));
+    if (layouts?.gameplay.home.icon) roles.push('settingsIconHome');
+    return roles;
+  }
   return READY_UI_SKIN_VIEW_ROLES[view];
 }
 
@@ -418,6 +450,7 @@ export function selectWindowSkin(window: ReadyUiSkinWindow, variant: 'donor' | '
 export interface WindowSkinLook<W extends ReadyUiSkinWindow> {
   skin: ReadyUiSkin;
   layout: NonNullable<ReadyUiSkinLayouts[W]>;
+  /** Every role `requiredSkinRoles(skin, window)` names; a role the layout does not draw is there only if loaded. */
   art: Record<(typeof READY_UI_SKIN_WINDOW_ROLES)[W][number], Texture>;
 }
 
@@ -438,6 +471,7 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
   const layout = skin.windows[window] as NonNullable<ReadyUiSkinLayouts[W]> | undefined;
   if (!skin.covers.includes(window) || !layout) throw new Error(`${view}: ReadyUiSkin '${skin.id}' does not cover '${window}'`);
   const roles = READY_UI_SKIN_WINDOW_ROLES[window] as readonly ReadyUiSkinRole[];
+  const required = requiredSkinRoles(skin, window);
   const loaded = textures.skins?.[skin.id];
   const pick = (source: (role: ReadyUiSkinRole) => Texture | undefined): { art: Record<string, Texture>; missing: ReadyUiSkinRole[] } => {
     const art: Record<string, Texture> = {};
@@ -445,7 +479,7 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
     for (const role of roles) {
       const texture = source(role);
       if (texture) art[role] = texture;
-      else missing.push(role);
+      else if (required.includes(role)) missing.push(role);
     }
     return { art, missing };
   };

@@ -1,15 +1,16 @@
 import type { ReadyUiSkin } from '../skin';
 
 /**
- * Style 2 — the artist's light-blue `theme_light_3` (file 5FWFwdO4QGeDfeQtloLNOS), LevelMap screen V1.
+ * Style 2 — the artist's light-blue `theme_light_3` (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1 + Settings.
  *
- * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from ONE approved screen: `screen_gameplay_pc` 8:23174
- * (docs/figma/style2-level-map-screen). NOT COVERED — donor look: every window (Confirm, Lives, Settings, Result,
- * Shop, NoAds, StarterPack). The other screens and the older variants that still lie in `theme_light_3` are not a
- * source for this package.
+ * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from the approved `screen_gameplay_pc` 8:23174
+ * (docs/figma/style2-level-map-screen), and `settings`, from the approved `настройки` 8:17493
+ * (docs/figma/style2-settings). NOT COVERED — donor look: Confirm, Lives, Result, Shop, NoAds, StarterPack. The other
+ * screens and the older variants that still lie in `theme_light_3` are not a source for this package.
  *
- * Units are the 4168 × 2344 screen frame's — the frame is 2344 high, like the kit's portrait design box, so the
- * views' contain fit keeps Figma's sizes. Node art is in node units: the blue locked node is 288 (its component), the
+ * Units: every screen is 2344 high, like the kit's portrait design box, so the views' contain fit keeps Figma's sizes.
+ * `frame` is the 1080 × 2344 mobile frame of 8:17493 — only the windows fit into it (the HUD, map, nav and PLAY lay
+ * out against the theme's design box and never read it); the LevelMap numbers are 4168 × 2344 frame units. Node art is in node units: the blue locked node is 288 (its component), the
  * orange node is the same art × 4/3 in Figma, drawn here at the same 288 base (its texture keeps the 384 px render).
  * Every texture is Figma's own transparent render of a leaf / static visual (no text, no sample values inside);
  * numbers, labels, counters, stars and states stay runtime. Text: Calibri Bold in Figma → Carlito Bold (OFL,
@@ -17,8 +18,8 @@ import type { ReadyUiSkin } from '../skin';
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen'],
-  frame: { width: 4168, height: 2344 },
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings'],
+  frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
     hudCapsule: { file: 'style2/hud_capsule.webp' },
@@ -50,13 +51,90 @@ export const READY_UI_STYLE_2 = {
     iconShop: { file: 'style2/icon_shop.webp' },
     iconHome: { file: 'style2/icon_home.webp' },
     /** `btn_green` 8:23224 (no wings): 550 × 280, its labels runtime. */
-    playButton: { file: 'style2/play.webp' }
+    playButton: { file: 'style2/play.webp' },
+    /**
+     * Settings 8:17493: `popup_back` + `header_back` (no title, no close), the header 49 above the 1000 × 1050 box.
+     * Caps measured on Figma's render (± its dither): the header and the corners stay, the white body stretches.
+     */
+    settingsPanel: { file: 'style2/settings_panel.webp', nineSlice: { left: 191, top: 167, right: 191, bottom: 88, pad: { left: 0, top: 49, right: 0, bottom: 0 } } },
+    /** `btn_close` (btn_red + icon_close): its 153 × 158 render box. */
+    settingsClose: { file: 'style2/settings_close.webp' },
+    /** `btn_sound` 228: btn_blue + the icon (ON), btn_grey + the icon (OFF, the slash is `settingsOff`). */
+    settingsSound: { file: 'style2/settings_sound.webp' },
+    settingsSoundOff: { file: 'style2/settings_sound_off.webp' },
+    settingsMusic: { file: 'style2/settings_music.webp' },
+    settingsMusicOff: { file: 'style2/settings_music_off.webp' },
+    /** `red_line` 8:17554 (190), over the OFF button. */
+    settingsOff: { file: 'style2/settings_off.webp' },
+    /** `btn_green` / `btn_red` at 822 × 200 (no icon, no text) and their icons `icon_return` 8:17504 / `icon_home` 8:17536. */
+    settingsBtnRestart: { file: 'style2/settings_btn_restart.webp' },
+    settingsBtnHome: { file: 'style2/settings_btn_home.webp' },
+    settingsIconRestart: { file: 'style2/settings_icon_restart.webp' },
+    settingsIconHome: { file: 'style2/settings_icon_home.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
-  /** No Style 2 window yet: the donor dim (unused). */
-  backdrop: { color: 0x000000, alpha: 0.55 },
-  windows: {},
+  /** 8:17494: #080b0d at 0.8 over the screen. */
+  backdrop: { color: 0x080b0d, alpha: 0.8 },
+  windows: {
+    /**
+     * Settings 8:17493: boxes local to the popup box (40, 647 of the frame). The approved screen is the in-level one
+     * (Restart level / Return home): `gameplay`. It has no haptic toggle. `map` (no game buttons) is not drawn in
+     * Figma: the same window without the two action rows — the version moves up into their place (482) and the window
+     * loses their 457 units. Text is Calibri Bold → Carlito, the labels and version #3f598c, the title and actions white.
+     */
+    settings: {
+      offButtons: true,
+      map: {
+        window: { width: 1000, height: 593 },
+        title: { x: 166, y: -18, width: 668, height: 110, fontSize: 90 },
+        close: { x: 887, y: -37, width: 153, height: 158 },
+        sound: {
+          button: { x: 237, y: 220, width: 228, height: 228 },
+          label: { x: 237, y: 147, width: 227, height: 73, fontSize: 60, fill: 0x3f598c },
+          off: { x: 18, y: 15, width: 190, height: 190 }
+        },
+        music: {
+          button: { x: 534, y: 220, width: 228, height: 228 },
+          label: { x: 536, y: 147, width: 227, height: 73, fontSize: 60, fill: 0x3f598c },
+          off: { x: 18, y: 15, width: 190, height: 190 }
+        },
+        haptic: null,
+        version: { x: 89, y: 482, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
+      },
+      gameplay: {
+        window: { width: 1000, height: 1050 },
+        title: { x: 166, y: -18, width: 668, height: 110, fontSize: 90 },
+        close: { x: 887, y: -37, width: 153, height: 158 },
+        sound: {
+          button: { x: 237, y: 220, width: 228, height: 228 },
+          label: { x: 237, y: 147, width: 227, height: 73, fontSize: 60, fill: 0x3f598c },
+          off: { x: 18, y: 15, width: 190, height: 190 }
+        },
+        music: {
+          button: { x: 534, y: 220, width: 228, height: 228 },
+          label: { x: 536, y: 147, width: 227, height: 73, fontSize: 60, fill: 0x3f598c },
+          off: { x: 18, y: 15, width: 190, height: 190 }
+        },
+        haptic: null,
+        /** `btn_main` (pad 50, gap 10, hug): icon 158 + 10 + the text, centred; the inner width 822 − 100 − 168 = 554. */
+        restart: {
+          button: { x: 89, y: 482, width: 822, height: 200 },
+          label: { x: 314, y: 57.5, width: 362, height: 85, fontSize: 70 },
+          icon: { x: 146, y: 21, width: 158, height: 158 },
+          hug: { maxWidth: 554 }
+        },
+        /** The home icon's render box is 4 units wider than its 158 box on each side. */
+        home: {
+          button: { x: 89, y: 716, width: 822, height: 200 },
+          label: { x: 304.5, y: 57.5, width: 381, height: 85, fontSize: 70 },
+          icon: { x: 132.5, y: 21, width: 166, height: 158 },
+          hug: { maxWidth: 554 }
+        },
+        version: { x: 89, y: 939, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
+      }
+    }
+  },
   hud: {
     /** One `icon_bar` (582 × 236): the icon box 0..236 (its centre is the badge origin), the capsule's render centre at 324.5, 118. */
     capsule: { x: 206.5, y: 0, width: 515, height: 182 },

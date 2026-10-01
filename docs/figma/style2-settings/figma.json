@@ -1,0 +1,495 @@
+{
+ "about": "Figma source of truth for Game Core Style 2 (READY_UI_STYLE_2, id style-2): the Settings window. Read 2026-10-01 through the Figma MCP: read-only use_figma dumps and get_screenshot with contentsOnly (transparent renders). Coordinates are Figma units of the 1080 x 2344 screen frame = Ready UI design units; window boxes are local to the popup box (40, 647).",
+ "source": {
+  "fileKey": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": {
+   "id": "8:17492",
+   "name": "theme_light_3"
+  },
+  "componentsSection": {
+   "id": "8:17503",
+   "name": "компоненты для художников"
+  },
+  "screen": {
+   "id": "8:17493",
+   "name": "настройки",
+   "size": [
+    1080,
+    2344
+   ],
+   "fill": {
+    "linear": [
+     "#483191",
+     "#274caf"
+    ],
+    "note": "the host background under the dim (not part of the skin)"
+   }
+  },
+  "reference": {
+   "node": "8:17493",
+   "file": "reference/screen-8-17493@0.5x.webp",
+   "note": "Figma's 1x render (get_screenshot, 1080 x 2344 PNG, sha256 b6ea8e4d7b227e72...) downscaled to 0.5x, lossy WebP q90"
+  }
+ },
+ "approvedNodes": [
+  {
+   "id": "8:17494",
+   "name": "Rectangle 65853",
+   "box": [
+    0,
+    0,
+    1080,
+    2344
+   ],
+   "fill": "#080b0d @ 0.8",
+   "core": "skin.backdrop"
+  },
+  {
+   "id": "8:17495",
+   "name": "popup",
+   "type": "INSTANCE of 8:17564 (popup_back 8:17585 + header_back 8:17569 + title + btn_close)",
+   "box": [
+    40,
+    647,
+    1000,
+    1050
+   ],
+   "render": [
+    40,
+    598,
+    1040,
+    1099
+   ],
+   "children": {
+    "popup_back": "I8:17495;8:17565: #0099eb rect 986 x 1036 r70 at +7 (inner shadows 0,4 r4 #4db8fb / 0,-10 r3 25%, spread 6 20%) + white rect 932 x 970 r41 at 34, 34",
+    "header_back": "I8:17495;8:17566: 756 x 166 at 122, -49; gradient #0eabff -> #218cfe rect 742 x 152 r62",
+    "title": "I8:17495;8:17567: box 206, 629, 668 x 110, Calibri Bold 90 (overridden), white, CENTER/CENTER, sample 'НАСТРОЙКИ'",
+    "btn_close": "I8:17495;8:17568: btn_main 136 at 938, 621 (btn_red I8:17495;8:17568;8:17557 rect 120 r41, icon_close I8:17495;8:17568;8:17558 158); render 927, 610, 153 x 158"
+   },
+   "core": "settingsPanel (9-slice) + runtime title + settingsClose"
+  },
+  {
+   "id": "8:17496",
+   "name": "version",
+   "box": [
+    129,
+    1586,
+    822,
+    61
+   ],
+   "text": "Calibri Bold 50, #3f598c, CENTER/CENTER, sample 'VERSION X.XX.XXXX (XX)'",
+   "core": "runtime version caption (the host's string)"
+  },
+  {
+   "id": "8:17497",
+   "name": "btn_sound (Sound ON sample)",
+   "box": [
+    277,
+    867,
+    228,
+    228
+   ],
+   "children": "btn_blue I8:17497;8:17561 (rect 214 r41, #0eabff -> #218cfe) + icon_sound I8:17497;8:17562 (= 8:17512) at 18, 15",
+   "core": "settingsSound"
+  },
+  {
+   "id": "8:17498",
+   "name": "btn_sound (Music OFF sample)",
+   "box": [
+    574,
+    867,
+    228,
+    228
+   ],
+   "children": "btn_grey I8:17498;8:17561 (rect 214 r41, #a7c2e6 -> #7d9ac2) + icon_music I8:17498;8:17562 (= 8:17519) + red_line I8:17498;8:17563 (= 8:17554) at 18, 15",
+   "core": "settingsMusicOff + settingsOff"
+  },
+  {
+   "id": "8:17499",
+   "name": "text (Sound)",
+   "box": [
+    277,
+    794,
+    227,
+    73
+   ],
+   "text": "Calibri Bold 60, #3f598c, CENTER/CENTER",
+   "core": "runtime label (core.settings.sound)"
+  },
+  {
+   "id": "8:17500",
+   "name": "text (Music)",
+   "box": [
+    576,
+    794,
+    227,
+    73
+   ],
+   "text": "Calibri Bold 60, #3f598c, CENTER/CENTER",
+   "core": "runtime label (core.settings.music)"
+  },
+  {
+   "id": "8:17501",
+   "name": "Component 44 (Restart level)",
+   "box": [
+    129,
+    1129,
+    822,
+    200
+   ],
+   "children": "btn_main 8:17556 auto-layout (pad 50, gap 10, hug): Btn_green I8:17501;8:17557 + icon_return I8:17501;8:17558 (= 8:17504) at 146, 21 + text 'Restart level' Calibri Bold 70 white at 314, 57.5 (362 x 85)",
+   "core": "settingsBtnRestart + settingsIconRestart + runtime label (core.settings.restart)"
+  },
+  {
+   "id": "8:17502",
+   "name": "Component 45 (Return home)",
+   "box": [
+    129,
+    1363,
+    822,
+    200
+   ],
+   "children": "btn_main 8:17556: Btn_red I8:17502;8:17557 + icon_home I8:17502;8:17558 (= 8:17536) at 136.5, 21 (render 132.5) + text 'Return home' at 304.5, 57.5 (381 x 85)",
+   "core": "settingsBtnHome + settingsIconHome + runtime label (core.settings.exit)"
+  }
+ ],
+ "leafSources": {
+  "icons": "8:17512 icon_sound, 8:17519 icon_music, 8:17554 red_line, 8:17504 icon_return, 8:17536 icon_home — components of 8:17503 at the instances' size, no overrides: their own transparent renders (png/) are the instances' pixels",
+  "surfaces": "btn_blue / btn_grey / btn_green / btn_red / popup_back / header_back / icon_close are resized instances (components 214 / 216 / 186 / 166 / 102): their exact pixels exist only inside the screen's top-level instances. separate.mjs takes them from Figma's renders of 8:17495 / 8:17497 / 8:17498 / 8:17501 / 8:17502 (render/) — validation printed by the script: blue ⊕ icon_sound vs 8:17497 mean 0.05 (max 12), grey ⊕ icon_music ⊕ red_line vs 8:17498 mean 0.06 (max 8), action rows from both sides agree within 1, header rows within 2, close over the panel vs 8:17495 mean 0.03 (max 31)."
+ },
+ "ignored": [
+  {
+   "name": "Haptic",
+   "why": "not in 8:17493: Style 2 has no haptic toggle (icon_haptic 8:17526 exists among the components, but the approved screen does not show it)"
+  },
+  {
+   "name": "Figma sample copy (НАСТРОЙКИ / Sound / Music / Restart level / Return home / VERSION X.XX...)",
+   "why": "runtime text from the localization provider / the host"
+  },
+  {
+   "name": "older Style 2 Settings, theme_light_2, Style 1",
+   "why": "not a source for this package"
+  }
+ ],
+ "fonts": {
+  "figma": "Calibri Bold",
+  "core": "Carlito Bold — the Style 2 font of the LevelMap slice (fonts/Carlito-Bold.woff), reused"
+ },
+ "rasters": "get_screenshot (contentsOnly) renders with alpha only nodes with plain ids: the screen's top-level instances and main components. Chrome's raster of the SVG export is not used (the icon drop shadow comes out far darker; the spread ring differs).",
+ "assets": [
+  {
+   "key": "style2-settings-panel",
+   "file": "style2/settings_panel.webp",
+   "scale": 1,
+   "size": [
+    1000,
+    1099
+   ],
+   "note": "popup 8:17495 without its title and close: popup_back + header_back, the header 49 above the 1000 x 1050 box; tolerance 4: Figma dithers one column (x 991) by 4 every 256 rows",
+   "pad": {
+    "left": 0,
+    "top": 49,
+    "right": 0,
+    "bottom": 0
+   },
+   "nineSlice": {
+    "figma": {
+     "left": 77,
+     "top": 116,
+     "right": 77,
+     "bottom": 87
+    },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 4
+   },
+   "layers": [
+    {
+     "image": "png/settings-panel.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1000,
+      1099
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-close",
+   "file": "style2/settings_close.webp",
+   "scale": 1,
+   "size": [
+    153,
+    158
+   ],
+   "note": "btn_close I8:17495;8:17568 (btn_red 136 + icon_close 158): its render box 927, 610 of the screen",
+   "layers": [
+    {
+     "image": "png/settings-close.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      153,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-sound",
+   "file": "style2/settings_sound.webp",
+   "scale": 1,
+   "size": [
+    228,
+    228
+   ],
+   "note": "btn_sound ON: btn_blue + icon_sound 8:17512 at 18, 15 (= 8:17497)",
+   "layers": [
+    {
+     "image": "png/toggle-blue.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      228,
+      228
+     ]
+    },
+    {
+     "image": "png/icon-sound.png",
+     "at": [
+      18,
+      15
+     ],
+     "size": [
+      192,
+      192
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-sound-off",
+   "file": "style2/settings_sound_off.webp",
+   "scale": 1,
+   "size": [
+    228,
+    228
+   ],
+   "note": "btn_sound OFF without the slash: btn_grey + icon_sound",
+   "layers": [
+    {
+     "image": "png/toggle-grey.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      228,
+      228
+     ]
+    },
+    {
+     "image": "png/icon-sound.png",
+     "at": [
+      18,
+      15
+     ],
+     "size": [
+      192,
+      192
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-music",
+   "file": "style2/settings_music.webp",
+   "scale": 1,
+   "size": [
+    228,
+    228
+   ],
+   "note": "btn_sound ON: btn_blue + icon_music 8:17519",
+   "layers": [
+    {
+     "image": "png/toggle-blue.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      228,
+      228
+     ]
+    },
+    {
+     "image": "png/icon-music.png",
+     "at": [
+      18,
+      15
+     ],
+     "size": [
+      192,
+      192
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-music-off",
+   "file": "style2/settings_music_off.webp",
+   "scale": 1,
+   "size": [
+    228,
+    228
+   ],
+   "note": "btn_sound OFF without the slash: btn_grey + icon_music (8:17498 minus red_line)",
+   "layers": [
+    {
+     "image": "png/toggle-grey.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      228,
+      228
+     ]
+    },
+    {
+     "image": "png/icon-music.png",
+     "at": [
+      18,
+      15
+     ],
+     "size": [
+      192,
+      192
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-off",
+   "file": "style2/settings_off.webp",
+   "scale": 1,
+   "size": [
+    190,
+    190
+   ],
+   "note": "red_line 8:17554 (its own render = the instance I8:17498;8:17563 at 18, 15 of the button)",
+   "layers": [
+    {
+     "image": "png/red-line.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      190,
+      190
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-btn-restart",
+   "file": "style2/settings_btn_restart.webp",
+   "scale": 1,
+   "size": [
+    822,
+    200
+   ],
+   "note": "Btn_green I8:17501;8:17557 (no icon, no text)",
+   "layers": [
+    {
+     "image": "png/btn-green.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      822,
+      200
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-btn-home",
+   "file": "style2/settings_btn_home.webp",
+   "scale": 1,
+   "size": [
+    822,
+    200
+   ],
+   "note": "Btn_red I8:17502;8:17557 (no icon, no text)",
+   "layers": [
+    {
+     "image": "png/btn-red.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      822,
+      200
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-icon-restart",
+   "file": "style2/settings_icon_restart.webp",
+   "scale": 1,
+   "size": [
+    158,
+    158
+   ],
+   "note": "icon_return 8:17504",
+   "layers": [
+    {
+     "image": "png/icon-return.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      158,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-icon-home",
+   "file": "style2/settings_icon_home.webp",
+   "scale": 1,
+   "size": [
+    166,
+    158
+   ],
+   "note": "icon_home 8:17536: its render box (4 units of shadow left / right of the 158 box)",
+   "layers": [
+    {
+     "image": "png/icon-home.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      166,
+      158
+     ]
+    }
+   ]
+  }
+ ]
+}

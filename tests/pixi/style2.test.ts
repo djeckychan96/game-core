@@ -9,6 +9,8 @@ import { BottomNavView, type BottomNavItem, type BottomNavViewOptions } from '..
 import { HudView } from '../../src/pixi/HudView';
 import { LevelMapScreen, type LevelMapScreenOptions } from '../../src/pixi/LevelMapScreen';
 import { LevelMapView } from '../../src/pixi/LevelMapView';
+import { SettingsWindowView, type SettingsWindowParams, type SettingsWindowViewOptions } from '../../src/pixi/SettingsWindowView';
+import type { UiButton } from '../../src/pixi/UiButton';
 import { loadReadyUiAssets, type ReadyUiTextures } from '../../src/pixi/assets';
 import { READY_UI_CATALOGS } from '../../src/pixi/locales';
 import { READY_UI_SKINS, READY_UI_SKIN_VIEW_ROLES, requiredSkinRoles, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
@@ -111,7 +113,7 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(pixiEntry.READY_UI_STYLE_2).toBe(READY_UI_STYLE_2);
     expect(READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1, 'style-2': READY_UI_STYLE_2 });
     expect(READY_UI_STYLE_2.id).toBe('style-2');
-    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
+    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings']);
     expect(() => validateReadyUiSkin(READY_UI_STYLE_2)).not.toThrow();
     const assetsDir = resolve(rootDir, 'assets/pixi-ui');
     for (const [role, asset] of Object.entries(READY_UI_STYLE_2.assets)) expect(existsSync(resolve(assetsDir, asset.file)), `${role} -> ${asset.file}`).toBe(true);
@@ -460,5 +462,200 @@ describe('LevelMapScreen — the minimal composition', () => {
     screen.destroy();
     expect(kit.uiErrors).toEqual([]);
     expect(kit.motionErrors).toEqual([]);
+  });
+});
+
+describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView', () => {
+  const STYLE_2_SETTINGS_ROLES = ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart', 'settingsSoundOff', 'settingsMusicOff', 'settingsIconHome'];
+  type Toggle = { button: UiButton; off: Sprite; label: Text };
+
+  function settingsView(kit: TestKit, extra: Partial<SettingsWindowViewOptions> = {}, log: string[] = [], textures = styled(kit)): SettingsWindowView {
+    return new SettingsWindowView({
+      ui: kit.ui, motion: kit.motion, textures, theme: { skin: READY_UI_STYLE_2 }, id: 'settings',
+      onToggle: (setting, enabled) => log.push(`${setting}:${enabled}`), onHome: () => log.push('home'), onRestart: () => log.push('restart'),
+      onDismiss: (reason) => log.push(`dismiss:${reason}`), width: 390, height: 844, ...extra
+    });
+  }
+  function show(kit: TestKit, view: SettingsWindowView, params: Partial<SettingsWindowParams> = {}): SettingsWindowView {
+    view.show({ sound: true, music: true, version: 'VERSION 1.2.3', gameButtons: true, ...params });
+    advance(kit.core, 400);
+    return view;
+  }
+  const placedTop = (text: Text): number => text.y;
+  const toggles = (view: SettingsWindowView) => field<{ sound: Toggle; music: Toggle; haptic: Toggle | null }>(view, 'toggles');
+
+  it('is part of the Style 2 package: covered, its roles follow the layout (no haptic art), strict files under style2/, Style 1 roles unchanged', () => {
+    expect(READY_UI_STYLE_2.covers).toContain('settings');
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'settings')).toEqual(STYLE_2_SETTINGS_ROLES);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'settings')).toEqual(['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart']);
+    expect(READY_UI_STYLE_2.assets).not.toHaveProperty('settingsHaptic');
+    expect(READY_UI_STYLE_2.windows.settings.map.haptic).toBeNull();
+    expect(READY_UI_STYLE_2.windows.settings.gameplay.haptic).toBeNull();
+    for (const role of STYLE_2_SETTINGS_ROLES) expect((READY_UI_STYLE_2.assets as ReadyUiSkin['assets'])[role as ReadyUiSkinRole]?.file).toMatch(/^style2\/settings_/);
+    // the one window frame: 1080 × 2344 (8:17493); only windows read it
+    expect(READY_UI_STYLE_2.frame).toEqual({ width: 1080, height: 2344 });
+    expect(READY_UI_STYLE_2.backdrop).toEqual({ color: 0x080b0d, alpha: 0.8 });
+    const noOffArt = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, settingsMusicOff: undefined } } as unknown as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(noOffArt)).toThrow("ReadyUiSkin 'style-2' covers 'settings' but has no asset for role 'settingsMusicOff'");
+  });
+
+  it('is chosen only by the theme: Style 2 draws its roles; no skin stays donor, Style 1 stays Style 1', () => {
+    const kit = createKit();
+    const view = show(kit, settingsView(kit));
+    expect(view.skin).toBe(READY_UI_STYLE_2);
+    expect(field<NineSliceSprite>(view, 'surface').texture.source.label).toBe('style-2:settingsPanel');
+    expect(field<UiButton>(view, 'closeButton').background.texture.source.label).toBe('style-2:settingsClose');
+    expect(labels(view)).toEqual(expect.arrayContaining(['style-2:settingsSound', 'style-2:settingsMusic', 'style-2:settingsBtnRestart', 'style-2:settingsBtnHome', 'style-2:settingsIconRestart', 'style-2:settingsIconHome']));
+    view.destroy();
+    const donor = show(kit, new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), id: 'donor', onToggle: () => {} }));
+    expect(donor.skin).toBeNull();
+    expect(labels(donor).some((label) => label.startsWith('style-2:'))).toBe(false);
+    donor.destroy();
+    const style1 = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 'style1', onToggle: () => {} });
+    expect(style1.skin).toBe(READY_UI_STYLE_1);
+    style1.destroy();
+  });
+
+  it('Sound / Music ON = the blue art, OFF = the muted art under the red slash; the slash shows only while disabled; state stays the host\'s', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = show(kit, settingsView(kit, {}, log), { sound: true, music: false });
+    const { sound, music } = toggles(view);
+    expect(sound.button.background.texture.source.label).toBe('style-2:settingsSound');
+    expect(sound.off.visible).toBe(false);
+    expect(music.button.background.texture.source.label).toBe('style-2:settingsMusicOff');
+    expect(music.off.visible).toBe(true);
+    expect(music.off.texture.source.label).toBe('style-2:settingsOff');
+    tap(sound.button, kit);
+    expect(log).toEqual(['sound:false']);
+    expect(sound.button.background.texture.source.label).toBe('style-2:settingsSoundOff');
+    expect(sound.off.visible).toBe(true);
+    // the art keeps the layout size whatever the texture
+    expect([sound.button.background.width, sound.button.background.height]).toEqual([228, 228]);
+    view.setSettings({ music: true });
+    expect(music.button.background.texture.source.label).toBe('style-2:settingsMusic');
+    expect(music.off.visible).toBe(false);
+    expect(view.currentSettings).toMatchObject({ sound: false, music: true });
+    view.destroy();
+  });
+
+  it('has no Haptic in the approved layout, while the generic API keeps it: asking Style 2 for it fails clearly, donor and Style 1 still draw it', () => {
+    const kit = createKit();
+    const view = show(kit, settingsView(kit), { gameButtons: false });
+    expect(toggles(view).haptic).toBeNull();
+    expect(texts(view)).not.toContain('HAPTIC');
+    view.destroy();
+    expect(() => settingsView(kit, { haptic: true })).toThrow("SettingsWindowView: style 'style-2' has no haptic toggle (windows.settings.map.haptic is null) — omit the haptic option");
+    expect(kit.ui.getStats()).toMatchObject({ windows: 0 });
+    const donor = show(kit, new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, id: 'donor', haptic: true, onToggle: () => {} }), { gameButtons: false });
+    expect(toggles(donor).haptic?.button.visible).toBe(true);
+    donor.destroy();
+    const style1 = show(kit, new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, READY_UI_STYLE_1), theme: { skin: READY_UI_STYLE_1 }, id: 'style1', haptic: true, onToggle: () => {} }), { gameButtons: false });
+    expect(toggles(style1).haptic?.button.visible).toBe(true);
+    style1.destroy();
+  });
+
+  it('close, Restart level and Return home keep their callbacks (close continuations)', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = show(kit, settingsView(kit, {}, log));
+    tap(field<UiButton>(view, 'restartButton'), kit);
+    advance(kit.core, 200);
+    show(kit, view);
+    tap(field<UiButton>(view, 'homeButton'), kit);
+    advance(kit.core, 200);
+    show(kit, view);
+    tap(field<UiButton>(view, 'closeButton') as unknown as Container, kit);
+    advance(kit.core, 200);
+    expect(log).toEqual(['restart', 'home', 'dismiss:button']);
+    view.destroy();
+  });
+
+  it('lays out 8:17493: the 1000 × 1050 popup with its header bleed, Figma boxes, the hugging icon + label rows; the map variant drops the action rows', () => {
+    const kit = createKit();
+    const view = show(kit, settingsView(kit, { restartLabel: 'Restart level', homeLabel: 'Return home' }));
+    const surface = field<NineSliceSprite>(view, 'surface');
+    // the 1000 × 1050 box centred on the panel origin, the header 49 above it
+    expect([surface.width, surface.height]).toEqual([1000, 1099]);
+    expect(surface.anchor.y * surface.height).toBeCloseTo(49 + 525, 6);
+    expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 887 + 76.5 - 500, y: -37 + 79 - 525 });
+    const { sound, music } = toggles(view);
+    expect(sound.button.position).toMatchObject({ x: 237 + 114 - 500, y: 220 + 114 - 525 });
+    expect(music.button.position).toMatchObject({ x: 534 + 114 - 500, y: 220 + 114 - 525 });
+    const restart = field<UiButton>(view, 'restartButton');
+    expect(restart.position).toMatchObject({ x: 0, y: 482 + 100 - 525 });
+    expect(field<UiButton>(view, 'homeButton').position).toMatchObject({ x: 0, y: 716 + 100 - 525 });
+    // text: Carlito, no stroke; labels and version #3f598c, title / actions white
+    const title = field<Text>(view, 'title');
+    expect(title.style.fontFamily).toBe('Carlito');
+    expect(title.style.stroke).toBeFalsy();
+    expect(title.style.fill).toBe(0xffffff);
+    expect(sound.label.style.fill).toBe(0x3f598c);
+    expect(field<Text>(view, 'version').style.fill).toBe(0x3f598c);
+    expect(field<Text>(view, 'restartLabel').style.fill).toBe(0xffffff);
+    // hugging row: a shorter runtime text moves the icon and the label together, the row stays centred
+    const restartIcon = field<Sprite>(view, 'restartIcon');
+    const iconX = restartIcon.x;
+    view.destroy();
+    const short = show(kit, settingsView(kit, { restartLabel: 'GO' }));
+    const shortIcon = field<Sprite>(short, 'restartIcon');
+    const shortLabel = field<Text>(short, 'restartLabel');
+    expect(shortIcon.x).toBeGreaterThan(iconX);
+    const left = shortIcon.x - 79;
+    const right = shortLabel.x + shortLabel.width;
+    expect(left + right).toBeCloseTo(0, 0);
+    // map: no action rows, the version where Restart was, a 593-unit window (the same header bleed)
+    short.destroy();
+    const map = show(kit, settingsView(kit), { gameButtons: false });
+    const mapSurface = field<NineSliceSprite>(map, 'surface');
+    expect([mapSurface.width, mapSurface.height]).toEqual([1000, 642]);
+    expect(mapSurface.anchor.y * mapSurface.height).toBeCloseTo(49 + 296.5, 6);
+    expect(field<UiButton>(map, 'restartButton').visible).toBe(false);
+    expect(field<UiButton>(map, 'homeButton').visible).toBe(false);
+    expect(placedTop(field<Text>(map, 'version'))).toBeGreaterThan(482 - 296.5);
+    map.destroy();
+  });
+
+  it('copy: explicit text wins, then the localization provider (RU / EN), then the legacy default', () => {
+    const kit = createKit();
+    const i18n = (locale: string) => new LocalizationRuntime({ rawLocale: locale, supportedLocales: ['en', 'ru'], defaultLocale: 'en', catalogs: READY_UI_CATALOGS });
+    const ru = show(kit, settingsView(kit, { i18n: i18n('ru') }));
+    expect(texts(ru)).toEqual(expect.arrayContaining(['НАСТРОЙКИ', 'ЗВУК', 'МУЗЫКА', 'ЗАНОВО', 'ВЫХОД', 'VERSION 1.2.3']));
+    ru.destroy();
+    const en = show(kit, settingsView(kit, { i18n: i18n('en') }));
+    expect(texts(en)).toEqual(expect.arrayContaining(['SETTINGS', 'SOUND', 'MUSIC', 'RESTART', 'EXIT']));
+    en.destroy();
+    const explicit = show(kit, settingsView(kit, { i18n: i18n('ru'), title: 'НАСТРОЙКИ', soundLabel: 'Sound', restartLabel: 'Restart level', homeLabel: 'Return home' }));
+    expect(texts(explicit)).toEqual(expect.arrayContaining(['НАСТРОЙКИ', 'Sound', 'МУЗЫКА', 'Restart level', 'Return home']));
+    explicit.destroy();
+    const legacy = show(kit, settingsView(kit));
+    expect(texts(legacy)).toEqual(expect.arrayContaining(['SETTINGS', 'SOUND', 'MUSIC', 'RESTART', 'EXIT']));
+    legacy.destroy();
+  });
+
+  it('strict art: a missing Settings role fails clearly; its files load only with Style 2 (Carlito once, shared with the LevelMap views)', async () => {
+    const kit = createKit();
+    expect(() => settingsView(kit, {}, [], styled(kit, READY_UI_STYLE_2, ['settingsSoundOff'])))
+      .toThrow("SettingsWindowView style 'style-2': no settingsSoundOff (style2/settings_sound_off.webp) in textures — load them with loadReadyUiAssets({ skin })");
+    expect(kit.ui.getStats()).toMatchObject({ windows: 0 });
+    const requested: string[] = [];
+    const load = vi.spyOn(Assets, 'load').mockImplementation((async (input: unknown) => {
+      for (const entry of (Array.isArray(input) ? input : [input]) as Array<{ src: string }>) requested.push(entry.src);
+      return labelled('loaded');
+    }) as never);
+    const get = vi.spyOn(Assets, 'get').mockImplementation((() => labelled('got')) as never);
+    try {
+      await loadReadyUiAssets({ baseUrl: './ui/' });
+      await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_1 });
+      expect(requested.filter((src) => src.includes('style2/settings_'))).toEqual([]);
+      requested.length = 0;
+      const textures = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 });
+      expect(requested.filter((src) => src.includes('style2/settings_')).length).toBe(11);
+      expect(requested.filter((src) => src.includes('Carlito'))).toEqual(['./ui/fonts/Carlito-Bold.woff']);
+      expect(Object.keys(textures.skins!['style-2']!)).toEqual(expect.arrayContaining(STYLE_2_SETTINGS_ROLES));
+    } finally {
+      load.mockRestore();
+      get.mockRestore();
+    }
   });
 });

@@ -57,6 +57,7 @@
     "showcase:qa": "node scripts/qa-panel-check.mjs",
     "showcase:confetti": "node scripts/confetti-check.mjs",
     "showcase:style2": "node scripts/style2-level-map-check.mjs",
+    "showcase:style2-settings": "node scripts/style2-settings-check.mjs",
     "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",

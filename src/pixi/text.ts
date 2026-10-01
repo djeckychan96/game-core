@@ -117,6 +117,12 @@ export function placeFigmaLabel(label: Text, slot: FigmaTextSlot): void {
   label.position.set((slot.align === 'center' ? slot.x + slot.width / 2 : slot.x) - k * originX, baseline - k * originY);
 }
 
+/** The one-line run's advance width in the label's units (what `placeFigmaLabel` aligns by), stroke and shadow excluded. */
+export function figmaLabelAdvance(label: Text): number {
+  const metrics = CanvasTextMetrics.measureText(label.text, label.style);
+  return metrics.lineWidths[0] ?? metrics.maxLineWidth;
+}
+
 /** Shrinks the label's scale so its width fits `maxWidth` (never grows). */
 export function fitLabelWidth(label: Text, maxWidth: number): void {
   label.scale.set(1);
