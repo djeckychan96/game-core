@@ -5,9 +5,10 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  * Style 1 — the Figma "HAMSTER PIXEL FLOW" Ready UI.
  *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
- * docs/figma/lives), the current runtime surface of `settings`, plus HUD and LevelMap from the canonical level-select
- * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301). NOT COVERED — donor look: Result, Shop,
- * NoAds, StarterPack.
+ * docs/figma/lives), the current runtime surface of `settings`, HUD and LevelMap from the canonical level-select
+ * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301), and the level `result` WIN / FAIL
+ * (screen/result-win 1:3854, screen/result-fail 1:4029, docs/figma/style1-result). NOT COVERED — donor look: Shop,
+ * NoAds, StarterPack (no Style 1 screen exists for them).
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -17,7 +18,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -76,7 +77,20 @@ export const READY_UI_STYLE_1 = {
     levelCurrentGlow: { file: 'level/shine.webp' },
     levelStarGold: { file: 'level/star_gold.webp' },
     levelStarGoldL: { file: 'level/star_gold_l.webp' },
-    levelStarGoldR: { file: 'level/star_gold_r.webp' }
+    levelStarGoldR: { file: 'level/star_gold_r.webp' },
+    /** Result `ui/ribbon/title` red / grey (1:4024 / 1:4141): back band, both tails, front band — no text (runtime). */
+    resultRibbonWin: { file: 'result/style1_ribbon_win@2x.webp' },
+    resultRibbonFail: { file: 'result/style1_ribbon_fail@2x.webp' },
+    /** Result `action/close` (its 51 × 51 box), tinted for the ribbon it sits on. */
+    resultCloseWin: { file: 'result/style1_close_win@2x.webp' },
+    resultCloseFail: { file: 'result/style1_close_fail@2x.webp' },
+    /** Result `Rectangle 218`: the blurred band behind the reward / the broken heart (its full render box, not cut at the frame). */
+    resultGlowWin: { file: 'result/style1_glow_win@0.5x.webp' },
+    resultGlowFail: { file: 'result/style1_glow_fail@0.5x.webp' },
+    /** Result `icon_coin_128` at 256: the reward coin (render box). */
+    rewardCoin: { file: 'result/style1_reward_coin@2x.webp' },
+    /** Result FAIL EXIT (no Figma node): Style 1's RETURN HOME surface — the gameplay Settings home button art. */
+    buttonExit: { file: 'settings/btn_home.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -234,6 +248,63 @@ export const READY_UI_STYLE_1 = {
           label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
         },
         version: { x: 267, y: 1476, width: 439, height: 48, fontSize: 40 }
+      }
+    },
+    /**
+     * Figma `screen/result-win` 1:3854 / `screen/result-fail` 1:4029 (docs/figma/style1-result): frame boxes. The hero art
+     * above the ribbon (art/result-*-hero: a trophy, the game's bear) is game content and not part of the style; the WIN
+     * star crown keeps that place.
+     */
+    result: {
+      win: {
+        /** ui/ribbon/title red 1:4024: the 815 × 203 band at 133, 735; render box with the tails and the shadow */
+        ribbon: { x: 31, y: 731, width: 1019, height: 239 },
+        /** the ribbon's text layers: Fira Sans Black 90 / 70, CENTER / CENTER */
+        title: { x: 133, y: 743, width: 816, height: 104, fontSize: 90 },
+        subtitle: { x: 133, y: 847, width: 816, height: 70, fontSize: 70 },
+        /** action/close 1:4025 */
+        close: { x: 957, y: 775, width: 51, height: 51 },
+        /** Rectangle 218 1:3955: 956 × 316 at 62, 1003, layer blur 225.7 */
+        glow: { x: -163.7, y: 777.3, width: 1408, height: 768 },
+        /**
+         * No Figma node (the hero's place): Core's WIN crown at the donor offsets from the ribbon's top edge — the Style 1
+         * ribbon's render box is the donor ribbon's 1019 × 239 — centred on the ribbon (540.5).
+         */
+        stars: [
+          { x: 268.5, y: 627.5, size: 240 },
+          { x: 540.5, y: 567.5, size: 288 },
+          { x: 812.5, y: 627.5, size: 240 }
+        ],
+        /** REWARDS 1:3974: Fira Sans Black 50 */
+        rewardsLabel: { x: 319, y: 973, width: 442, height: 60, fontSize: 50 },
+        /** icon_coin_128 1:3958 (256 box at 412, 1023): the coin's render box */
+        coin: { x: 442, y: 1051, width: 196, height: 210 },
+        /** 1:3973 "500": Fira Sans Black 80, hugging, centred at 540.5, 1271 */
+        amount: { x: 340.5, y: 1223, width: 400, height: 96, fontSize: 80 },
+        /** 1:3978 ui/button/surface green + CONTINUE (Fira Sans Black 60) */
+        next: { button: { x: 90, y: 1375.5, width: 439, height: 207 }, label: { x: 22, y: 13, width: 398, height: 159, fontSize: 60 } },
+        /** 1:3981 ui/button/surface orange + its highlight; the runtime RETRY label in CONTINUE's box (Figma's x2 offer is not Core's) */
+        retry: { button: { x: 551, y: 1375.5, width: 439, height: 207 }, label: { x: 22, y: 13, width: 398, height: 159, fontSize: 60 }, highlight: { x: 8, y: 5, width: 307, height: 172 } }
+      },
+      fail: {
+        /** ui/ribbon/title grey 1:4141 */
+        ribbon: { x: 31, y: 731, width: 1019, height: 239 },
+        /** slot/level 1:4146: Fira Sans Black 90, one line centred on the ribbon */
+        title: { x: 133, y: 785, width: 816, height: 104, fontSize: 90 },
+        /** action/close 1:4142 */
+        close: { x: 957, y: 774, width: 51, height: 51 },
+        /** Rectangle 218 1:4130 */
+        glow: { x: -163.7, y: 777.3, width: 1408, height: 768 },
+        /** Group 170 + Vector 28 (305.4 × 268 at 387, 1027): the broken heart's render box */
+        lifeLost: { x: 377, y: 1017, width: 326, height: 298 },
+        /** 1:4140 "-1": Fira Sans Black 150, LEFT / CENTER */
+        lifeDelta: { x: 578, y: 1134, width: 146, height: 180, fontSize: 150 },
+        /** slot/status 1:4148: Fira Sans Black 50 */
+        status: { x: 123, y: 1348, width: 834, height: 113, fontSize: 50 },
+        /** ui/button/base 1:4147 (the confirm-exit button, slot/label 80) */
+        retry: { button: { x: 240, y: 1461, width: 600, height: 206 }, label: { x: 25, y: 27, width: 550, height: 128, fontSize: 80 } },
+        /** No Figma node: the kit's fail EXIT rule — 0.85 of the RETURN HOME art (599 × 207), 26 units under RETRY */
+        exit: { button: { x: 285.5, y: 1693, width: 509, height: 176 }, label: { x: 21, y: 23, width: 467, height: 109, fontSize: 68 } }
       }
     }
   }

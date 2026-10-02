@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <title>Game Core · Style 1 Result</title>
+    <link rel="icon" href="data:," />
+    <style>
+      /* a host background under the style's dim (Figma has the game's gameplay screen there); the window is the skin's */
+      html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(#483191, #274caf); }
+      canvas { display: block; }
+      #safe-probe { position: fixed; inset: 0; pointer-events: none; visibility: hidden;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+    </style>
+  </head>
+  <body>
+    <div id="safe-probe"></div>
+    <script type="module" src="./result1Demo.ts"></script>
+  </body>
+</html>

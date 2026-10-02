@@ -17,6 +17,11 @@ export interface LivesWindowParams {
   refillPrice: number;
   /** Offer a "+1 for an ad" button. Default true. */
   adOffer?: boolean;
+  /**
+   * Offer the coin REFILL button. Default true. `false` = no refill offer (a game without a refill economy): the button
+   * is hidden and the rewarded button, when offered, takes the centre.
+   */
+  refillOffer?: boolean;
 }
 
 /**
@@ -117,8 +122,9 @@ function sprite(texture: Texture, b: ReadyUiSkinBox): Sprite {
  * price / reward / ad icons as sprites; the count (the lives, as Figma shows it), the countdown, the price and every
  * label are runtime text in the style's boxes.
  *
- * Both: the same params, actions and states — REFILL disabled at full lives, the ad button only when offered and
- * handled (REFILL then centred), `setTimer` while open, continuations after the close.
+ * Both: the same params, actions and states — REFILL disabled at full lives and drawn only when offered
+ * (`refillOffer`), the ad button only when offered and handled (the one shown button then centred), `setTimer` while
+ * open, continuations after the close.
  */
 export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   readonly variant: LivesWindowVariant;
@@ -264,10 +270,13 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       this.priceText.text = formatAmount(params.refillPrice);
       this.layoutPrice(look);
       const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
+      const showRefill = params.refillOffer ?? true;
       this.adButton.visible = showAd;
       this.adButton.setEnabled(showAd);
-      this.refillButton.setEnabled(!full);
+      this.refillButton.visible = showRefill;
+      this.refillButton.setEnabled(showRefill && !full);
       this.refillButton.x = showAd ? X(look, L.refill.x + L.refill.width / 2) : 0;
+      this.adButton.x = showRefill ? X(look, L.ad.x + L.ad.width / 2) : 0;
       return;
     }
     this.params = params;
@@ -277,10 +286,13 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     fitLabelWidth(this.timerText, 420);
     this.priceText.text = formatAmount(params.refillPrice);
     const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
+    const showRefill = params.refillOffer ?? true;
     this.adButton.visible = showAd;
     this.adButton.setEnabled(showAd);
-    this.refillButton.setEnabled(!full);
+    this.refillButton.visible = showRefill;
+    this.refillButton.setEnabled(showRefill && !full);
     this.refillButton.x = showAd ? -253 : 0;
+    this.adButton.x = showRefill ? 206 : 0;
   }
 
   /** Live countdown update while the window is open. */

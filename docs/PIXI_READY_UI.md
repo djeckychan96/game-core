@@ -229,10 +229,13 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   `REWARDS` caption, big coin with the amount under it, green CONTINUE (−230, 310), yellow
   secondary (230, 310), × at (445, −369); slate 0.94 backdrop and the 440 ms `backOut(1.9)`
   victory pop. Optional stars crown the ribbon. `onNext` / `onRetry` are **close
-  continuations**: only after the window is hidden, never on cancel.
+  continuations**: only after the window is hidden, never on cancel. Styled (`theme.skin` covering `result`,
+  Style 1): the style's red / grey ribbon per outcome, glow band, reward coin and 9-slice CTAs, the fail's
+  life-lost art with `lifeDelta` (default `-1`, `null` = none) and its outcome line under it.
 - **LivesWindowView** — RefillHearts: 968 × 1070 purple panel, inner 900 × 382 panel, heart
   at x −261 with `n/max`, `Next heart in` + countdown (`setTimer` while open; `MAX` when full),
-  REFILL with the coin price and a "+1 for an ad" button at y 350; `onRefill`, `onWatchAd`.
+  REFILL with the coin price and a "+1 for an ad" button at y 350; `onRefill`, `onWatchAd`. `refillOffer: false`
+  (a game without a refill economy) hides REFILL, `adOffer: false` the ad button; the one shown takes the centre.
 - **ShopWindowView** — the donor's **full-screen** shop: striped awning tiled across the top
   (36/255 of the height), the 89-unit × at the top-right, then the blue `SPECIAL OFFER` ribbon
   and a 3-column grid of 318 × 418 pack cards (amount on top, coin pile, price on the bottom band)
@@ -336,7 +339,7 @@ layout of every Core view it `covers`. The view code is the same for every style
 style, once, in its Ready UI config — the theme it gives every covered view and the loader:
 
 ```ts
-import { ConfirmWindowView, HudView, LevelMapView, LivesWindowView, SettingsWindowView, READY_UI_STYLE_1, loadReadyUiAssets } from 'game-core/pixi';
+import { ConfirmWindowView, HudView, LevelMapView, LivesWindowView, ResultWindowView, SettingsWindowView, READY_UI_STYLE_1, loadReadyUiAssets } from 'game-core/pixi';
 
 const READY_UI_THEME = { skin: READY_UI_STYLE_1 }; // the game's one style choice
 const textures = await loadReadyUiAssets({ baseUrl: './pixi-ui/', skin: READY_UI_THEME.skin });
@@ -346,6 +349,7 @@ new LivesWindowView({ ...readyUi, id: 'lives', onRefill, onWatchAd });
 new SettingsWindowView({ ...readyUi, id: 'settings', onToggle, onHome, onRestart });
 new HudView({ ...readyUi, id: 'hud' });
 new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel });
+new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 ```
 
 | View | Style 1 (`READY_UI_STYLE_1`, id `style-1`) | Style 2 (`READY_UI_STYLE_2`, id `style-2`) |
@@ -356,7 +360,8 @@ new LevelMapView({ ...readyUi, id: 'map', levels, currentLevel, onSelectLevel })
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |
-| Result, Shop, NoAds, StarterPack | not covered — donor look | not covered — donor look |
+| ResultWindowView | covered — Figma `screen/result-win` 1:3854 / `screen/result-fail` 1:4029: red / grey ribbon with its tinted ×, glow band, reward coin, CONTINUE + RETRY (orange with the highlight; Figma's rewarded x2 offer is not Core's), fail broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | not covered — donor look |
+| Shop, NoAds, StarterPack | not covered — donor look (no Style 1 screen) | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
@@ -493,6 +498,18 @@ renders of 8:22049 / 8:22069 / 8:22838 at 1080 × 2344, 390 × 844 next to Figma
 1280 × 800 shots, real taps (RESTART / EXIT run the host's action, × / backdrop dismiss, REFILL / GET report the
 params, the countdown ticks), and no Style 2 request from the donor / Style 1 pages. Writes
 `showcase-shots/style2-windows/`.
+
+```bash
+npm run showcase:style1-result   # the Style 1 Result WIN / FAIL proof
+```
+
+`examples/pixi-showcase/result1.html` (`?outcome=win|fail`, `?figma=1` = the Figma sample copy and values as host data,
+`?locale=ru`, `?stars=0..3`, `?exit=0`, `?lives=0`, `?confetti=1`, `?donor=1`) and `scripts/style1-result-check.mjs`:
+region parity against Figma's renders of 1:3854 / 1:4029 at 1080 × 2344 (sampled with the measured centring offset:
+the Result centres its composition, Figma puts game hero art above it), 390 × 844 next to Figma, RU / 1 star / no
+EXIT / confetti / donor, 320 × 568 and 1280 × 800 shots, real taps (CONTINUE / RETRY / EXIT continuations, × /
+backdrop dismiss), and no Result file request from the donor pages or the other Style 1 windows. Writes
+`showcase-shots/style1-result/`.
 
 ## Tests
 

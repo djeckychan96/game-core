@@ -1,0 +1,62 @@
+{
+  "about": "Figma source of truth for the Style 1 level Result (ResultWindowView WIN / FAIL). Read 2026-10-02 through the Figma MCP (get_metadata, get_design_context of modal/result-win 1:3953 and modal/result-fail 1:4128, get_screenshot). Coordinates are Figma units inside the 1080 x 2344 screen frame = Ready UI design units.",
+  "source": {
+    "fileKey": "sJ0BV1ARqMpcj5dZbjFppz",
+    "page": "0:1 Page 1 / section 1:910 02 / SCREENS / 1080x2344",
+    "win": { "screen": "1:3854 screen/result-win", "modal": "1:3953 modal/result-win", "reference": "reference/screen-win-1-3854@0.5x.webp", "ribbonRender": "reference/ribbon-win-1-4024-render@1x.png" },
+    "fail": { "screen": "1:4029 screen/result-fail", "modal": "1:4128 modal/result-fail", "reference": "reference/screen-fail-1-4029@0.5x.webp", "ribbonRender": "reference/ribbon-fail-1-4141-render@1x.png" }
+  },
+  "screenChildren": [
+    { "id": "1:3856 / 1:4031", "name": "overlay/dim", "fill": "#080b0d", "opacity": 0.8, "note": "the same dim as Confirm / Lives (READY_UI_STYLE_1.backdrop)" },
+    { "id": "1:3857 / 1:4032", "name": "art/result-win-hero / art/result-fail-hero", "box": [165, 325, 750, 432], "note": "GAME CONTENT, not Style 1: a trophy (win) and the Pixel Flow bear character (fail). Not exported, not in the style package; the WIN star crown keeps this area. A future per-game asset override." }
+  ],
+  "win": {
+    "ribbon": { "id": "1:4024", "name": "ui/ribbon/title (red)", "box": [133, 735, 815, 203], "render": [31, 731, 1019, 239],
+      "layers": "I1:4024;77:3137 back band, 77:3101 left tail, 77:3119 right tail (mirrored), 77:3073 front band; the instance's two text layers are runtime text" },
+    "title": { "id": "I1:4024;77:3153", "box": [133, 743, 816, 104], "fontSize": 90, "align": "CENTER/CENTER", "sample": "LEVEL 200" },
+    "subtitle": { "id": "I1:4024;77:3152", "box": [133, 847, 816, 70], "fontSize": 70, "align": "CENTER/CENTER", "sample": "COMPLETED!" },
+    "close": { "id": "1:4025", "name": "action/close", "box": [957, 775, 50.519, 50.52], "fill": "#811d22" },
+    "glow": { "id": "1:3955", "name": "Rectangle 218 (section/reward)", "box": [62, 1003, 956, 316], "render": [-163.7, 777.3, 1407.4, 767.4], "fill": "#933ace", "cornerRadius": 138, "effects": [{ "type": "LAYER_BLUR", "radius": 225.7 }],
+      "note": "the frame clips Figma's own render at x 0..1080 (reference/glow-win-frame-clipped@0.56x.webp); the SVG is written in Figma's export form (stdDeviation = radius / 2) so the texture is not cut at the frame edge on wide viewports" },
+    "rewardsCaption": { "id": "1:3974", "box": [319, 973, 442, 60], "fontSize": 50, "sample": "REWARDS" },
+    "coin": { "id": "1:3958", "name": "icon_coin_128", "box": [412, 1023, 256, 256], "art": [450, 1059, 180, 186], "render": [442, 1051, 196, 210] },
+    "amount": { "id": "1:3973", "centre": [540.5, 1271], "box": [340, 1223, 400, 96], "fontSize": 80, "sample": "500" },
+    "next": { "id": "1:3978", "button": [90, 1375.5, 439, 207], "surface": "ui/button/surface green", "label": { "id": "1:3980", "box": [112, 1388.5, 398, 159], "fontSize": 60, "sample": "CONTINUE" } },
+    "secondary": { "id": "1:3981", "button": [551, 1375.5, 439, 207], "surface": "ui/button/surface orange", "highlight": { "id": "1:3983", "box": [559, 1380.5, 307, 172] },
+      "note": "Figma's secondary is a rewarded x2 offer (clapper 1:4001, '900 + coin' 1:3984, x2 badge 1:4017). Core's WIN secondary is RETRY (no rewarded double in ResultWindowView): the orange surface and its highlight are kept, the label is the runtime RETRY text, the clapper / price / x2 badge are not drawn." }
+  },
+  "fail": {
+    "ribbon": { "id": "1:4141", "name": "ui/ribbon/title (grey)", "box": [133, 735, 815, 203], "render": [31, 731, 1019, 239] },
+    "title": { "id": "1:4146", "name": "slot/level", "box": [133, 785, 816, 104], "fontSize": 90, "sample": "LEVEL 200" },
+    "close": { "id": "1:4142", "name": "action/close", "box": [957, 774, 50.519, 50.52], "fill": "#445a66" },
+    "glow": { "id": "1:4130", "name": "Rectangle 218 (section/result-body)", "box": [62, 1003, 956, 316], "render": [-163.7, 777.3, 1407.4, 767.4], "fill": "#445a66", "cornerRadius": 138, "effects": [{ "type": "LAYER_BLUR", "radius": 225.7 }] },
+    "heart": { "id": "1:4132 + 1:4139", "name": "Group 170 + Vector 28 (crack)", "box": [387, 1027, 305.4, 268], "render": [377, 1017, 326, 298], "note": "the same art as Confirm's art/broken-heart: Style 1 role lifeLostArt (icons/broken_heart@2x.webp)" },
+    "lifeDelta": { "id": "1:4140", "box": [578, 1134, 146, 180], "fontSize": 150, "align": "LEFT/CENTER", "sample": "-1" },
+    "status": { "id": "1:4148", "name": "slot/status", "box": [123, 1348, 834, 113], "fontSize": 50, "sample": "YOU FAILED" },
+    "retry": { "id": "1:4147", "name": "ui/button/base", "button": [240, 1461, 600, 206], "label": { "buttonBox": [25, 27, 550, 128], "fontSize": 80, "sample": "TRY AGAIN" } },
+    "exit": { "note": "NOT IN FIGMA. Core's optional fail EXIT (onExit): 0.85 of the primary (510 x 175) right under it, 26 units apart (the kit fail rule), drawn with Style 1's 'return home' surface (settings/btn_home.webp, the gameplay Settings RETURN HOME button) — the same action in the same style.",
+      "button": [285, 1693, 510, 175], "label": { "buttonBox": [21, 23, 468, 109], "fontSize": 68 } }
+  },
+  "textStyle": { "font": "Fira Sans / Black (900)", "fill": "#ffffff", "stroke": { "color": "#000000", "weight": 4, "align": "OUTSIDE" }, "dropShadow": { "offset": [0, 4], "blur": 0, "color": "#000000" }, "note": "READY_UI_STYLE_1.text (strokeOutside 4, shadowY 4)" },
+  "assets": [
+    { "key": "resultRibbonWin", "file": "result/style1_ribbon_win@2x.webp", "scale": 2, "size": [1019, 239],
+      "layers": [
+        { "svg": "svg/ribbon-win-back.svg", "at": [105.5705, 0] },
+        { "svg": "svg/ribbon-win-tail-left.svg", "at": [0, 24] },
+        { "svg": "svg/ribbon-win-tail-right.svg", "at": [781, 24], "flipX": true },
+        { "svg": "svg/ribbon-win-front.svg", "at": [109.5795, 4] }
+      ] },
+    { "key": "resultRibbonFail", "file": "result/style1_ribbon_fail@2x.webp", "scale": 2, "size": [1019, 239],
+      "layers": [
+        { "svg": "svg/ribbon-fail-back.svg", "at": [105.5705, 0] },
+        { "svg": "svg/ribbon-fail-tail-left.svg", "at": [0, 24] },
+        { "svg": "svg/ribbon-fail-tail-right.svg", "at": [781, 24], "flipX": true },
+        { "svg": "svg/ribbon-fail-front.svg", "at": [109.5795, 4] }
+      ] },
+    { "key": "resultGlowWin", "file": "result/style1_glow_win@0.5x.webp", "scale": 0.5, "size": [1408, 768], "layers": [{ "svg": "svg/glow-win.svg", "at": [0, 0] }] },
+    { "key": "resultGlowFail", "file": "result/style1_glow_fail@0.5x.webp", "scale": 0.5, "size": [1408, 768], "layers": [{ "svg": "svg/glow-fail.svg", "at": [0, 0] }] },
+    { "key": "resultCloseWin", "file": "result/style1_close_win@2x.webp", "scale": 2, "size": [51, 51], "layers": [{ "svg": "svg/close-win.svg", "at": [0, 0] }] },
+    { "key": "resultCloseFail", "file": "result/style1_close_fail@2x.webp", "scale": 2, "size": [51, 51], "layers": [{ "svg": "svg/close-fail.svg", "at": [0, 0] }] },
+    { "key": "rewardCoin", "file": "result/style1_reward_coin@2x.webp", "scale": 2, "size": [196, 210], "layers": [{ "svg": "svg/reward-coin.svg", "at": [0, 0] }] }
+  ]
+}

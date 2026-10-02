@@ -118,15 +118,15 @@ function restyle(id: string, change: (skin: { -readonly [K in keyof ReadyUiSkin]
   return skin;
 }
 
-describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings, HUD and LevelMap', () => {
+describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings, HUD, LevelMap and Result', () => {
   it('is exported from game-core/pixi: Style 1, the catalog and the per-window roles; the package states its coverage', () => {
     expect(pixiEntry.READY_UI_STYLE_1).toBe(READY_UI_STYLE_1);
     expect(pixiEntry.READY_UI_SKINS['style-1']).toBe(READY_UI_STYLE_1);
     expect(pixiEntry.READY_UI_SKIN_WINDOW_ROLES).toBe(READY_UI_SKIN_WINDOW_ROLES);
     expect(pixiEntry.READY_UI_SKIN_VIEW_ROLES).toBe(READY_UI_SKIN_VIEW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
-    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap']);
-    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'settings']);
+    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result']);
+    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'result', 'settings']);
     expect('hud' in READY_UI_STYLE_1).toBe(true);
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
     // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles)
@@ -374,7 +374,8 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
       s.windows = {
         confirm: { ...READY_UI_STYLE_1.windows.confirm, button: { ...READY_UI_STYLE_1.windows.confirm.button, y: 725 + 40 } },
         lives: { ...READY_UI_STYLE_1.windows.lives, refill: { ...READY_UI_STYLE_1.windows.lives.refill, x: 90 + 30 } },
-        settings: READY_UI_STYLE_1.windows.settings
+        settings: READY_UI_STYLE_1.windows.settings,
+        result: READY_UI_STYLE_1.windows.result
       };
       s.assets = {
         ...s.assets,

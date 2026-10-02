@@ -12,7 +12,7 @@ import { READY_UI_STYLE_2 } from './skins/style2';
  */
 
 /** The modal windows a style can cover. */
-export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings';
+export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result';
 
 /** Non-modal Core views whose visuals may come from the same selected skin. */
 export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen';
@@ -24,6 +24,10 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
   settings: [
     'settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart',
     'settingsSoundOff', 'settingsMusicOff', 'settingsHapticOff', 'settingsIconHome'
+  ],
+  result: [
+    'resultGlowWin', 'resultGlowFail', 'rewardCoin', 'lifeLostArt', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'buttonExit',
+    'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail'
   ]
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
@@ -311,10 +315,62 @@ export interface ReadyUiSkinLevelMapScreenLayout {
   };
 }
 
+/** A Result button: its box in the frame, its label box button-local (from the button box's top-left). */
+export interface ReadyUiSkinResultButtonLayout {
+  readonly button: ReadyUiSkinBox;
+  readonly label: ReadyUiSkinTextBox;
+}
+
+/** Shared by both Result outcomes: the ribbon (render box) with its × (`resultCloseWin` / `resultCloseFail`), the glow under the content. */
+export interface ReadyUiSkinResultOutcomeLayout {
+  /** `resultRibbonWin` / `resultRibbonFail`: the ribbon's render box (tails and shadow included). */
+  readonly ribbon: ReadyUiSkinBox;
+  /** The ribbon's runtime title (`LEVEL n`). */
+  readonly title: ReadyUiSkinTextBox;
+  readonly close: ReadyUiSkinBox;
+  /** `resultGlowWin` / `resultGlowFail`: the blurred band behind the content (render box; decoration, never measured). */
+  readonly glow: ReadyUiSkinBox;
+}
+
+/**
+ * Result WIN / FAIL. Boxes are FRAME coordinates (x / y in the style's `frame`; the panel origin is the frame centre);
+ * button labels are button-local. The behaviour stays ResultWindowView's: one frame-fit scale for both outcomes, the
+ * WIN composition (crown … CTA row) centred, the FAIL composition centred, stars / confetti / callbacks unchanged.
+ */
+export interface ReadyUiSkinResultLayout {
+  readonly win: ReadyUiSkinResultOutcomeLayout & {
+    /** The ribbon's second line (`COMPLETED!`). */
+    readonly subtitle: ReadyUiSkinTextBox;
+    /** The earned stars' rest boxes (centre x / y and size), left to right: Core's crown over this style's ribbon. */
+    readonly stars: readonly [ReadyUiSkinIconBox, ReadyUiSkinIconBox, ReadyUiSkinIconBox];
+    readonly rewardsLabel: ReadyUiSkinTextBox;
+    /** `rewardCoin` (render box). */
+    readonly coin: ReadyUiSkinBox;
+    /** The reward amount, centred on this box. */
+    readonly amount: ReadyUiSkinTextBox;
+    /** CONTINUE on `buttonPrimary`. */
+    readonly next: ReadyUiSkinResultButtonLayout;
+    /** The secondary (RETRY) on `buttonRewarded` with the `buttonHighlight` layer (`highlight`, button-local). */
+    readonly retry: ReadyUiSkinResultButtonLayout & { readonly highlight: ReadyUiSkinBox };
+  };
+  readonly fail: ReadyUiSkinResultOutcomeLayout & {
+    /** `lifeLostArt` (render box) and its runtime delta (`-1`, LEFT / CENTER). */
+    readonly lifeLost: ReadyUiSkinBox;
+    readonly lifeDelta: ReadyUiSkinTextBox;
+    /** The outcome line (`FAILED`, the params' subtitle) under the art. */
+    readonly status: ReadyUiSkinTextBox;
+    /** RETRY on `buttonPrimary`. */
+    readonly retry: ReadyUiSkinResultButtonLayout;
+    /** The optional EXIT on `buttonExit` (fixed art, drawn at the box). */
+    readonly exit: ReadyUiSkinResultButtonLayout;
+  };
+}
+
 export interface ReadyUiSkinLayouts {
   readonly confirm?: ReadyUiSkinConfirmLayout;
   readonly lives?: ReadyUiSkinLivesLayout;
   readonly settings?: ReadyUiSkinSettingsLayouts;
+  readonly result?: ReadyUiSkinResultLayout;
 }
 
 /** A style's own font file (under `assets/pixi-ui/`), registered under `family` by `loadReadyUiAssets({ skin })`. */

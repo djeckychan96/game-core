@@ -140,7 +140,7 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(() => validateReadyUiSkin(broken)).toThrow("ReadyUiSkin 'style-2' covers 'levelMap' but has no asset for role 'levelNodeLocked'");
     const noCaps = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, navSelected: { file: 'style2/nav_selected.webp' } } } as unknown as ReadyUiSkin;
     expect(() => validateReadyUiSkin(noCaps)).toThrow("ReadyUiSkin 'style-2': role 'navSelected' is drawn as a 9-slice but has no nineSlice caps");
-    expect(Object.keys(READY_UI_SKIN_VIEW_ROLES)).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
+    expect(Object.keys(READY_UI_SKIN_VIEW_ROLES)).toEqual(['confirm', 'lives', 'settings', 'result', 'hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
   });
 
   it('loads only when chosen, strictly, with its font; the donor path requests no Style 2 file', async () => {

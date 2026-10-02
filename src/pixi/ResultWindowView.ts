@@ -1,4 +1,4 @@
-import { type Container, Rectangle, Sprite, type Text } from 'pixi.js';
+import { type Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { WindowHiddenReason } from '../index';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName } from './assets';
 import { WinConfettiEffect, type WinConfettiConfig } from './fx/WinConfettiEffect';
@@ -6,8 +6,9 @@ import { WinStarsEffect } from './fx/WinStarsEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import type { UiButton } from './UiButton';
-import { createLabel, fitLabelWidth, formatAmount } from './text';
+import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinResultButtonLayout, type WindowSkinLook } from './skin';
+import { UiButton } from './UiButton';
+import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel, type FigmaTextLook } from './text';
 import { resolveTheme } from './theme';
 
 /**
@@ -48,6 +49,11 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
   exitLabel?: string;
   /** Caption above the reward. Default `REWARDS`. */
   rewardsLabel?: string;
+  /**
+   * Styled fail only (a Ready UI style that covers `result`): the runtime text next to the style's life-lost art.
+   * Default `-1`; `null` = no life-lost art at all (a game without lives). Ignored by the donor look.
+   */
+  lifeDelta?: string | null;
   /** Business continuations: run only after the window has fully closed. */
   onNext: (params: ResultWindowParams) => void;
   onRetry?: (params: ResultWindowParams) => void;
@@ -61,8 +67,33 @@ export interface ResultWindowViewOptions extends Omit<ModalWindowOptions, 'id'> 
   confetti?: boolean | Partial<WinConfettiConfig>;
 }
 
+type ResultLook = WindowSkinLook<'result'>;
+
+/** The style drawing this window (null = donor) with its layout and art; a missing piece fails here, before anything registers. */
+function resultLook(options: ResultWindowViewOptions): ResultLook | null {
+  const skin = selectWindowSkin('result', undefined, options.theme?.skin);
+  if (!skin) return null;
+  return resolveWindowSkin('ResultWindowView', 'result', skin, options.textures, { variant: false, include: '' });
+}
+
+/** Style frame x / y → panel units (the styled panel origin is the frame centre). */
+const fx = (look: ResultLook, x: number): number => x - look.skin.frame.width / 2;
+const fy = (look: ResultLook, y: number): number => y - look.skin.frame.height / 2;
+const panelBox = (look: ResultLook, b: ReadyUiSkinBox): ReadyUiSkinBox => ({ x: fx(look, b.x), y: fy(look, b.y), width: b.width, height: b.height });
+
+/** The styled WIN composition (the crown, the ribbon, the reward, the CTA row, the ×) in frame units: the fit box of both outcomes. */
+function styledWinFrame(look: ResultLook): ReadyUiSkinBox {
+  const L = look.layout.win;
+  const boxes: ReadyUiSkinBox[] = [L.ribbon, L.coin, L.next.button, L.retry.button, L.close, ...L.stars.map((s) => ({ x: s.x - s.size / 2, y: s.y - s.size / 2, width: s.size, height: s.size }))];
+  const left = Math.min(...boxes.map((b) => b.x));
+  const top = Math.min(...boxes.map((b) => b.y));
+  const right = Math.max(...boxes.map((b) => b.x + b.width));
+  const bottom = Math.max(...boxes.map((b) => b.y + b.height));
+  return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
 /** Fails before anything registers when confetti is on and its art was not loaded. */
-function modalOptions(options: ResultWindowViewOptions): ModalWindowOptions {
+function modalOptions(options: ResultWindowViewOptions, look: ResultLook | null): ModalWindowOptions {
   if (options.confetti) {
     const missing = WIN_CONFETTI_TEXTURES.filter((name) => !options.textures[name]);
     if (missing.length) {
@@ -70,13 +101,34 @@ function modalOptions(options: ResultWindowViewOptions): ModalWindowOptions {
       throw new Error(`ResultWindowView confetti: no ${list} in textures — load them with loadReadyUiAssets({ include: WIN_CONFETTI_TEXTURES })`);
     }
   }
+  const base = { ...options, id: options.id ?? 'result-window', entrance: options.entrance ?? VICTORY_ENTRANCE };
+  if (look) {
+    // the style's dim and the frame fit: the composition keeps its share of the style frame (1080 × 2344)
+    const frame = styledWinFrame(look);
+    return {
+      ...base,
+      backdropColor: options.backdropColor ?? look.skin.backdrop.color,
+      backdropAlpha: options.backdropAlpha ?? look.skin.backdrop.alpha,
+      fit: { widthRatio: frame.width / look.skin.frame.width, heightRatio: frame.height / look.skin.frame.height, ...(options.fit ?? {}) }
+    };
+  }
   return {
-    ...options,
-    id: options.id ?? 'result-window',
-    entrance: options.entrance ?? VICTORY_ENTRANCE,
+    ...base,
     backdropColor: options.backdropColor ?? resolveTheme(options.theme).colors.resultBackdrop,
     backdropAlpha: options.backdropAlpha ?? resolveTheme(options.theme).colors.resultBackdropAlpha
   };
+}
+
+/** The styled-only nodes: per-outcome ribbon / glow, the fail's life-lost art, its delta and its outcome line. */
+interface StyledNodes {
+  look: ResultLook;
+  ribbonWin: Sprite;
+  ribbonFail: Sprite;
+  glowWin: Sprite;
+  glowFail: Sprite;
+  lifeLost: Sprite;
+  lifeDelta: Text;
+  status: Text;
 }
 
 /**
@@ -95,8 +147,17 @@ function modalOptions(options: ResultWindowViewOptions): ModalWindowOptions {
  * the × and the backdrop run only `onDismiss(reason)`, never a retry or an exit.
  * Optional WIN confetti (`confetti`): an input-transparent layer over the composition, in panel design units around
  * the frame centre; it starts at every WIN show (t = 0) and stops on every path to hidden (the fx scope).
+ *
+ * Styled (a Ready UI style that covers `result`, `theme.skin`; Style 1 = Figma screen/result-win / result-fail): the
+ * style's ribbon per outcome (red / grey) with its tinted ×, the blurred glow band behind the content, the reward coin,
+ * the CTA surfaces as the style's 9-slices (the WIN secondary on the rewarded surface with its highlight), the fail's
+ * life-lost art with its runtime delta and the outcome line under it, EXIT on the style's exit surface; every text is
+ * runtime text in the style's boxes. Same params, callbacks, stars, confetti and fit rule; the scale is the style
+ * frame's contain-fit, like every styled window. The style's hero art slot is game content and is not drawn.
  */
 export class ResultWindowView extends ModalWindow<ResultWindowParams> {
+  /** The Ready UI style drawing this window, or null (donor). */
+  readonly skin: ReadyUiSkin | null;
   private readonly titleText: Text;
   private readonly subtitleText: Text;
   private readonly stars: Sprite[] = [];
@@ -119,30 +180,34 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   private frame: Rectangle | null = null;
   /** WIN confetti, only when `options.confetti` is on. */
   private readonly confetti: WinConfettiEffect | null = null;
+  /** Styled only (null for the donor look). */
+  private readonly styled: StyledNodes | null;
+  private readonly lifeDeltaText: string | null;
 
   constructor(options: ResultWindowViewOptions) {
-    super(modalOptions(options));
+    const look = resultLook(options);
+    super(modalOptions(options, look));
+    this.skin = look?.skin ?? null;
     this.onNext = options.onNext;
     this.onRetry = options.onRetry ?? null;
     this.onExit = options.onExit ?? null;
+    this.lifeDeltaText = options.lifeDelta === undefined ? '-1' : options.lifeDelta;
     const t = this.textures;
+    const nextText = localizedText(options.nextLabel, this.i18n, 'core.result.continue', READY_UI_LEGACY_TEXT.result.continue);
+    const retryText = localizedText(options.retryLabel, this.i18n, 'core.result.retry', READY_UI_LEGACY_TEXT.result.retry);
+    const exitText = localizedText(options.exitLabel, this.i18n, 'core.result.exit', READY_UI_LEGACY_TEXT.result.exit);
+    const rewardsText = localizedText(options.rewardsLabel, this.i18n, 'core.result.rewards', READY_UI_LEGACY_TEXT.result.rewards);
 
-    const ribbon = this.sprite(t.victoryRibbon, 1019, 239);
-    ribbon.y = -317;
-    this.panel.addChildAt(ribbon, 0);
-
-    // stars crown the ribbon (not in the donor window; hidden unless params.stars > 0): 2× the first crown, the middle
-    // one 20 % larger and raised like Vlad's WIN; all of them clear of the title (its top ≈ −413) and of the ×. All three
-    // stand upright (the kit's starGoldL / starGoldR are the level map's tilted side stars)
-    const starSpecs = [
-      { x: -272, y: -540, size: 240, tex: t.starGold },
-      { x: 0, y: -600, size: 288, tex: t.starGold },
-      { x: 272, y: -540, size: 240, tex: t.starGold }
-    ];
+    // stars crown the ribbon (hidden unless params.stars > 0). Donor: 2× the first crown, the middle one 20 % larger and
+    // raised like Vlad's WIN; all of them clear of the title (its top ≈ −413) and of the ×. All three stand upright (the
+    // kit's starGoldL / starGoldR are the level map's tilted side stars). Styled: the style's rest boxes.
+    const starSpecs = look
+      ? look.layout.win.stars.map((s) => ({ x: fx(look, s.x), y: fy(look, s.y), size: s.size }))
+      : [{ x: -272, y: -540, size: 240 }, { x: 0, y: -600, size: 288 }, { x: 272, y: -540, size: 240 }];
     for (const spec of starSpecs) {
-      const star = new Sprite(spec.tex);
+      const star = new Sprite(t.starGold);
       star.anchor.set(0.5);
-      star.scale.set(spec.size / Math.max(1, spec.tex.width));
+      star.scale.set(spec.size / Math.max(1, t.starGold.width));
       star.position.set(spec.x, spec.y);
       star.visible = false;
       // never measured: the tap area takes the rest box of an earned star, not whatever transform it has mid-flight
@@ -153,35 +218,116 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     // their landing flash, rays and halo behind them, the sparks over them; eventMode none, excluded from bounds
     const landing = t.fxGlowSoft && t.fxSparkStar ? { glow: t.fxGlowSoft, spark: t.fxSparkStar } : null;
     this.starsFx = new WinStarsEffect({ motion: this.motion, scope: this.fxScope, stars: this.stars, textures: landing });
-    this.panel.addChild(this.starsFx, ...this.stars, this.starsFx.front);
 
-    this.titleText = createLabel(this.theme, 'LEVEL 1', { fontSize: 60, stroke: 9 });
-    this.titleText.y = -373;
-    this.subtitleText = createLabel(this.theme, 'COMPLETED!', { fontSize: 60, stroke: 9 });
-    this.subtitleText.y = -304;
-    this.panel.addChild(this.titleText, this.subtitleText);
+    if (look) {
+      const { skin, layout: L, art: A } = look;
+      const text: FigmaTextLook = skinTextLook(skin);
+      const label = (value: string, fontSize: number): Text => createFigmaLabel(this.theme, value, fontSize, text);
+      const art = (texture: Texture, b: ReadyUiSkinBox): Sprite => {
+        const sprite = new Sprite(texture);
+        sprite.position.set(fx(look, b.x), fy(look, b.y));
+        sprite.width = b.width;
+        sprite.height = b.height;
+        return sprite;
+      };
+      /** A styled CTA: the surface (a 9-slice, or fixed art drawn at the box), its runtime label in the style's button-local box. */
+      const button = (id: string, texture: Texture, role: 'buttonPrimary' | 'buttonRewarded' | null, layout: ReadyUiSkinResultButtonLayout, value: string, onTap: () => void): UiButton => {
+        const b = layout.button;
+        const view = this.addButton(new UiButton({
+          ui: this.ui, id: `${this.id}:${id}`, theme: this.theme, texture,
+          ...(role ? { nineSlice: skinNineSlice(skin, role, 'result') } : {}),
+          width: b.width, height: b.height, pressScale: 0.9, onTap
+        }));
+        view.position.set(fx(look, b.x + b.width / 2), fy(look, b.y + b.height / 2));
+        const caption = label(value, layout.label.fontSize);
+        caption.eventMode = 'none';
+        placeFigmaLabel(caption, { x: layout.label.x - b.width / 2, y: layout.label.y - b.height / 2, width: layout.label.width, height: layout.label.height, align: 'center' });
+        view.addChild(caption);
+        return view;
+      };
 
-    this.rewardCaption = createLabel(this.theme, localizedText(options.rewardsLabel, this.i18n, 'core.result.rewards', READY_UI_LEGACY_TEXT.result.rewards), { fontSize: 38, stroke: 9 });
-    this.rewardCaption.y = -139;
-    this.rewardCoin = this.sprite(t.coinBig, 196, 210);
-    this.rewardAmount = createLabel(this.theme, '0', { fontSize: 88, stroke: 9 });
-    this.rewardAmount.y = 119; // donor 101 overlapped the coin; Trail Arrow's fix moved it 18 lower
-    this.panel.addChild(this.rewardCaption, this.rewardCoin, this.rewardAmount);
+      const glowWin = art(A.resultGlowWin, L.win.glow);
+      const glowFail = art(A.resultGlowFail, L.fail.glow);
+      // the glows reach far outside the composition: never part of the fit, the centring or the tap area
+      glowWin.measurable = glowFail.measurable = false;
+      this.rewardCoin = art(A.rewardCoin, L.win.coin);
+      this.rewardAmount = label('0', L.win.amount.fontSize);
+      this.rewardCaption = label(rewardsText, L.win.rewardsLabel.fontSize);
+      placeFigmaLabel(this.rewardCaption, { ...panelBox(look, L.win.rewardsLabel), align: 'center' });
+      const lifeLost = art(A.lifeLostArt, L.fail.lifeLost);
+      const lifeDelta = label(this.lifeDeltaText ?? '', L.fail.lifeDelta.fontSize);
+      placeFigmaLabel(lifeDelta, { ...panelBox(look, L.fail.lifeDelta), align: 'left' });
+      const status = label('', L.fail.status.fontSize);
 
-    this.nextButton = this.createButton('next', t.btnGreen, localizedText(options.nextLabel, this.i18n, 'core.result.continue', READY_UI_LEGACY_TEXT.result.continue), () => this.finish('next'));
-    this.nextButton.position.set(-230, 310);
-    this.retryButton = this.createButton('retry', t.btnYellow, localizedText(options.retryLabel, this.i18n, 'core.result.retry', READY_UI_LEGACY_TEXT.result.retry), () => this.finish('retry'));
-    this.retryButton.position.set(230, 310);
-    // fail: the win's CONTINUE size for the primary, the secondary at 0.85 of it, 26 units apart
-    this.failRetryButton = this.createButton('fail-retry', t.btnGreen, localizedText(options.retryLabel, this.i18n, 'core.result.retry', READY_UI_LEGACY_TEXT.result.retry), () => this.finish('retry'));
-    this.failRetryButton.position.set(0, -48);
-    this.exitButton = this.createButton('exit', t.btnYellow, localizedText(options.exitLabel, this.i18n, 'core.result.exit', READY_UI_LEGACY_TEXT.result.exit), () => this.finish('exit'), 373, 176, 53, -8);
-    this.exitButton.position.set(0, 170);
-    this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
-    // the stars are hidden until they pop, so they are counted here, not measured at fit time
-    const framed: Container[] = [ribbon, ...this.stars, this.rewardCoin, this.nextButton, this.retryButton];
-    if (this.closeButton) framed.push(this.closeButton);
-    this.frame = centeredBox(framed);
+      this.nextButton = button('next', A.buttonPrimary, 'buttonPrimary', L.win.next, nextText, () => this.finish('next'));
+      this.retryButton = button('retry', A.buttonRewarded, 'buttonRewarded', L.win.retry, retryText, () => this.finish('retry'));
+      const highlight = L.win.retry.highlight;
+      const glare = new Sprite(A.buttonHighlight);
+      glare.position.set(highlight.x - L.win.retry.button.width / 2, highlight.y - L.win.retry.button.height / 2);
+      glare.width = highlight.width;
+      glare.height = highlight.height;
+      glare.eventMode = 'none';
+      this.retryButton.addChildAt(glare, 1); // over the surface, under the label
+      this.failRetryButton = button('fail-retry', A.buttonPrimary, 'buttonPrimary', L.fail.retry, retryText, () => this.finish('retry'));
+      this.exitButton = button('exit', A.buttonExit, null, L.fail.exit, exitText, () => this.finish('exit'));
+
+      const ribbonWin = art(A.resultRibbonWin, L.win.ribbon);
+      const ribbonFail = art(A.resultRibbonFail, L.fail.ribbon);
+      this.titleText = label('LEVEL 1', L.win.title.fontSize);
+      this.subtitleText = label('COMPLETED!', L.win.subtitle.fontSize);
+
+      // decoration never takes input: taps on it still land inside the panel's hit area (no backdrop close)
+      for (const node of [glowWin, glowFail, this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta, status, ribbonWin, ribbonFail, this.titleText, this.subtitleText]) node.eventMode = 'none';
+      // Figma bottom → top: the glow band, the reward / the broken heart, the CTAs, the outcome line, the ribbon; then
+      // the crown (as the donor: over the ribbon, under its text), the ribbon text and the × (placeClose)
+      this.panel.addChild(
+        glowWin, glowFail, this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta,
+        this.nextButton, this.retryButton, this.failRetryButton, this.exitButton, status, ribbonWin, ribbonFail,
+        this.starsFx, ...this.stars, this.starsFx.front, this.titleText, this.subtitleText
+      );
+      this.styled = { look, ribbonWin, ribbonFail, glowWin, glowFail, lifeLost, lifeDelta, status };
+      if (this.closeButton) {
+        this.closeButton.background.texture = A.resultCloseWin;
+        this.closeButton.background.width = L.win.close.width;
+        this.closeButton.background.height = L.win.close.height;
+      }
+      const frame = styledWinFrame(look);
+      this.frame = new Rectangle(fx(look, frame.x), fy(look, frame.y), frame.width, frame.height);
+    } else {
+      this.styled = null;
+      const ribbon = this.sprite(t.victoryRibbon, 1019, 239);
+      ribbon.y = -317;
+      this.panel.addChildAt(ribbon, 0);
+      this.panel.addChild(this.starsFx, ...this.stars, this.starsFx.front);
+
+      this.titleText = createLabel(this.theme, 'LEVEL 1', { fontSize: 60, stroke: 9 });
+      this.titleText.y = -373;
+      this.subtitleText = createLabel(this.theme, 'COMPLETED!', { fontSize: 60, stroke: 9 });
+      this.subtitleText.y = -304;
+      this.panel.addChild(this.titleText, this.subtitleText);
+
+      this.rewardCaption = createLabel(this.theme, rewardsText, { fontSize: 38, stroke: 9 });
+      this.rewardCaption.y = -139;
+      this.rewardCoin = this.sprite(t.coinBig, 196, 210);
+      this.rewardAmount = createLabel(this.theme, '0', { fontSize: 88, stroke: 9 });
+      this.rewardAmount.y = 119; // donor 101 overlapped the coin; Trail Arrow's fix moved it 18 lower
+      this.panel.addChild(this.rewardCaption, this.rewardCoin, this.rewardAmount);
+
+      this.nextButton = this.createButton('next', t.btnGreen, nextText, () => this.finish('next'));
+      this.nextButton.position.set(-230, 310);
+      this.retryButton = this.createButton('retry', t.btnYellow, retryText, () => this.finish('retry'));
+      this.retryButton.position.set(230, 310);
+      // fail: the win's CONTINUE size for the primary, the secondary at 0.85 of it, 26 units apart
+      this.failRetryButton = this.createButton('fail-retry', t.btnGreen, retryText, () => this.finish('retry'));
+      this.failRetryButton.position.set(0, -48);
+      this.exitButton = this.createButton('exit', t.btnYellow, exitText, () => this.finish('exit'), 373, 176, 53, -8);
+      this.exitButton.position.set(0, 170);
+      this.panel.addChild(this.nextButton, this.retryButton, this.failRetryButton, this.exitButton);
+      // the stars are hidden until they pop, so they are counted here, not measured at fit time
+      const framed: Container[] = [ribbon, ...this.stars, this.rewardCoin, this.nextButton, this.retryButton];
+      if (this.closeButton) framed.push(this.closeButton);
+      this.frame = centeredBox(framed);
+    }
     if (options.confetti && t.fxSparkStar && t.fxGlowSoft) {
       // over the composition (the × stays on top), centred on the frame; eventMode none, excluded from bounds
       const config = options.confetti === true ? {} : options.confetti;
@@ -196,14 +342,12 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     this.params = params;
     const fail = params.outcome === 'fail';
     this.titleText.text = params.title ?? this.i18n?.t('core.result.level', { level: params.level }) ?? READY_UI_LEGACY_TEXT.result.level(params.level);
-    fitLabelWidth(this.titleText, 760);
-    this.subtitleText.text = localizedText(
+    const subtitle = localizedText(
       params.subtitle,
       this.i18n,
       fail ? 'core.result.failed' : 'core.result.completed',
       fail ? READY_UI_LEGACY_TEXT.result.failed : READY_UI_LEGACY_TEXT.result.completed
     );
-    fitLabelWidth(this.subtitleText, 760);
     this.rewardCaption.visible = !fail;
     this.rewardCoin.visible = !fail;
     this.rewardAmount.visible = !fail;
@@ -211,13 +355,45 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     const showRetry = !fail && (params.retry ?? true) && this.onRetry !== null;
     setShown(this.nextButton, !fail);
     setShown(this.retryButton, showRetry);
-    this.nextButton.x = showRetry ? -230 : 0;
     setShown(this.failRetryButton, fail);
     setShown(this.exitButton, fail && this.onExit !== null);
+    if (this.styled) this.applyStyled(this.styled, fail, subtitle, showRetry);
+    else {
+      fitLabelWidth(this.titleText, 760);
+      this.subtitleText.text = subtitle;
+      fitLabelWidth(this.subtitleText, 760);
+      this.nextButton.x = showRetry ? -230 : 0;
+    }
     this.starsFx.reset();
     // applyParams runs once per show (the controller's onShow): a WIN starts the confetti from t = 0
     if (fail) this.confetti?.cancel();
     else this.confetti?.play();
+  }
+
+  /** Styled: the outcome's ribbon, glow, × and text boxes; the fail's outcome line goes under its art (the ribbon has one line). */
+  private applyStyled(nodes: StyledNodes, fail: boolean, subtitle: string, showRetry: boolean): void {
+    const { look } = nodes;
+    const L = look.layout;
+    const outcome = fail ? L.fail : L.win;
+    placeFigmaLabel(this.titleText, { ...panelBox(look, outcome.title), align: 'center' });
+    this.subtitleText.visible = !fail;
+    nodes.status.visible = fail;
+    if (fail) {
+      nodes.status.text = subtitle;
+      placeFigmaLabel(nodes.status, { ...panelBox(look, L.fail.status), align: 'center' });
+    } else {
+      this.subtitleText.text = subtitle;
+      placeFigmaLabel(this.subtitleText, { ...panelBox(look, L.win.subtitle), align: 'center' });
+      placeFigmaLabel(this.rewardAmount, { ...panelBox(look, L.win.amount), align: 'center' });
+    }
+    nodes.ribbonWin.visible = nodes.glowWin.visible = !fail;
+    nodes.ribbonFail.visible = nodes.glowFail.visible = fail;
+    const lifeLost = fail && this.lifeDeltaText !== null;
+    nodes.lifeLost.visible = nodes.lifeDelta.visible = lifeLost;
+    if (this.closeButton) this.closeButton.background.texture = fail ? look.art.resultCloseFail : look.art.resultCloseWin;
+    // CONTINUE alone moves to the frame centre, like the donor's
+    const next = L.win.next.button;
+    this.nextButton.x = showRetry ? fx(look, next.x + next.width / 2) : 0;
   }
 
   /** Fit box: the victory frame for both outcomes, so the scale never depends on what is visible. */
@@ -243,7 +419,10 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
-    return { x: 445, y: -369 };
+    const look = this.styled?.look;
+    if (!look) return { x: 445, y: -369 };
+    const c = this.params?.outcome === 'fail' ? look.layout.fail.close : look.layout.win.close;
+    return { x: fx(look, c.x + c.width / 2), y: fy(look, c.y + c.height / 2) };
   }
 
   protected override onShown(): void {
