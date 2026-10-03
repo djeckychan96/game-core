@@ -1,4 +1,4 @@
-import type { LocalizationCatalogs } from '../../localization';
+import type { LocalizationCatalogs } from '../../index';
 import { READY_UI_EN } from './en';
 import { READY_UI_RU } from './ru';
 

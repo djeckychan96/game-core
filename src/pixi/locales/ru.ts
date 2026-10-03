@@ -1,4 +1,4 @@
-import type { TranslationCatalog } from '../../localization';
+import type { TranslationCatalog } from '../../index';
 
 export const READY_UI_RU = Object.freeze({
   'core.confirm.title': 'ВЫ УВЕРЕНЫ?',

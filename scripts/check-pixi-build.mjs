@@ -79,8 +79,9 @@ const types = readFileSync(pixiTypes, 'utf-8');
 for (const name of ['LevelMapView', 'HudView', 'ResultWindowView', 'ReadyUiTextures', 'ClickRippleEffect', 'createReadyUiOverlay', 'ReadyUiOverlayOptions', 'createOrientationGuard', 'OrientationGuardOptions']) {
   if (!types.includes(name)) fail(`${pixiExport.types} lacks ${name}`);
 }
-// the kit's declarations import the foundation types relatively; they must ship next to them
-for (const rel of ['dist/pixi/index.d.ts', 'dist/pixi/ui/types.d.ts', 'dist/pixi/motion/types.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts', 'dist/pixi/pixi/fx/ClickRippleEffect.d.ts', 'dist/pixi/pixi/ReadyUiOverlay.d.ts', 'dist/pixi/pixi/OrientationGuard.d.ts']) {
+// the kit's declarations name the foundation types through the root entry's dist/index.d.ts (one declaration of each,
+// shared with `game-core` — scripts/check-pixi-types.mjs proves it); the kit's own tree ships under dist/pixi/pixi
+for (const rel of ['dist/index.d.ts', 'dist/pixi/pixi/LevelMapView.d.ts', 'dist/pixi/pixi/fx/ClickRippleEffect.d.ts', 'dist/pixi/pixi/ReadyUiOverlay.d.ts', 'dist/pixi/pixi/OrientationGuard.d.ts']) {
   if (!existsSync(resolve(rootDir, rel))) fail(`missing declaration ${rel}`);
 }
 

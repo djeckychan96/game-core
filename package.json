@@ -36,7 +36,7 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && npm run build:platform-cleverapps && npm run build:qa && node scripts/check-pixi-build.mjs && node scripts/check-platform-build.mjs && node scripts/check-qa-build.mjs",
+    "build": "npm run build:core && npm run build:pixi && npm run build:platform-yandex && npm run build:platform-cleverapps && npm run build:qa && node scripts/check-pixi-build.mjs && node scripts/check-pixi-types.mjs && node scripts/check-platform-build.mjs && node scripts/check-qa-build.mjs",
     "build:core": "vite build",
     "build:pixi": "vite build --config vite.pixi.config.ts",
     "build:platform-yandex": "vite build --config vite.platform-yandex.config.ts",

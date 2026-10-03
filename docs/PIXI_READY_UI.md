@@ -23,7 +23,9 @@ Rules that keep the two layers apart:
   (`scripts/check-pixi-build.mjs`) fails the build if either bundle drifts.
 - The kit imports the foundation as **types only**: a host passes its own `UiRuntime` and
   `MotionRuntime` instances in, so there is exactly one clock, one cancellation tree and no
-  duplicated core code.
+  duplicated core code. Its declarations name the root's own types (`dist/pixi/pixi/*.d.ts`
+  import `dist/index.d.ts`, no second copy), so a TypeScript host passes `game-core` instances to
+  `game-core/pixi` with no cast; `scripts/check-pixi-types.mjs` compiles such a host against `dist`.
 - The kit never creates a ticker or `requestAnimationFrame`. Every animation is a MotionRuntime
   tween/sequence, every tap a `ButtonController`, every modal a `WindowController`. The host ticks
   `core.update(frameMs)` and everything moves; `core.cancelAll()` settles everything.
