@@ -372,3 +372,23 @@ export type {
   ContinueOfferSaveGate,
   ContinueOfferRuntimeOptions
 } from './continue';
+export { createContentLoader, ContentLoadError } from './content';
+export type {
+  ContentLoader,
+  ContentLoaderOptions,
+  ContentLoadOptions,
+  ContentLoadContext,
+  ContentUnloadContext,
+  ContentUnloadReason,
+  ContentRetryPolicy,
+  ContentRetryEvent,
+  ContentLoaderTimers,
+  ContentLoaderOnline,
+  ContentLoaderErrorPhase,
+  ContentLoaderErrorContext,
+  ContentLoadErrorReason,
+  ContentLoadFailure,
+  ContentGroupStatus,
+  ContentGroupSnapshot,
+  ContentLoaderSnapshot
+} from './content';
