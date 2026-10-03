@@ -394,6 +394,12 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
   current `SettingsWindowView` has no runtime state or callbacks for them, so adding them is a future
   bounded API slice rather than speculative skin behavior. A style changes files, caps, text look, dim and boxes; adding, removing
   or reordering a window's elements is still view code.
+- A game shows the subset of a styled window's parts it uses and the style's layout closes up around them (any style,
+  no per-game variant). Settings: a hidden toggle (HAPTIC) leaves no slot — the shown toggles take the first slots,
+  centred on the full row; HOME / RESTART without its continuation (`onHome` / `onRestart`) leaves no row — the rest
+  moves up and the window is shorter (in-level with neither = the `map` layout). Confirm: `illustration: false` leaves
+  out the life-lost art, its `-1` and the glow and closes their band (e.g. a restart that costs level progress, not a
+  life). Every part shown = the style's layout unchanged; the donor look is untouched (its Confirm art bakes the heart in).
 
 ## Render quality (Retina)
 

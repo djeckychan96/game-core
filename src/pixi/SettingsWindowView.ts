@@ -28,7 +28,10 @@ export interface SettingsState {
 export interface SettingsWindowParams extends SettingsState {
   /** Caption at the bottom, e.g. `VERSION 1.0.75`. Omit to hide. */
   version?: string;
-  /** Show the in-level HOME / RESTART buttons (donor: only on the game screen). Default false. */
+  /**
+   * Show the in-level HOME / RESTART buttons (donor: only on the game screen). Default false. Each one is drawn only
+   * when its continuation (`onHome` / `onRestart`) is given; a style lays out just the drawn ones (no empty row).
+   */
   gameButtons?: boolean;
 }
 
@@ -71,6 +74,68 @@ const GAME_BUTTON_SCALE = 0.72;
 
 type SettingsLook = WindowSkinLook<'settings'>;
 type SettingsLayout = ReadyUiSkinSettingsBaseLayout | ReadyUiSkinSettingsGameplayLayout;
+type SettingsToggleLayout = NonNullable<SettingsLayout[SettingKey]>;
+
+/** Which of the style's optional controls this show draws (sound and music always are). */
+interface SettingsShown {
+  haptic: boolean;
+  restart: boolean;
+  home: boolean;
+}
+
+const moveBox = <B extends ReadyUiSkinBox>(box: B, dx: number, dy: number): B => ({ ...box, x: box.x + dx, y: box.y + dy });
+
+/**
+ * The style's layout for the controls this show actually draws. A style lays out every control it has; a game may show
+ * a subset (no haptic, no HOME …), and a hidden control leaves no hole:
+ * - toggles: the visible ones take the first slots of the row (layout order) and the group is centred on the full row;
+ * - game actions: the visible ones move up into the first action rows, and everything below the rows (the version)
+ *   moves up with the window's bottom by the freed height.
+ * Every control shown → the style's own layout object, unchanged.
+ */
+function compactSettingsLayout(layout: SettingsLayout, shown: SettingsShown): SettingsLayout {
+  let out = layout;
+  const slots = (['sound', 'music', 'haptic'] as const).filter((key) => layout[key] !== null);
+  const visible = slots.filter((key) => key !== 'haptic' || shown.haptic);
+  if (visible.length > 0 && visible.length < slots.length) {
+    const toggle = (key: SettingKey): SettingsToggleLayout => layout[key] as SettingsToggleLayout;
+    const centre = (keys: readonly SettingKey[]): number => {
+      const boxes = keys.map((key) => toggle(key).button);
+      return (Math.min(...boxes.map((b) => b.x)) + Math.max(...boxes.map((b) => b.x + b.width))) / 2;
+    };
+    const dx = centre(slots) - centre(slots.slice(0, visible.length));
+    const next: { -readonly [K in keyof SettingsLayout]: SettingsLayout[K] } = { ...layout };
+    visible.forEach((key, index) => {
+      const own = toggle(key);
+      const slot = toggle(slots[index] as SettingKey).button;
+      const mx = slot.x - own.button.x + dx;
+      const my = slot.y - own.button.y;
+      // the label is window-local and moves with its button; `off` is button-local
+      next[key] = { ...own, button: moveBox(own.button, mx, my), label: moveBox(own.label, mx, my) };
+    });
+    out = next;
+  }
+  if (!('restart' in out)) return out;
+  const gameplay = out;
+  const rows = (['restart', 'home'] as const).slice().sort((a, b) => gameplay[a].button.y - gameplay[b].button.y);
+  const actions = rows.filter((key) => shown[key]);
+  if (actions.length === 0 || actions.length === rows.length) return out;
+  const bottom = (box: ReadyUiSkinBox): number => box.y + box.height;
+  const blockBottom = Math.max(...rows.map((key) => bottom(gameplay[key].button)));
+  const next: { -readonly [K in keyof ReadyUiSkinSettingsGameplayLayout]: ReadyUiSkinSettingsGameplayLayout[K] } = { ...gameplay };
+  let packedBottom = 0;
+  actions.forEach((key, index) => {
+    // label and icon are button-local: the action moves as one
+    const button = moveBox(gameplay[key].button, 0, gameplay[rows[index] as 'restart' | 'home'].button.y - gameplay[key].button.y);
+    if (key === 'restart') next.restart = { ...gameplay.restart, button };
+    else next.home = { ...gameplay.home, button };
+    packedBottom = Math.max(packedBottom, bottom(button));
+  });
+  const lift = blockBottom - packedBottom;
+  if (gameplay.version.y >= blockBottom) next.version = moveBox(gameplay.version, 0, -lift);
+  next.window = { ...gameplay.window, height: gameplay.window.height - lift };
+  return next;
+}
 
 /** The style drawing Settings, or null for the unchanged donor path. */
 function settingsLook(options: SettingsWindowViewOptions): SettingsLook | null {
@@ -296,10 +361,11 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
   }
 
   private layoutButtons(gameButtons: boolean): void {
+    const hapticShown = this.hapticVisible && !gameButtons;
     const items: Array<{ view: ToggleView; visible: boolean }> = [
       { view: this.toggles.sound, visible: true },
       { view: this.toggles.music, visible: true },
-      ...(this.toggles.haptic ? [{ view: this.toggles.haptic, visible: this.hapticVisible && !gameButtons }] : [])
+      ...(this.toggles.haptic ? [{ view: this.toggles.haptic, visible: hapticShown }] : [])
     ];
     const visible = items.filter((it) => it.visible);
     for (const it of items) {
@@ -307,30 +373,30 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       it.view.label.visible = it.visible;
       it.view.button.setEnabled(it.visible);
     }
-    if (this.look) this.applySkinLayout(gameButtons);
-    else {
-      const startX = -((visible.length - 1) * ITEM_GAP) / 2;
-      visible.forEach((it, index) => {
-        const x = startX + index * ITEM_GAP;
-        const y = gameButtons ? GAME_ITEM_Y : MAIN_ITEM_Y;
-        it.view.button.position.set(x, y);
-        it.view.label.position.set(x, y + LABEL_OFFSET_Y);
-      });
-    }
     const showGame = gameButtons && (this.onHome !== null || this.onRestart !== null);
     this.homeButton.visible = showGame && this.onHome !== null;
     this.restartButton.visible = showGame && this.onRestart !== null;
     this.homeButton.setEnabled(this.homeButton.visible);
     this.restartButton.setEnabled(this.restartButton.visible);
-    if (!this.look) {
-      this.homeButton.position.set(0, GAME_BUTTON_Y);
-      this.restartButton.position.set(0, GAME_BUTTON_Y + GAME_BUTTON_GAP);
+    if (this.look) {
+      this.applySkinLayout(showGame, { haptic: hapticShown, restart: this.restartButton.visible, home: this.homeButton.visible });
+      return;
     }
+    const startX = -((visible.length - 1) * ITEM_GAP) / 2;
+    visible.forEach((it, index) => {
+      const x = startX + index * ITEM_GAP;
+      const y = gameButtons ? GAME_ITEM_Y : MAIN_ITEM_Y;
+      it.view.button.position.set(x, y);
+      it.view.label.position.set(x, y + LABEL_OFFSET_Y);
+    });
+    this.homeButton.position.set(0, GAME_BUTTON_Y);
+    this.restartButton.position.set(0, GAME_BUTTON_Y + GAME_BUTTON_GAP);
   }
 
-  private applySkinLayout(gameButtons: boolean): void {
+  /** `gameplay`: game actions are drawn (the style's gameplay layout); else its map layout — both compacted to `shown`. */
+  private applySkinLayout(gameplay: boolean, shown: SettingsShown): void {
     const look = this.look as SettingsLook;
-    const L = gameButtons ? look.layout.gameplay : look.layout.map;
+    const L = compactSettingsLayout(gameplay ? look.layout.gameplay : look.layout.map, shown);
     this.activeLayout = L;
     this.fit.widthRatio = this.styleFit?.widthRatio ?? L.window.width / look.skin.frame.width;
     this.fit.heightRatio = this.styleFit?.heightRatio ?? L.window.height / look.skin.frame.height;
@@ -361,10 +427,10 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       toggle.off.height = layout.off.height;
     }
 
-    if (gameButtons) {
-      const gameplay = L as ReadyUiSkinSettingsGameplayLayout;
-      this.placeAction(gameplay, this.restartButton, this.restartLabel as Text, this.restartIcon, gameplay.restart);
-      this.placeAction(gameplay, this.homeButton, this.homeLabel as Text, this.homeIcon, gameplay.home);
+    if (gameplay) {
+      const G = L as ReadyUiSkinSettingsGameplayLayout;
+      this.placeAction(G, this.restartButton, this.restartLabel as Text, this.restartIcon, G.restart);
+      this.placeAction(G, this.homeButton, this.homeLabel as Text, this.homeIcon, G.home);
     }
     this.placeClose();
   }

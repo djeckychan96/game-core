@@ -46,6 +46,13 @@ export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'>
   confirmLabel?: string;
   /** Styled only: default `-1` (slot/life-delta), runtime text over the life-lost art (the donor art bakes it in). */
   lifeDelta?: string;
+  /**
+   * Styled only: draw the style's illustration — the life-lost art, its `lifeDelta` and the glow behind them. Default
+   * true. `false` = a window without one (e.g. a restart that loses level progress, not a life): the band the art took
+   * closes up — the body and the button move into it and the window is that much shorter. The donor art bakes its
+   * broken heart in, so the donor look ignores it.
+   */
+  illustration?: boolean;
   /** The one action button, a close continuation. Cancel = the × or the backdrop → `onDismiss`. */
   onConfirm: () => void;
 }
@@ -56,7 +63,22 @@ type ConfirmLook = WindowSkinLook<'confirm'>;
 function confirmLook(options: ConfirmWindowViewOptions): ConfirmLook | null {
   const skin = selectWindowSkin('confirm', options.variant, options.theme?.skin);
   if (!skin) return null;
-  return resolveWindowSkin('ConfirmWindowView', 'confirm', skin, options.textures, { variant: options.variant === 'figma', include: 'CONFIRM_EXIT_FIGMA_TEXTURES' });
+  const look = resolveWindowSkin('ConfirmWindowView', 'confirm', skin, options.textures, { variant: options.variant === 'figma', include: 'CONFIRM_EXIT_FIGMA_TEXTURES' });
+  return options.illustration === false ? { ...look, layout: withoutIllustration(look.layout) } : look;
+}
+
+/**
+ * The style's layout without its illustration: the band from the art's top down to the next content box below it
+ * closes up — that box and everything under it move up, and the window loses the same height. Title and × stay.
+ */
+function withoutIllustration(layout: ReadyUiSkinConfirmLayout): ReadyUiSkinConfirmLayout {
+  const top = layout.heart.y;
+  const below = [layout.body, layout.button].filter((box) => box.y > top);
+  if (below.length === 0) return layout;
+  const next = Math.min(...below.map((box) => box.y));
+  const lift = next - top;
+  const up = <B extends ReadyUiSkinBox>(box: B): B => (box.y >= next ? { ...box, y: box.y - lift } : box);
+  return { ...layout, window: { ...layout.window, height: layout.window.height - lift }, body: up(layout.body), button: up(layout.button) };
 }
 
 /** Window-local style x / y → panel units (the panel origin is the window box centre). */
@@ -93,6 +115,7 @@ function modalOptions(options: ConfirmWindowViewOptions, look: ConfirmLook | nul
  * shell and the button surface are the style's 9-slices (its caps); title, body, the "-1" and the button label are
  * runtime text laid out in the style's boxes; the close glyph, the glow and the life-lost art are separate sprites, in
  * the Figma order (the glow sits above the shell, its title and the ×). The window keeps its share of the style frame.
+ * `illustration: false` leaves the art, its "-1" and the glow out and closes their band up (a shorter window).
  *
  * Both: the × and a backdrop tap cancel (`onDismiss`); the button runs `onConfirm`.
  */
@@ -106,7 +129,7 @@ export class ConfirmWindowView extends ModalWindow {
   private readonly body: Text;
   private readonly confirmButton: UiButton;
   private readonly onConfirm: () => void;
-  // 'figma' only (null for 'donor')
+  // 'figma' only (null for 'donor'; glow / heart / lifeDelta also null with `illustration: false`)
   private readonly surface: NineSliceSprite | null;
   private readonly glow: Sprite | null;
   private readonly heart: Sprite | null;
@@ -157,7 +180,8 @@ export class ConfirmWindowView extends ModalWindow {
       this.closeButton.background.width = L.close.width;
       this.closeButton.background.height = L.close.height;
     }
-    this.glow = this.art(A.heroGlow, L.glow);
+    const illustration = options.illustration ?? true;
+    this.glow = illustration ? this.art(A.heroGlow, L.glow) : null;
 
     this.confirmButton = this.addButton(new UiButton({
       ui: this.ui,
@@ -178,17 +202,17 @@ export class ConfirmWindowView extends ModalWindow {
 
     this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, text);
     placeFigmaLabel(this.body, { ...this.box(L.body), align: 'center' });
-    this.heart = this.art(A.lifeLostArt, L.heart);
-    this.lifeDelta = createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, text);
-    placeFigmaLabel(this.lifeDelta, { ...this.box(L.lifeDelta), align: 'left' });
+    this.heart = illustration ? this.art(A.lifeLostArt, L.heart) : null;
+    this.lifeDelta = illustration ? createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, text) : null;
+    if (this.lifeDelta) placeFigmaLabel(this.lifeDelta, { ...this.box(L.lifeDelta), align: 'left' });
 
     // Decorative layers never take input: the glow lies over the × and Pixi hit-tests every child of the interactive
     // panel, so a hit on it would stop at the panel. Taps on them still land inside the panel's hit area (no backdrop).
-    for (const node of [this.surface, this.title, this.glow, this.body, this.heart, this.lifeDelta]) node.eventMode = 'none';
+    for (const node of [this.surface, this.title, this.glow, this.body, this.heart, this.lifeDelta]) if (node) node.eventMode = 'none';
     // Figma bottom → top; the × (created by the base) goes in right after the title, see placeClose()
     this.panel.addChildAt(this.surface, 0);
     this.panel.addChildAt(this.title, 1);
-    this.panel.addChild(this.glow, this.confirmButton, this.body, this.heart, this.lifeDelta);
+    for (const node of [this.glow, this.confirmButton, this.body, this.heart, this.lifeDelta]) if (node) this.panel.addChild(node);
     this.placeClose();
   }
 

@@ -273,8 +273,9 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     const restart = field<UiButton>(view, 'restartButton');
     const home = field<UiButton>(view, 'homeButton');
     expect(field<NineSliceSprite>(view, 'surface').height).toBe(1588); // 1576 logical + 4 top / 8 bottom bleed
-    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: -387 });
-    expect(toggles.music.button.position).toMatchObject({ x: 0, y: -387 });
+    // haptic is never drawn in-level: the pair is centred (it used to keep the empty third slot at x 306)
+    expect(toggles.sound.button.position).toMatchObject({ x: -153, y: -387 });
+    expect(toggles.music.button.position).toMatchObject({ x: 153, y: -387 });
     expect(toggles.haptic.button.visible).toBe(false);
     expect(restart.position).toMatchObject({ x: 0.5, y: 303.5 });
     expect(home.position).toMatchObject({ x: 0.5, y: 535.5 });
