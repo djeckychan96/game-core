@@ -131,8 +131,9 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
     // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles)
     expect(ROLES.sort()).toEqual([...new Set(READY_UI_STYLE_1.covers.flatMap((view) => requiredSkinRoles(READY_UI_STYLE_1, view)))].sort());
-    expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 1090 });
-    expect(READY_UI_STYLE_1.windows.settings.gameplay.window).toEqual({ width: 960, height: 1576 });
+    // one dense column (the language row included; the rows a show does not draw close up)
+    expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 907 });
+    expect(READY_UI_STYLE_1.windows.settings.gameplay.window).toEqual({ width: 960, height: 1371 });
   });
 
   it('owns the files and caps: the pre-style kit names (READY_UI_OPTIONAL_ASSET_FILES / READY_UI_NINE_SLICES) are the same values', () => {
@@ -239,11 +240,11 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     expect(toggles.sound.button.background.texture).toBe(roles.settingsSound);
     expect(toggles.music.button.background.texture).toBe(roles.settingsMusic);
     expect(toggles.haptic.button.background.texture).toBe(roles.settingsHaptic);
-    // theme_light_4 22:28430: the toggle row centred in the body (buttons at 478 of the 1090 window)
-    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: 43 });
-    expect(toggles.music.button.position).toMatchObject({ x: 0, y: 43 });
-    expect(toggles.haptic.button.position).toMatchObject({ x: 306, y: 43 });
-    expect(field<object>(view, 'activeLayout')).toBe(READY_UI_STYLE_1.windows.settings.map);
+    // the dense column: the toggles under the header (buttons at 291), no language row → the 660-unit window
+    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: 71 });
+    expect(toggles.music.button.position).toMatchObject({ x: 0, y: 71 });
+    expect(toggles.haptic.button.position).toMatchObject({ x: 306, y: 71 });
+    expect(field<{ window: object }>(view, 'activeLayout').window).toEqual({ width: 960, height: 660 });
     expect(field<Text>(view, 'version').text).toBe('VERSION 1.2.3');
     // theme_light_4: SETTINGS at 100, the version plain #716dd0 (no stroke / shadow), the shell's own violet ×
     expect(field<Text>(view, 'title').style.fontSize).toBe(100);
@@ -277,13 +278,13 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     const toggles = field<Record<'sound' | 'music' | 'haptic', { button: UiButton; off: Sprite; label: Text }>>(view, 'toggles');
     const restart = field<UiButton>(view, 'restartButton');
     const home = field<UiButton>(view, 'homeButton');
-    expect(field<NineSliceSprite>(view, 'surface').height).toBe(1588); // 1576 logical + 4 top / 8 bottom bleed
+    expect(field<NineSliceSprite>(view, 'surface').height).toBe(1151); // 1371 − the language row 232 + 4 top / 8 bottom bleed
     // haptic is never drawn in-level: the pair is centred (it used to keep the empty third slot at x 306)
-    expect(toggles.sound.button.position).toMatchObject({ x: -153, y: -200 });
-    expect(toggles.music.button.position).toMatchObject({ x: 153, y: -200 });
+    expect(toggles.sound.button.position).toMatchObject({ x: -153, y: -168.5 });
+    expect(toggles.music.button.position).toMatchObject({ x: 153, y: -168.5 });
     expect(toggles.haptic.button.visible).toBe(false);
-    expect(restart.position).toMatchObject({ x: 0.5, y: 303.5 });
-    expect(home.position).toMatchObject({ x: 0.5, y: 535.5 });
+    expect(restart.position).toMatchObject({ x: 0.5, y: 85 });
+    expect(home.position).toMatchObject({ x: 0.5, y: 317 });
     expect(restart.background.texture).toBe(roles.settingsBtnRestart);
     expect(home.background.texture).toBe(roles.settingsBtnHome);
     tap(restart, kit);

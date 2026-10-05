@@ -10,8 +10,8 @@ snapshot is frozen for this pass. Style mapping: the light row is drawn with the
 |---|---|---|
 | `popart_restart` 22:28984 / `popart_leave` 22:29021 | `windows.confirm` | the Style 2 popup now (theme_light_3 drew the Style 1 window): 960 × 980, blur, `icon_heart_2` + runtime "-1", #3f598c body, `btn_green` 528.7 × 214 |
 | `screen_refill_hearts` 22:28924 | `windows.lives` | popup 1050 → 756, buttons at its bottom, the tv / heart "+1" on the rewarded button's corners |
-| its `offer` 22:28956, `popart_restart` `offer` 22:28986 | `windows.offer` + `offerPanel` / `offerBadge` / `offerLivesArt` / `offerCoinArt` | new: the orange OFFER 100 under the window, 14 right of it; no × (hidden in Figma) |
-| `настройки` 22:28904 / 22:28915 | `windows.settings` | unchanged boxes; the new Language row is not drawn (SettingsWindowView has no language control) |
+| its `offer` 22:28956, `popart_restart` `offer` 22:28986 | `windows.offer` + `offerPanel` / `offerBadge` / `offerLivesArt` / `offerCoinArt` | new: the orange OFFER 100 under the window, on its horizontal centre (Figma's 14-unit right shift is not reproduced); no × (hidden in Figma) |
+| `настройки` 22:28904 / 22:28915 | `windows.settings` | the theme_light_3 boxes plus the Language row `btn_main` 22:28907 / 22:28918 (`btn_blue` 822 × 200 + `icon_language` 22:27117 + the language name, hugging); rows not drawn close up (in-level 1290 → 1056, map 822 → 588) |
 | `screen_victory` 22:29110, `defeat_screen` 22:29036 | — | Result stays uncovered: 22:29036 is a NO STARS continue offer (star hero, sample REFILL NOW / x2 buttons), not a Result FAIL, and a style covers both outcomes or neither |
 
 Adaptations (not from Figma): a window alone is centred (Figma draws Exit 36 above the centre and the window + OFFER
@@ -20,6 +20,10 @@ the reward "1" box is 100 wide around its centre so the runtime "+1" fits. The b
 «Продолжить с +3★») and the boosters are game content.
 
 ## Files
+
+The language row's button (`png/btn-main-blue-clean-22-28918.png`) is Figma's render of `btn_main` with the columns of
+its globe + text (196–629) replaced by the clean column 120 (`btn_blue` is a vertical gradient: every other column
+matches it within 3/255); the globe is `icon_language`'s SVG. Figma has no RU / EN picker screen: the row is the control.
 
 Reused (proved by pixel comparison of the raw image fills, mean |Δ| ≤ 0.6): `style2/icon_coin.webp` = `icon_coin_1`
 (the OFFER coin hero and its price coin), `style2/icon_heart.webp` = `icon_heart_1`, `style2/icon_tv.webp`; the popup,

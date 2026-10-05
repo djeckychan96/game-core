@@ -90,6 +90,9 @@ export const READY_UI_STYLE_2 = {
     settingsBtnHome: { file: 'style2/settings_btn_home.webp' },
     settingsIconRestart: { file: 'style2/settings_icon_restart.webp' },
     settingsIconHome: { file: 'style2/settings_icon_home.webp' },
+    /** theme_light_4 `btn_main` 22:28907 / 22:28918: `btn_blue` at 822 × 200 (no icon, no text) and `icon_language` 22:27117. */
+    settingsBtnLanguage: { file: 'style2/settings_btn_language.webp' },
+    settingsIconLanguage: { file: 'style2/settings_icon_language.webp' },
     /**
      * Refill Hearts 8:22838: the `popup` instance is the Settings popup at 960 × 1050 (its header stretches with the
      * width) — the same file and caps; its `btn_close` is the Settings close.
@@ -199,12 +202,12 @@ export const READY_UI_STYLE_2 = {
     },
     /**
      * OFFER theme_light_4 (22:28956 under Lives, 22:28986 under Restart): the orange popup (960 × 600, its header 49
-     * above) 100 under the window and 14 right of it (Figma: x 74 under a window at 60, in both screens). Panel-local
-     * boxes. No × (the artist hides `btn_close`). The bubble under it (`bubble_1`, «Продолжить с +3★») is game copy, not
+     * above) 100 under the window, centred under it like every OFFER (Figma draws it 14 right, at x 74 under a window at
+     * 60 — not reproduced: window and offer share one centre). Panel-local boxes. No × (the artist hides `btn_close`). The bubble under it (`bubble_1`, «Продолжить с +3★») is game copy, not
      * Core's. Calibri Bold → Carlito: title / price / "30%" white, the counts and "35d" #3f598c, "2000" white + #963304 4.
      */
     offer: {
-      panel: { width: 960, height: 600, gap: 100, x: 14 },
+      panel: { width: 960, height: 600, gap: 100 },
       title: { x: 166, y: -2, width: 628, height: 79, fontSize: 65 },
       close: null,
       /** `icon_sticker_1` 200 at 46, 1292 */
@@ -231,15 +234,17 @@ export const READY_UI_STYLE_2 = {
       coin: { width: 84, height: 84, y: 58.47, art: 'offerCoinArt' }
     },
     /**
-     * Settings 8:17493: boxes local to the popup box (40, 647 of the frame). The approved screen is the in-level one
-     * (Restart level / Return home): `gameplay`. It has no haptic toggle. `map` (no game buttons) is not drawn in
-     * Figma: the same window without the two action rows — the version moves up into their place (482) and the window
-     * loses their 457 units. Text is Calibri Bold → Carlito, the labels and version #3f598c, the title and actions white.
+     * Settings 8:17493 / theme_light_4 22:28904 (in-level) / 22:28915 (map): boxes local to the popup box (40, 513 /
+     * 40, 714 of the frame). No haptic toggle. theme_light_4 adds the Language row (`btn_main`: `btn_blue` + `icon_language`
+     * + the language's name, Calibri 70, hugging like Restart / Return home) under the action rows; the map window is
+     * Sound / Music + Language. Rows a show does not draw close up: without the language the in-level window is 1056
+     * (theme_light_3's 1050 + Figma's new 29-unit version gap) and the map 588. Text is Calibri Bold → Carlito, the labels
+     * and version #3f598c, the title and actions white.
      */
     settings: {
       offButtons: true,
       map: {
-        window: { width: 1000, height: 593 },
+        window: { width: 1000, height: 822 },
         title: { x: 166, y: -18, width: 668, height: 110, fontSize: 90 },
         close: { x: 887, y: -37, width: 153, height: 158 },
         sound: {
@@ -253,10 +258,17 @@ export const READY_UI_STYLE_2 = {
           off: { x: 18, y: 15, width: 190, height: 190 }
         },
         haptic: null,
-        version: { x: 89, y: 482, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
+        /** `btn_main` 22:28918 at 129, 1196: icon 158 + 10 + the text, centred (sample "Language" 266 wide) */
+        language: {
+          button: { x: 89, y: 482, width: 822, height: 200 },
+          label: { x: 362, y: 57.5, width: 266, height: 85, fontSize: 70 },
+          icon: { x: 194, y: 21, width: 158, height: 158 },
+          hug: { maxWidth: 554 }
+        },
+        version: { x: 89, y: 711, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
       },
       gameplay: {
-        window: { width: 1000, height: 1050 },
+        window: { width: 1000, height: 1290 },
         title: { x: 166, y: -18, width: 668, height: 110, fontSize: 90 },
         close: { x: 887, y: -37, width: 153, height: 158 },
         sound: {
@@ -284,7 +296,14 @@ export const READY_UI_STYLE_2 = {
           icon: { x: 132.5, y: 21, width: 166, height: 158 },
           hug: { maxWidth: 554 }
         },
-        version: { x: 89, y: 939, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
+        /** `btn_main` 22:28907 at 129, 1463 */
+        language: {
+          button: { x: 89, y: 950, width: 822, height: 200 },
+          label: { x: 362, y: 57.5, width: 266, height: 85, fontSize: 70 },
+          icon: { x: 194, y: 21, width: 158, height: 158 },
+          hug: { maxWidth: 554 }
+        },
+        version: { x: 89, y: 1179, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
       }
     }
   },

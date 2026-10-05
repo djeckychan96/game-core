@@ -47,7 +47,7 @@ export type { ReadyUiOffer, ReadyUiOfferArt, ReadyUiOfferItem } from './OfferPan
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
 export { SettingsWindowView } from './SettingsWindowView';
-export type { SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
+export type { SettingsLanguage, SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
 export { NoAdsWindowView } from './NoAdsWindowView';
 export type { NoAdsWindowParams, NoAdsWindowViewOptions } from './NoAdsWindowView';
 export { StarterPackWindowView } from './StarterPackWindowView';

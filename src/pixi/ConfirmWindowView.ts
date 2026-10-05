@@ -278,7 +278,7 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
       else if (!show && panel.parent) panel.parent.removeChild(panel);
       if (show && offer && L) {
         panel.set(offer);
-        panel.position.set(px(L, panel.layout.panel.x ?? 0), py(L, L.window.height + panel.layout.panel.gap));
+        panel.position.set(px(L, (L.window.width - panel.layout.panel.width) / 2), py(L, L.window.height + panel.layout.panel.gap));
       }
     }
     if (L && this.skin && this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / this.skin.frame.height;
@@ -300,9 +300,9 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
     if (!L) return super.panelBounds();
     const offer = this.offerPanel?.visible ? this.offerPanel.layout.panel : null;
     if (!offer) return new Rectangle(px(L, 0), py(L, 0), L.window.width, L.window.height);
-    const left = Math.min(0, offer.x ?? 0);
-    const right = Math.max(L.window.width, (offer.x ?? 0) + offer.width);
-    return new Rectangle(px(L, left), py(L, 0), right - left, L.window.height + offer.gap + offer.height);
+    // the panel shares the window's horizontal centre
+    const width = Math.max(L.window.width, offer.width);
+    return new Rectangle(px(L, (L.window.width - width) / 2), py(L, 0), width, L.window.height + offer.gap + offer.height);
   }
 
   /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */

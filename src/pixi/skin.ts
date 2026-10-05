@@ -26,7 +26,7 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
   ],
   settings: [
     'settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart',
-    'settingsSoundOff', 'settingsMusicOff', 'settingsHapticOff', 'settingsIconHome'
+    'settingsSoundOff', 'settingsMusicOff', 'settingsHapticOff', 'settingsIconHome', 'settingsBtnLanguage', 'settingsIconLanguage'
   ],
   result: [
     'resultGlowWin', 'resultGlowFail', 'rewardCoin', 'lifeLostArt', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'buttonExit',
@@ -180,8 +180,8 @@ export interface ReadyUiSkinOfferItemLayout {
  * alone and centred as before.
  */
 export interface ReadyUiSkinOfferLayout {
-  /** The panel box; `gap` = its distance under the window box above it, `x` = its left edge from the window's (default 0). */
-  readonly panel: { readonly width: number; readonly height: number; readonly gap: number; readonly x?: number };
+  /** The panel box, horizontally centred under the window box; `gap` = its distance under that box. */
+  readonly panel: { readonly width: number; readonly height: number; readonly gap: number };
   readonly title: ReadyUiSkinLivesTextBox;
   /** The panel's own × (closes the window like the window's ×); `null` = none. */
   readonly close: ReadyUiSkinBox | null;
@@ -237,7 +237,11 @@ export interface ReadyUiSkinSettingsActionLayout {
   readonly hug?: { readonly maxWidth: number };
 }
 
-/** The Settings surface shared by the map and gameplay layouts. Every box is window-local. */
+/**
+ * The Settings surface shared by the map and gameplay layouts. Every box is window-local. A layout lays out every row it
+ * has; the rows a show does not draw (an absent continuation, no languages) close up — the rest moves up with the window
+ * bottom (with no row left, everything under them moves up to the toggles by their gap).
+ */
 export interface ReadyUiSkinSettingsBaseLayout {
   readonly window: { readonly width: number; readonly height: number };
   readonly title: ReadyUiSkinSettingsTextBox;
@@ -246,6 +250,11 @@ export interface ReadyUiSkinSettingsBaseLayout {
   readonly music: ReadyUiSkinSettingsToggleLayout;
   /** `null` = this style has no haptic toggle (no `settingsHaptic` art; asking SettingsWindowView for one throws). */
   readonly haptic: ReadyUiSkinSettingsToggleLayout | null;
+  /**
+   * The language row (`settingsBtnLanguage`, a 9-slice when its asset has caps, + `settingsIconLanguage` when `icon`):
+   * its label is the current language's name. Absent = the style draws no language row (the option is ignored).
+   */
+  readonly language?: ReadyUiSkinSettingsActionLayout;
   readonly version: ReadyUiSkinSettingsTextBox;
 }
 
@@ -529,6 +538,8 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     roles.push('settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart');
     if (layouts?.offButtons) roles.push('settingsSoundOff', 'settingsMusicOff', ...(haptic ? ['settingsHapticOff' as const] : []));
     if (layouts?.gameplay.home.icon) roles.push('settingsIconHome');
+    if (layouts?.map.language || layouts?.gameplay.language) roles.push('settingsBtnLanguage');
+    if (layouts?.map.language?.icon || layouts?.gameplay.language?.icon) roles.push('settingsIconLanguage');
     return roles;
   }
   return READY_UI_SKIN_VIEW_ROLES[view];

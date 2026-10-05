@@ -269,8 +269,8 @@ describe('Lives without REFILL and without the rewarded button: the button row c
   }
 });
 
-describe('theme_light_4 OFFER panel (Style 2): the orange popup 100 under the window, 14 right of it', () => {
-  it('draws the style data: offset panel, its own caption look per hero, the coin art as the price coin, no ×', () => {
+describe('theme_light_4 OFFER panel (Style 2): the orange popup 100 under the window, on its horizontal centre', () => {
+  it('draws the style data: the panel centred under the window, its own caption look per hero, the coin art as the price coin, no ×', () => {
     const kit = createKit();
     const art = roles(READY_UI_STYLE_2);
     const log: string[] = [];
@@ -282,8 +282,10 @@ describe('theme_light_4 OFFER panel (Style 2): the orange popup 100 under the wi
     view.show({ ...LIVES, offer: OFFER });
     advance(kit.core, 400);
     const offer = offerOf(view) as OfferPanel;
-    expect([offer.x, offer.y]).toEqual([74 - 540, 794 + 756 + 100 - 1172]);
-    expect(panelOf(view).hitArea).toMatchObject({ x: -480, width: 974, height: 756 + 100 + 600 });
+    // one horizontal centre for the window and its OFFER (Figma's 14-unit shift is not reproduced)
+    expect([offer.x, offer.y]).toEqual([60 - 540, 794 + 756 + 100 - 1172]);
+    expect(offer.x + 960 / 2).toBe(0); // the window's centre (60 + 480 = the frame centre)
+    expect(panelOf(view).hitArea).toMatchObject({ x: -480, width: 960, height: 756 + 100 + 600 });
     expect(offer.closeButton).toBeNull();
     expect(field<Sprite>(offer, 'priceCoin').texture).toBe(art.offerCoinArt);
     const caption = field<Text>(offer, 'heroLabel');
@@ -302,4 +304,32 @@ describe('theme_light_4 OFFER panel (Style 2): the orange popup 100 under the wi
     view.destroy();
     expect(kit.ui.getStats().buttons).toBe(0);
   });
+});
+
+describe('OFFER alignment: the window and its OFFER share one horizontal centre (Lives, Confirm; Style 1, Style 2)', () => {
+  for (const skin of [S1, READY_UI_STYLE_2]) {
+    it(`${skin.id}: the panel centre is the window centre; the composition is centred on the screen at every size`, () => {
+      for (const [w, h] of [[390, 844], [320, 568], [1280, 800]] as const) {
+        const kit = createKit();
+        const lives = new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, roles(skin), skin), theme: { skin }, id: 'lives', onRefill: () => {}, onWatchAd: () => {}, onOffer: () => {} });
+        lives.resize(w, h);
+        lives.show({ ...LIVES, offer: OFFER });
+        advance(kit.core, 400);
+        const W = skin.windows.lives.window;
+        const livesOffer = offerOf(lives) as OfferPanel;
+        expect(livesOffer.x + skin.windows.offer.panel.width / 2, `${skin.id} lives ${w}`).toBeCloseTo(W.x + W.width / 2 - skin.frame.width / 2, 9);
+        // on screen: the panel's centre x is the screen centre
+        expect(panelOf(lives).x, `${skin.id} lives ${w}`).toBeCloseTo(w / 2, 6);
+        lives.destroy();
+        const confirmView = new ConfirmWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, roles(skin), skin), theme: { skin }, id: 'restart', action: 'restart', onConfirm: () => {}, onOffer: () => {} });
+        confirmView.resize(w, h);
+        confirmView.show({ offer: { ...OFFER, icon: 'offerCoinArt', iconLabel: '2000' } });
+        advance(kit.core, 400);
+        const confirmOffer = offerOf(confirmView) as OfferPanel;
+        expect(confirmOffer.x + skin.windows.offer.panel.width / 2, `${skin.id} confirm ${w}`).toBeCloseTo(0, 9); // the confirm window's centre
+        expect(panelOf(confirmView).x, `${skin.id} confirm ${w}`).toBeCloseTo(w / 2, 6);
+        confirmView.destroy();
+      }
+    });
+  }
 });

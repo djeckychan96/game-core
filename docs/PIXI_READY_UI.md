@@ -250,7 +250,10 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   optional in-level HOME / RESTART; `onToggle(setting, enabled)` fires in place, home/restart
   are continuations. `setSettings`, `currentSettings`. Style 1 keeps this one generic View and
   selects its typed `map` / `gameplay` layout from `gameButtons`; these are layout/state variants,
-  not separate View classes.
+  not separate View classes. Styled: an optional language row — `languages: [{ id, label }]` (two or more) +
+  `onLanguage(locale)`, the current one by `show({ …, locale })` / `currentLocale`; the row shows the current
+  language's name and a tap moves to the next (wrapping) in place, like a toggle; applying the locale is the host's.
+  Every row a show does not draw (HOME / RESTART without its continuation, no languages) closes up.
 - **NoAdsWindowView** — 975 × 1355 blue panel with the crossed clapperboard, `NO` / `ADS`
   rotated −32° over the corner, description band at y 248, green price button at y 517;
   `onBuy(params)` continuation, no purchase logic inside.
@@ -274,8 +277,8 @@ the hero is the style's `'offerLivesArt'` (unlimited lives) / `'offerCoinArt'` o
 host icons with their counts (boosters are game content), `price` is a coin price on the buy button, `badge` the corner
 text (`x3`, `-60%`; none = no badge). `LivesWindowView.show({ …, offer })` / `ConfirmWindowView.show({ offer })` with
 `onOffer` set; the buy tap closes the window and runs `onOffer` (the purchase is the host's), the panel's × (when the
-style draws one) closes the window like the window's ×. The window and the panel are centred together; a show without
-an offer builds nothing and keeps the window alone. The donor look and the pre-style `include` path never draw it.
+style draws one) closes the window like the window's ×. The panel sits on the window's horizontal centre, and the window
+and the panel are centred together; a show without an offer builds nothing and keeps the window alone. The donor look and the pre-style `include` path never draw it.
 
 ```ts
 lives.show({ lives, maxLives, timerText, refillPrice: 900,
@@ -378,7 +381,7 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | --- | --- | --- |
 | ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit); theme_light_4 Exit 22:28232 unchanged, Restart 22:28101 = the same window + the OFFER panel (docs/figma/style1-theme-light-4) | covered — theme_light_4 22:28984 Restart / 22:29021 Exit: the Style 2 popup (the Lives / Settings files), blur, `icon_heart_2` + runtime "-1", Carlito; one view, `action: 'restart' \| 'exit'` picks the copy; the orange OFFER under Restart (docs/figma/style2-theme-light-4) |
 | LivesWindowView | covered — theme_light_4 22:27562 on the `screen/lives` art: the 990-unit window (REFILL NOW / GET +1 71 units higher) + the optional OFFER panel (docs/figma/style1-theme-light-4) | covered — theme_light_4 22:28924: the Settings popup at 756, blur, heart with the runtime count, green REFILL + price coin, orange GET with the tv and the heart "+1" on its corners, no highlight (`adHighlight: null`); the orange OFFER (docs/figma/style2-theme-light-4) |
-| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts; theme_light_4 22:28430: toggle row centred in the body, SETTINGS 100, plain version, the violet shell × | covered — `theme_light_3` 8:17493 (theme_light_4 22:28904 / 22:28915: the same boxes): Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, no HAPTIC (`haptic: null`; asking for it throws); theme_light_4's Language row is not drawn (no control in the view) (docs/figma/style2-settings) |
+| SettingsWindowView | covered — SOUND / MUSIC / optional HAPTIC, close, version, optional HOME / RESTART and the language row (Style 1's blue `Btn`, no Figma node) as one dense column (`map` / `gameplay`); theme_light_4 22:28430 type: SETTINGS 100, plain version, the violet shell × | covered — theme_light_4 22:28904 (in-level) / 22:28915 (map): Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, the Language row (`btn_main` + globe), no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings, docs/figma/style2-theme-light-4) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |
@@ -548,8 +551,8 @@ SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:gallery # screenshots of ev
 
 `examples/pixi-showcase/ui-gallery.html` shows every public Ready UI view of one style over that style's map screen:
 STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching reloads the page), a screen picker (HUD +
-LevelMap, Settings map / in level, Confirm Restart / Restart + OFFER / Exit, Lives minimal / REFILL + GET / full with
-the OFFER, Result WIN / FAIL), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
+LevelMap, Settings compact / with language / in level with and without language, Confirm Restart / Restart + OFFER /
+Exit, Lives minimal / REFILL + GET / full with the OFFER, Result WIN / FAIL, the coin Shop), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
 donor look (Style 2 Result). Query: `?style=1|2&screen=<id>&locale=ru&ui=0` (`ui=0` hides the controls). The OFFER's
 booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
 `SCREENS`, `VIEWPORTS`, `LOCALE`) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png` and fails on a

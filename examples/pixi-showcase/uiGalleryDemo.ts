@@ -19,6 +19,7 @@ import {
   READY_UI_STYLE_2,
   ResultWindowView,
   SettingsWindowView,
+  ShopWindowView,
   formatTimer,
   loadReadyUiAssets,
   type LevelMapLevel,
@@ -27,12 +28,15 @@ import {
   type ReadyUiSkin,
   type ReadyUiThemeOverrides
 } from 'game-core/pixi';
+import { DEMO_SHOP_ITEMS } from './demoData';
 import { createShowcaseLocalization } from './localizationDemo';
 
 const SCREENS = [
   { id: 'map', label: 'HUD + LevelMap' },
-  { id: 'settings-map', label: 'Settings (map)' },
-  { id: 'settings-level', label: 'Settings (in level)' },
+  { id: 'settings-map', label: 'Settings — compact, no language' },
+  { id: 'settings-map-lang', label: 'Settings — with language' },
+  { id: 'settings-level', label: 'Settings in level — no language' },
+  { id: 'settings-level-lang', label: 'Settings in level — with language' },
   { id: 'restart', label: 'Confirm Restart' },
   { id: 'restart-offer', label: 'Confirm Restart + OFFER' },
   { id: 'exit', label: 'Confirm Exit' },
@@ -40,7 +44,8 @@ const SCREENS = [
   { id: 'lives', label: 'Lives — REFILL + GET' },
   { id: 'lives-full', label: 'Lives — full (REFILL + GET + OFFER)' },
   { id: 'win', label: 'Result WIN' },
-  { id: 'fail', label: 'Result FAIL' }
+  { id: 'fail', label: 'Result FAIL' },
+  { id: 'shop', label: 'Shop / bank (coin packs)' }
 ] as const;
 type ScreenId = (typeof SCREENS)[number]['id'];
 
@@ -150,15 +155,30 @@ let open: () => void = () => {};
 const onDismiss = (reason: string): void => log(`dismiss:${reason}`);
 switch (screenId) {
   case 'settings-map':
-  case 'settings-level': {
-    const inLevel = screenId === 'settings-level';
+  case 'settings-map-lang':
+  case 'settings-level':
+  case 'settings-level-lang': {
+    const inLevel = screenId.startsWith('settings-level');
+    const withLanguage = screenId.endsWith('-lang');
     const settings = new SettingsWindowView({
       ...base, id: 'settings', haptic: styleNo === 1, onDismiss,
       onToggle: (setting, enabled) => log(`toggle:${setting}:${enabled}`),
-      ...(inLevel ? { onHome: () => log('settings:home'), onRestart: () => log('settings:restart') } : {})
+      ...(inLevel ? { onHome: () => log('settings:home'), onRestart: () => log('settings:restart') } : {}),
+      // the host's locales; applying one (catalogs, rebuilt views) is the host's — here the page reloads in it
+      ...(withLanguage ? {
+        languages: [{ id: 'en', label: 'English' }, { id: 'ru', label: 'Русский' }],
+        onLanguage: (locale: string) => log(`language:${locale}`)
+      } : {})
     });
-    open = () => settings.show({ sound: true, music: false, haptic: true, version: 'VERSION 1.0.0 (1)', gameButtons: inLevel });
+    open = () => settings.show({ sound: true, music: false, haptic: true, version: 'VERSION 1.0.0 (1)', gameButtons: inLevel, locale: i18n.locale });
     view = settings as unknown as ModalWindow<never>;
+    break;
+  }
+  case 'shop': {
+    // Core's coin shop (the bank): ShopWindowView — no style covers it yet, so both styles show its donor look
+    const shop = new ShopWindowView({ ...base, id: 'shop', onDismiss, onBuy: (item) => log(`buy:${item.id}`) });
+    open = () => shop.show({ items: DEMO_SHOP_ITEMS });
+    view = shop as unknown as ModalWindow<never>;
     break;
   }
   case 'restart':
@@ -209,7 +229,8 @@ if (view) app.stage.addChild(view);
 
 /** What this style draws for the screen: its own art, or the donor look where the style has no design. */
 function coverage(): string {
-  const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId === 'win' || screenId === 'fail' ? 'result' : screenId === 'map' ? 'levelMap' : 'confirm';
+  const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId === 'win' || screenId === 'fail' ? 'result'
+    : screenId === 'map' ? 'levelMap' : screenId === 'shop' ? 'shop' : 'confirm';
   const covered = skin.covers.includes(window as never);
   return `Style ${styleNo} · ${SCREENS.find((s) => s.id === screenId)?.label}: ${covered ? 'style art' : 'NOT in this style — donor look'}`;
 }

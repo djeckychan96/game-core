@@ -357,9 +357,9 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const height = w.height - this.collapse;
     const offer = this.offerPanel?.visible ? this.offerPanel.layout.panel : null;
     if (!offer) return new Rectangle(X(look, w.x), Y(look, w.y), w.width, height);
-    const left = Math.min(0, offer.x ?? 0);
-    const right = Math.max(w.width, (offer.x ?? 0) + offer.width);
-    return new Rectangle(X(look, w.x + left), Y(look, w.y), right - left, height + offer.gap + offer.height);
+    // the panel shares the window's horizontal centre
+    const width = Math.max(w.width, offer.width);
+    return new Rectangle(X(look, w.x + (w.width - width) / 2), Y(look, w.y), width, height + offer.gap + offer.height);
   }
 
   /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */
@@ -408,7 +408,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const w = look.layout.window;
     if (show && panel && offer) {
       panel.set(offer);
-      panel.position.set(X(look, w.x + (panel.layout.panel.x ?? 0)), Y(look, w.y + w.height - this.collapse + panel.layout.panel.gap));
+      panel.position.set(X(look, w.x + (w.width - panel.layout.panel.width) / 2), Y(look, w.y + w.height - this.collapse + panel.layout.panel.gap));
       this.placeClose();
     }
     if (this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / look.skin.frame.height;

@@ -11,7 +11,7 @@ for Style 1; the light row above it (y 2583) is Style 2.
 | its `offer` 22:28069, `попап рестарт` 22:28101 `offer` 22:28122 | `windows.offer` + `offerPanel` / `offerBadge` / `offerLivesArt` / `offerCoinArt` | new: the OFFER panel under Lives / Confirm |
 | `попап выйти` 22:28232 | `windows.confirm` | unchanged (same boxes) |
 | `попап рестарт` 22:28101 top | `windows.confirm` (`action: 'restart'`) | unchanged window; the OFFER under it |
-| `настройки гл экран` 22:28430 | `windows.settings` | toggle row 291 → 478 (labels 204 → 391), SETTINGS 100, version plain #716dd0, × = the shell's violet × |
+| `настройки гл экран` 22:28430 | `windows.settings` | SETTINGS 100, version plain #716dd0, × = the shell's violet ×; its centred toggle row is **not** kept: after the manual test (empty band) map and in-level are one dense column — toggles 204 / 291, rows 40 below and 25 apart, the version 49 under the last row; the language row (no Style 1 node) is the same 599 × 207 row on Style 1's blue `Btn` (`button/button_blue@2x`, the toggles' variant of the green / orange surface), text only |
 | `победа` 22:28251 | `windows.result.win` | unchanged boxes; Figma's rewarded x2 button is still not Core's (RETRY stays) |
 | `попап рестарт` 22:28152 (RESPAWN / GET 3 STARS) | — | rejected: a draft (placeholder «Нужна иконка сломанной звезды») |
 
@@ -20,7 +20,8 @@ the booster icons (game content a host passes as `items`).
 
 ## Files
 
-`svg/` holds Figma's SVG exports of the leaves; `figma.json` `assets` composes them (the badge = the two `Union` layers
+`svg/` holds Figma's SVG exports of the leaves (`button-surface-blue.svg` = docs/figma/lives' orange `Btn` SVG with the
+blue variant's fills #1564B9 / #2A90FF); `figma.json` `assets` composes them (the badge = the two `Union` layers
 of `icon_sale` 22:28091 turned −30° in `svg/offer-badge.svg`; the ∞ heart = Group 170 + Group 378):
 
 ```sh

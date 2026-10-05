@@ -471,7 +471,7 @@ describe('LevelMapScreen — the minimal composition', () => {
 });
 
 describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView', () => {
-  const STYLE_2_SETTINGS_ROLES = ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart', 'settingsSoundOff', 'settingsMusicOff', 'settingsIconHome'];
+  const STYLE_2_SETTINGS_ROLES = ['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart', 'settingsSoundOff', 'settingsMusicOff', 'settingsIconHome', 'settingsBtnLanguage', 'settingsIconLanguage'];
   type Toggle = { button: UiButton; off: Sprite; label: Text };
 
   function settingsView(kit: TestKit, extra: Partial<SettingsWindowViewOptions> = {}, log: string[] = [], textures = styled(kit)): SettingsWindowView {
@@ -492,7 +492,7 @@ describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView
   it('is part of the Style 2 package: covered, its roles follow the layout (no haptic art), strict files under style2/, Style 1 roles unchanged', () => {
     expect(READY_UI_STYLE_2.covers).toContain('settings');
     expect(requiredSkinRoles(READY_UI_STYLE_2, 'settings')).toEqual(STYLE_2_SETTINGS_ROLES);
-    expect(requiredSkinRoles(READY_UI_STYLE_1, 'settings')).toEqual(['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart']);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'settings')).toEqual(['settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart', 'settingsBtnLanguage']);
     expect(READY_UI_STYLE_2.assets).not.toHaveProperty('settingsHaptic');
     expect(READY_UI_STYLE_2.windows.settings.map.haptic).toBeNull();
     expect(READY_UI_STYLE_2.windows.settings.gameplay.haptic).toBeNull();
@@ -576,20 +576,21 @@ describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView
     view.destroy();
   });
 
-  it('lays out 8:17493: the 1000 × 1050 popup with its header bleed, Figma boxes, the hugging icon + label rows; the map variant drops the action rows', () => {
+  it('lays out 22:28904 without its Language row: the popup closes up to 1056 with its header bleed, Figma boxes, the hugging icon + label rows; the map variant drops the action rows', () => {
     const kit = createKit();
     const view = show(kit, settingsView(kit, { restartLabel: 'Restart level', homeLabel: 'Return home' }));
     const surface = field<NineSliceSprite>(view, 'surface');
-    // the 1000 × 1050 box centred on the panel origin, the header 49 above it
-    expect([surface.width, surface.height]).toEqual([1000, 1099]);
-    expect(surface.anchor.y * surface.height).toBeCloseTo(49 + 525, 6);
-    expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 887 + 76.5 - 500, y: -37 + 79 - 525 });
+    // no languages: the 1290 popup without its Language row (1056) centred on the panel origin, the header 49 above it
+    expect([surface.width, surface.height]).toEqual([1000, 1105]);
+    expect(surface.anchor.y * surface.height).toBeCloseTo(49 + 528, 6);
+    expect(field<UiButton>(view, 'closeButton').position).toMatchObject({ x: 887 + 76.5 - 500, y: -37 + 79 - 528 });
     const { sound, music } = toggles(view);
-    expect(sound.button.position).toMatchObject({ x: 237 + 114 - 500, y: 220 + 114 - 525 });
-    expect(music.button.position).toMatchObject({ x: 534 + 114 - 500, y: 220 + 114 - 525 });
+    expect(sound.button.position).toMatchObject({ x: 237 + 114 - 500, y: 220 + 114 - 528 });
+    expect(music.button.position).toMatchObject({ x: 534 + 114 - 500, y: 220 + 114 - 528 });
     const restart = field<UiButton>(view, 'restartButton');
-    expect(restart.position).toMatchObject({ x: 0, y: 482 + 100 - 525 });
-    expect(field<UiButton>(view, 'homeButton').position).toMatchObject({ x: 0, y: 716 + 100 - 525 });
+    expect(restart.position).toMatchObject({ x: 0, y: 482 + 100 - 528 });
+    expect(field<UiButton>(view, 'homeButton').position).toMatchObject({ x: 0, y: 716 + 100 - 528 });
+    expect(field<{ button: UiButton }>(view, 'languageRow').button.visible).toBe(false);
     // text: Carlito, no stroke; labels and version #3f598c, title / actions white
     const title = field<Text>(view, 'title');
     expect(title.style.fontFamily).toBe('Carlito');
@@ -609,15 +610,15 @@ describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView
     const left = shortIcon.x - 79;
     const right = shortLabel.x + shortLabel.width;
     expect(left + right).toBeCloseTo(0, 0);
-    // map: no action rows, the version where Restart was, a 593-unit window (the same header bleed)
+    // map without languages: no row, the version 29 under the toggles (Figma's version gap), a 588-unit window
     short.destroy();
     const map = show(kit, settingsView(kit), { gameButtons: false });
     const mapSurface = field<NineSliceSprite>(map, 'surface');
-    expect([mapSurface.width, mapSurface.height]).toEqual([1000, 642]);
-    expect(mapSurface.anchor.y * mapSurface.height).toBeCloseTo(49 + 296.5, 6);
+    expect([mapSurface.width, mapSurface.height]).toEqual([1000, 637]);
+    expect(mapSurface.anchor.y * mapSurface.height).toBeCloseTo(49 + 294, 6);
     expect(field<UiButton>(map, 'restartButton').visible).toBe(false);
     expect(field<UiButton>(map, 'homeButton').visible).toBe(false);
-    expect(placedTop(field<Text>(map, 'version'))).toBeGreaterThan(482 - 296.5);
+    expect(placedTop(field<Text>(map, 'version'))).toBeGreaterThan(448 - 294);
     map.destroy();
   });
 
@@ -655,8 +656,8 @@ describe('Style 2 — Settings (8:17493) through the existing SettingsWindowView
       expect(requested.filter((src) => src.includes('style2/settings_'))).toEqual([]);
       requested.length = 0;
       const textures = await loadReadyUiAssets({ baseUrl: './ui/', skin: READY_UI_STYLE_2 });
-      // 11 Settings files; the popup and the close are also the Lives window's (one file, two roles)
-      expect(new Set(requested.filter((src) => src.includes('style2/settings_'))).size).toBe(11);
+      // 13 Settings files; the popup and the close are also the Lives window's (one file, two roles)
+      expect(new Set(requested.filter((src) => src.includes('style2/settings_'))).size).toBe(13);
       expect(requested.filter((src) => src.includes('Carlito'))).toEqual(['./ui/fonts/Carlito-Bold.woff']);
       expect(Object.keys(textures.skins!['style-2']!)).toEqual(expect.arrayContaining(STYLE_2_SETTINGS_ROLES));
     } finally {

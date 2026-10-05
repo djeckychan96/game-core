@@ -37,6 +37,16 @@
       "size": [267, 278],
       "note": "icon_coin 22:28125 (260 x 268.67, render 266.19 x 277.95) without '2000'",
       "layers": [{ "svg": "svg/icon-coin-22-28125.svg", "at": [0, 0] }]
+    },
+    {
+      "key": "style1-button-blue",
+      "file": "button/button_blue@2x.webp",
+      "scale": 2,
+      "size": [507, 207],
+      "note": "Style 1 `Btn` property1=blue (the Settings toggles' surface, 22:28872): the orange button SVG of docs/figma/lives with the blue variant's fills #1564B9 / #2A90FF (the same component geometry); the Language row of Settings",
+      "pad": { "left": 0, "top": 0, "right": 0, "bottom": 0 },
+      "nineSlice": { "figma": { "left": 51, "top": 51, "right": 51, "bottom": 51 }, "gutter": 8, "strip": 8 },
+      "layers": [{ "svg": "svg/button-surface-blue.svg", "at": [0, 0] }]
     }
   ]
 }

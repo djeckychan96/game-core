@@ -10,7 +10,7 @@
     "22:28984": "popart_restart — Confirm RESTART: popup 960 x 980 at 60, 303 (header tab, ×), frame_blur_bg, icon_heart_2 338 + '-1', 'You will lose 1 heart', btn_green 528.7 x 214; OFFER popup at 74, 1383",
     "22:29021": "popart_leave — Confirm EXIT: the same window at 60, 646",
     "22:28924": "screen_refill_hearts — Lives: popup 960 x 756 at 60, 486; btn_green 354 x 214 / btn_yellow 460 x 214 at y 952 with the tv (bottom-left) and the heart '1' (top-right) on its corners; OFFER popup at 74, 1342",
-    "22:28904 / 22:28915": "Settings in-level / map: unchanged boxes; a new Language row (no SettingsWindowView API) — not drawn",
+    "22:28904 / 22:28915": "Settings in-level / map: the same boxes plus the Language row btn_main 22:28907 / 22:28918 (btn_blue + icon_language 22:27117 + 'Language', Calibri 70): in-level popup 1290 with Restart / Home / Language, map popup 822 with Language",
     "22:29110": "screen_victory — not used: Result is not covered by Style 2 (its FAIL counterpart 22:29036 is a NO STARS continue offer, not a Result FAIL)",
     "22:29036": "defeat_screen — not used (NO STARS / Get 3 stars continue offer; REFILL NOW / x2 sample buttons)"
   },
@@ -138,6 +138,48 @@
           "size": [
             200,
             200
+          ]
+        }
+      ]
+    },
+    {
+      "key": "style2-settings-btn-language",
+      "file": "style2/settings_btn_language.webp",
+      "scale": 1,
+      "size": [
+        822,
+        200
+      ],
+      "note": "btn_main 22:28918 without its icon and text: Figma's 822 x 200 render (png/btn-main-render-22-28918.png) with columns 196..629 (the globe + 'Language') replaced by the clean column 120 — the btn_blue surface is a vertical gradient, every other column matches column 120 within 3/255",
+      "layers": [
+        {
+          "image": "png/btn-main-blue-clean-22-28918.png",
+          "at": [
+            0,
+            0
+          ],
+          "size": [
+            822,
+            200
+          ]
+        }
+      ]
+    },
+    {
+      "key": "style2-settings-icon-language",
+      "file": "style2/settings_icon_language.webp",
+      "scale": 1,
+      "size": [
+        158,
+        158
+      ],
+      "note": "icon_language 22:27117: its 158 SVG export (the white globe)",
+      "layers": [
+        {
+          "svg": "svg/icon-language-22-27117.svg",
+          "at": [
+            0,
+            0
           ]
         }
       ]

@@ -107,54 +107,59 @@ describe('Settings — a style lays out only the controls a game shows', () => {
     const { view } = open({ onRestart: () => {} }, { gameButtons: true });
     const L = layout(view);
     const full = STYLE_1.gameplay;
-    const freed = bottom(full.home.button) - bottom(full.restart.button);
-    expect(freed).toBe(232);
+    const last = full.language as NonNullable<typeof full.language>;
+    // HOME and the language row (no languages) are not drawn: their two rows close up
+    const freed = bottom(last.button) - bottom(full.restart.button);
+    expect(freed).toBe(464);
     expect(L.window).toEqual({ width: 960, height: full.window.height - freed });
-    expect(surface(view).height).toBe(1344 + 12); // + 4 top / 8 bottom bleed
+    expect(surface(view).height).toBe(907 + 12); // + 4 top / 8 bottom bleed
     expect(L.restart.button).toEqual(full.restart.button);
     expect(field<UiButton>(view, 'homeButton').visible).toBe(false);
-    // the version sits under RESTART exactly as it sat under HOME
-    expect(L.version.y - bottom(L.restart.button)).toBe(full.version.y - bottom(full.home.button));
+    // the version sits under RESTART exactly as it sat under the last row
+    expect(L.version.y - bottom(L.restart.button)).toBe(full.version.y - bottom(last.button));
     expect(bottom(L.version) <= L.window.height).toBe(true);
     // the panel's fit box and hit area are the shorter window (same design-unit scale as the full one)
     const panel = field<Container>(view, 'panel');
-    expect(panel.hitArea).toMatchObject({ y: -672, height: 1344 });
+    expect(panel.hitArea).toMatchObject({ y: -453.5, height: 907 });
     const fullView = open({ onRestart: () => {}, onHome: () => {} }, { gameButtons: true }).view;
     expect(field<number>(view, 'fitScale')).toBeCloseTo(field<number>(fullView, 'fitScale'), 9);
     // RESTART hidden instead: HOME moves up into the first action row
     const homeOnly = open({ onHome: () => {} }, { gameButtons: true }).view;
     expect(layout(homeOnly).home.button.y).toBe(full.restart.button.y);
     expect(layout(homeOnly).window.height).toBe(full.window.height - freed);
-    // in-level with no action at all: the style's map composition (no action band)
+    // in-level with no action at all: the style's map composition (no action band; no language row either)
     const none = open({}, { gameButtons: true }).view;
-    expect(layout(none).window).toEqual(STYLE_1.map.window);
+    expect(layout(none).window).toEqual({ width: 960, height: STYLE_1.map.window.height - (bottom((STYLE_1.map.language as { button: ReadyUiSkinBox }).button) - bottom(STYLE_1.map.sound.button)) });
     expect(field<UiButton>(none, 'restartButton').visible).toBe(false);
     // Style 2 closes its action rows the same way
     const style2 = open({ onRestart: () => {} }, { gameButtons: true }, READY_UI_STYLE_2).view;
     const s2 = READY_UI_STYLE_2.windows.settings.gameplay;
-    expect(layout(style2).window.height).toBe(s2.window.height - (bottom(s2.home.button) - bottom(s2.restart.button)));
-    expect(layout(style2).version.y - bottom(s2.restart.button)).toBe(s2.version.y - bottom(s2.home.button));
+    const s2last = (s2.language as { button: ReadyUiSkinBox }).button;
+    expect(layout(style2).window.height).toBe(s2.window.height - (bottom(s2last) - bottom(s2.restart.button)));
+    expect(layout(style2).version.y - bottom(s2.restart.button)).toBe(s2.version.y - bottom(s2last));
     for (const v of [view, fullView, homeOnly, none, style2]) v.destroy();
   });
 
   it('3. every control shown keeps the accepted composition: the style\'s own layout objects, positions unchanged; donor unchanged', () => {
-    // map with HAPTIC: all three slots
-    const map = open({ haptic: true }, { gameButtons: false, haptic: true }).view;
+    const LANGS = { languages: [{ id: 'en', label: 'English' }, { id: 'ru', label: 'Русский' }], onLanguage: () => {} };
+    // map with HAPTIC and the language row: all three slots, every row
+    const map = open({ haptic: true, ...LANGS }, { gameButtons: false, haptic: true }).view;
     expect(layout(map)).toBe(STYLE_1.map);
     const t = toggles(map);
     expect([t.sound.button.x, t.music.button.x, t.haptic?.button.x]).toEqual([-306, 0, 306]);
     // in-level with HOME and RESTART: the action rows, the version and the window are the style's, untouched
-    const game = open({ onRestart: () => {}, onHome: () => {} }, { gameButtons: true }).view;
+    const game = open({ onRestart: () => {}, onHome: () => {}, ...LANGS }, { gameButtons: true }).view;
     const G = layout(game);
     expect(G.restart).toBe(STYLE_1.gameplay.restart);
     expect(G.home).toBe(STYLE_1.gameplay.home);
     expect(G.version).toBe(STYLE_1.gameplay.version);
     expect(G.window).toBe(STYLE_1.gameplay.window);
-    expect(surface(game).height).toBe(1588);
-    expect(field<UiButton>(game, 'restartButton').position).toMatchObject({ x: 0.5, y: 303.5 });
-    expect(field<UiButton>(game, 'homeButton').position).toMatchObject({ x: 0.5, y: 535.5 });
+    expect(surface(game).height).toBe(1371 + 12);
+    expect(field<UiButton>(game, 'restartButton').position).toMatchObject({ x: 0.5, y: 551 + 103.5 - 685.5 });
+    expect(field<UiButton>(game, 'homeButton').position).toMatchObject({ x: 0.5, y: 783 + 103.5 - 685.5 });
+    expect(field<{ button: UiButton }>(game, 'languageRow').button.position).toMatchObject({ x: 0.5, y: 1015 + 103.5 - 685.5 });
     // Style 2 draws two toggles by design (no haptic slot): its full in-level layout is its own object
-    const style2 = open({ onRestart: () => {}, onHome: () => {} }, { gameButtons: true }, READY_UI_STYLE_2).view;
+    const style2 = open({ onRestart: () => {}, onHome: () => {}, ...LANGS }, { gameButtons: true }, READY_UI_STYLE_2).view;
     expect(layout(style2)).toBe(READY_UI_STYLE_2.windows.settings.gameplay);
     // no style: the donor path is untouched (its own centring, fixed HOME / RESTART slots)
     const donor = open({ onRestart: () => {} }, { gameButtons: true }, null).view;
@@ -178,6 +183,93 @@ describe('Settings — a style lays out only the controls a game shows', () => {
     reopen(kit, view, { gameButtons: true });
     tap(field<UiButton>(view, 'closeButton'), kit);
     expect(log).toEqual(['sound:false', 'music:false', 'restart', 'dismiss:button']);
+    view.destroy();
+  });
+});
+
+describe('Settings — the language row (one public API, both styles)', () => {
+  const LANGUAGES = [{ id: 'en', label: 'English' }, { id: 'ru', label: 'Русский' }, { id: 'de', label: 'Deutsch' }];
+  type Row = { button: UiButton; label: Text; icon: Sprite | null };
+
+  function open(skin: ReadyUiSkin | null, extra: Partial<SettingsWindowViewOptions>, params: Partial<SettingsWindowParams> = {}, log: string[] = []): { kit: TestKit; view: SettingsWindowView } {
+    const kit = createKit();
+    const view = new SettingsWindowView({
+      ui: kit.ui, motion: kit.motion, textures: skin ? styled(kit, skin) : kit.textures, id: 'settings', ...(skin ? { theme: { skin } } : {}),
+      onToggle: (setting, enabled) => log.push(`${setting}:${enabled}`), onDismiss: (reason) => log.push(`dismiss:${reason}`), ...extra
+    });
+    view.show({ sound: true, music: true, version: 'VERSION 1', ...params });
+    advance(kit.core, 400);
+    return { kit, view };
+  }
+  const row = (view: SettingsWindowView): Row => field<Row>(view, 'languageRow');
+  const height = (view: SettingsWindowView): number => field<{ window: { height: number } }>(view, 'activeLayout').window.height;
+
+  for (const skin of [READY_UI_STYLE_1, READY_UI_STYLE_2]) {
+    it(`${skin.id}: drawn with two or more languages and onLanguage; shows the current one; a tap moves to the next in place`, () => {
+      const log: string[] = [];
+      const { kit, view } = open(skin, { languages: LANGUAGES, onLanguage: (locale) => log.push(`language:${locale}`) }, { locale: 'ru' }, log);
+      const r = row(view);
+      expect(r.button.visible).toBe(true);
+      expect(r.label.text).toBe('Русский');
+      expect(view.currentLocale).toBe('ru');
+      expect(r.button.background.texture.source.label).toBe(`${skin.id}:settingsBtnLanguage`);
+      // Style 1: its own blue Btn as a 9-slice, text only; Style 2: the Figma row with the globe
+      if (skin === READY_UI_STYLE_1) {
+        expect(r.button.background).toBeInstanceOf(NineSliceSprite);
+        expect(r.icon).toBeNull();
+      } else {
+        expect(r.icon?.texture.source.label).toBe('style-2:settingsIconLanguage');
+      }
+      tap(r.button, kit);
+      expect(view.state).toBe('shown'); // in place, like a toggle
+      expect([r.label.text, view.currentLocale]).toEqual(['Deutsch', 'de']);
+      tap(r.button, kit);
+      expect([r.label.text, view.currentLocale]).toEqual(['English', 'en']); // wraps
+      expect(log).toEqual(['language:de', 'language:en']);
+      // the map window with the row is the style's own map layout, taller than without it
+      const withRow = height(view);
+      view.destroy();
+      const none = open(skin, {}).view;
+      expect(field<Row>(none, 'languageRow').button.visible).toBe(false);
+      expect(height(none)).toBeLessThan(withRow);
+      expect(none.currentLocale).toBeNull();
+      none.destroy();
+      // one language or no callback: no row
+      const single = open(skin, { languages: LANGUAGES.slice(0, 1), onLanguage: () => {} }).view;
+      expect(row(single).button.visible).toBe(false);
+      single.destroy();
+      const silent = open(skin, { languages: LANGUAGES }).view;
+      expect(row(silent).button.visible).toBe(false);
+      silent.destroy();
+    });
+
+    it(`${skin.id}: in-level the row closes up with the actions — any subset leaves no empty row`, () => {
+      const G = skin.windows.settings.gameplay;
+      const rowH = (key: 'restart' | 'home' | 'language'): number => (G[key] as { button: ReadyUiSkinBox }).button.height;
+      const all = open(skin, { onRestart: () => {}, onHome: () => {}, languages: LANGUAGES, onLanguage: () => {} }, { gameButtons: true }).view;
+      expect(height(all)).toBe(G.window.height);
+      const languageOnly = open(skin, { onRestart: () => {}, languages: LANGUAGES, onLanguage: () => {} }, { gameButtons: true }).view;
+      // HOME gone: the language row takes its slot, the window loses one row pitch
+      expect(row(languageOnly).button.y).toBeCloseTo(field<UiButton>(all, 'homeButton').y + (height(all) - height(languageOnly)) / 2, 6);
+      expect(height(all) - height(languageOnly)).toBe(G.language!.button.y - G.home.button.y);
+      expect(rowH('language')).toBe(rowH('home'));
+      for (const v of [all, languageOnly]) v.destroy();
+    });
+  }
+
+  it('the donor look and a style without a language layout ignore the option (no row, nothing breaks)', () => {
+    const donor = open(null, { languages: LANGUAGES, onLanguage: () => {} }).view;
+    expect((donor as unknown as { languageRow: unknown }).languageRow).toBeNull();
+    donor.destroy();
+    const plain = JSON.parse(JSON.stringify(READY_UI_STYLE_2)) as { -readonly [K in keyof ReadyUiSkin]: ReadyUiSkin[K] } & { windows: { settings: { map: { language?: unknown }; gameplay: { language?: unknown } } } };
+    delete plain.windows.settings.map.language;
+    delete plain.windows.settings.gameplay.language;
+    plain.id = 'style-2-no-language';
+    const kit = createKit();
+    const view = new SettingsWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, plain as ReadyUiSkin), theme: { skin: plain as ReadyUiSkin }, id: 'plain', onToggle: () => {}, languages: LANGUAGES, onLanguage: () => {} });
+    view.show({ sound: true, music: true });
+    advance(kit.core, 400);
+    expect((view as unknown as { languageRow: unknown }).languageRow).toBeNull();
     view.destroy();
   });
 });

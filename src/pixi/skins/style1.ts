@@ -6,8 +6,8 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  *
  * theme_light_4 (file 5FWFwdO4QGeDfeQtloLNOS, section 22:26884, the purple row; docs/figma/style1-theme-light-4) is the
  * current snapshot: Lives 22:27562 (shorter window), the OFFER panel under Lives / Restart (22:28069 / 22:28122),
- * Settings 22:28430 (toggle row centred, SETTINGS 100, plain version, violet ×); Exit 22:28232 and WIN 22:28251 are
- * the boxes below unchanged.
+ * Settings 22:28430 (SETTINGS 100, plain version, violet ×; the windows are one dense column — see `settings`);
+ * Exit 22:28232 and WIN 22:28251 are the boxes below unchanged.
  *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
  * docs/figma/lives), the current runtime surface of `settings`, HUD and LevelMap from the canonical level-select
@@ -52,6 +52,11 @@ export const READY_UI_STYLE_1 = {
     adIcon: { file: 'icons/icon_ad@2x.webp' },
     /** Settings window shell. Its 968 × 1102 export is the 960 × 1090 logical map box plus 4 / 4 / 4 / 8 bleed. */
     settingsPanel: { file: 'settings/panel.webp', nineSlice: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } } },
+    /**
+     * The Settings language row: Style 1's own `Btn` surface in its blue variant (the toggles' #1564b9 / #2a90ff) — the
+     * green / orange button geometry and caps (docs/figma/style1-theme-light-4).
+     */
+    settingsBtnLanguage: { file: 'button/button_blue@2x.webp', nineSlice: { left: 67, top: 69, right: 67, bottom: 89 } },
     /** Settings close glyph (51 × 51): theme_light_4 22:28868 draws the shell's own violet × (the window's), not the red donor one. */
     settingsClose: { file: 'window/window_close@2x.webp' },
     settingsSound: { file: 'settings/btn_sound.webp' },
@@ -245,64 +250,75 @@ export const READY_UI_STYLE_1 = {
     /**
      * Current SettingsWindowView only. All boxes are local to the window's top-left. The legacy notification,
      * privacy and restore controls are intentionally absent: the current runtime has no state or callbacks for them.
-     * theme_light_4 `настройки гл экран` 22:28430 (Component 9 960 × 1090 at 60, 627): the toggle row sits centred in
-     * the body — labels at 391, buttons at 478 (before: 204 / 291, with the legacy controls under them); the version
-     * stays at 994. theme_light_4 has no Style 1 in-level screen: `gameplay` keeps its rule — the map window with the
-     * action rows inserted above the version — so its toggle row follows the map's. SETTINGS is 100 (the other
-     * windows' titles 80); the version #716dd0 40 is plain (no stroke / shadow).
+     *
+     * One dense column for the map and in-level windows (the manual test of the theme_light_4 pass found the centred
+     * toggle row of 22:28430 / the inserted action rows leaving a large empty band): the Component 9 shell (header 175),
+     * the toggles right under it (labels 204, buttons 291 — Style 1's toggle row), then the rows 40 below the toggles and
+     * 25 apart (599 × 207, the RETURN HOME / RESTART art), the version 49 under the last row, 52 to the bottom. The
+     * language row (no Style 1 Figma node; theme_light_4 has one only in Style 2) is the same row on Style 1's own blue
+     * `Btn` surface (`settingsBtnLanguage`, the toggles' blue variant as a 9-slice), its name runtime text, no icon. Rows
+     * a show does not draw close up (SettingsWindowView). SETTINGS is 100 (the other windows' titles 80); the version
+     * #716dd0 40 is plain (no stroke / shadow); the × is the shell's violet one.
      */
     settings: {
-      /** map-a / map-b collapse to the one current map layout; their unsupported legacy controls are not represented. */
       map: {
-        window: { width: 960, height: 1090 },
+        window: { width: 960, height: 907 },
         title: { x: 135, y: 34, width: 690, height: 104, fontSize: 100 },
         close: { x: 863, y: 61, width: 51, height: 51 },
         sound: {
-          button: { x: 62, y: 478, width: 224, height: 220 },
-          label: { x: 77, y: 391, width: 194, height: 72, fontSize: 60 },
+          button: { x: 62, y: 291, width: 224, height: 220 },
+          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         music: {
-          button: { x: 368, y: 478, width: 224, height: 220 },
-          label: { x: 393, y: 391, width: 174, height: 72, fontSize: 60 },
+          button: { x: 368, y: 291, width: 224, height: 220 },
+          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         haptic: {
-          button: { x: 674, y: 478, width: 224, height: 220 },
-          label: { x: 688, y: 391, width: 197, height: 72, fontSize: 60 },
+          button: { x: 674, y: 291, width: 224, height: 220 },
+          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
-        version: { x: 267, y: 994, width: 439, height: 48, fontSize: 40, outline: false }
+        language: {
+          button: { x: 181, y: 551, width: 599, height: 207 },
+          label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
+        },
+        version: { x: 267, y: 807, width: 439, height: 48, fontSize: 40, outline: false }
       },
       gameplay: {
-        window: { width: 960, height: 1576 },
+        window: { width: 960, height: 1371 },
         title: { x: 135, y: 34, width: 690, height: 104, fontSize: 100 },
         close: { x: 863, y: 61, width: 51, height: 51 },
         sound: {
-          button: { x: 62, y: 478, width: 224, height: 220 },
-          label: { x: 77, y: 391, width: 194, height: 72, fontSize: 60 },
+          button: { x: 62, y: 291, width: 224, height: 220 },
+          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         music: {
-          button: { x: 368, y: 478, width: 224, height: 220 },
-          label: { x: 393, y: 391, width: 174, height: 72, fontSize: 60 },
+          button: { x: 368, y: 291, width: 224, height: 220 },
+          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         haptic: {
-          button: { x: 674, y: 478, width: 224, height: 220 },
-          label: { x: 688, y: 391, width: 197, height: 72, fontSize: 60 },
+          button: { x: 674, y: 291, width: 224, height: 220 },
+          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         restart: {
-          button: { x: 181, y: 988, width: 599, height: 207 },
+          button: { x: 181, y: 551, width: 599, height: 207 },
           label: { x: 190, y: 27, width: 360, height: 128, fontSize: 70 },
           icon: { x: 44.5, y: 16, width: 170, height: 155 }
         },
         home: {
-          button: { x: 181, y: 1220, width: 599, height: 207 },
+          button: { x: 181, y: 783, width: 599, height: 207 },
           label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
         },
-        version: { x: 267, y: 1476, width: 439, height: 48, fontSize: 40, outline: false }
+        language: {
+          button: { x: 181, y: 1015, width: 599, height: 207 },
+          label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
+        },
+        version: { x: 267, y: 1271, width: 439, height: 48, fontSize: 40, outline: false }
       }
     },
     /**

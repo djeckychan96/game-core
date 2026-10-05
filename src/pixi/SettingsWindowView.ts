@@ -6,6 +6,7 @@ import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import {
   resolveWindowSkin,
   selectWindowSkin,
+  skinAssetKey,
   skinNineSlice,
   skinTextLook,
   type ReadyUiSkin,
@@ -17,7 +18,7 @@ import {
   type WindowSkinLook
 } from './skin';
 import { UiButton } from './UiButton';
-import { createFigmaLabel, createLabel, figmaLabelAdvance, fitLabelWidth, placeFigmaLabel } from './text';
+import { applyTextResolution, createFigmaLabel, createLabel, figmaLabelAdvance, fitLabelWidth, placeFigmaLabel } from './text';
 
 export interface SettingsState {
   sound: boolean;
@@ -33,6 +34,14 @@ export interface SettingsWindowParams extends SettingsState {
    * when its continuation (`onHome` / `onRestart`) is given; a style lays out just the drawn ones (no empty row).
    */
   gameButtons?: boolean;
+  /** The current language (an id of `languages`); absent / unknown = the first one. */
+  locale?: string;
+}
+
+/** One language the Settings language row offers: a stable id (the host's locale) and its display name. */
+export interface SettingsLanguage {
+  id: string;
+  label: string;
 }
 
 export interface SettingsWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
@@ -50,6 +59,14 @@ export interface SettingsWindowViewOptions extends Omit<ModalWindowOptions, 'id'
   /** Close continuations for the in-level buttons. */
   onHome?: () => void;
   onRestart?: () => void;
+  /**
+   * Styled only (a style whose Settings layout has a language row): the languages the row switches between, in order.
+   * The row shows the current one's name; a tap moves to the next (wrapping) and reports it through `onLanguage` while
+   * the window stays open (like a toggle). Drawn with two or more languages and `onLanguage`; otherwise no row — the
+   * window closes up. Applying the locale (catalogs, rebuilt views) is the host's.
+   */
+  languages?: readonly SettingsLanguage[];
+  onLanguage?: (locale: string) => void;
 }
 
 interface ToggleView {
@@ -81,7 +98,11 @@ interface SettingsShown {
   haptic: boolean;
   restart: boolean;
   home: boolean;
+  language: boolean;
 }
+
+type SettingsRow = 'restart' | 'home' | 'language';
+type SettingsRows = Partial<Record<SettingsRow, ReadyUiSkinSettingsActionLayout>>;
 
 const moveBox = <B extends ReadyUiSkinBox>(box: B, dx: number, dy: number): B => ({ ...box, x: box.x + dx, y: box.y + dy });
 
@@ -89,8 +110,9 @@ const moveBox = <B extends ReadyUiSkinBox>(box: B, dx: number, dy: number): B =>
  * The style's layout for the controls this show actually draws. A style lays out every control it has; a game may show
  * a subset (no haptic, no HOME …), and a hidden control leaves no hole:
  * - toggles: the visible ones take the first slots of the row (layout order) and the group is centred on the full row;
- * - game actions: the visible ones move up into the first action rows, and everything below the rows (the version)
- *   moves up with the window's bottom by the freed height.
+ * - rows (game actions, the language row): the visible ones move up into the first row slots, and everything below the
+ *   rows (the version) moves up with the window's bottom by the freed height; with no row left, by the whole block and
+ *   its gap to the toggles (the version keeps its gap, now to the toggles).
  * Every control shown → the style's own layout object, unchanged.
  */
 function compactSettingsLayout(layout: SettingsLayout, shown: SettingsShown): SettingsLayout {
@@ -115,26 +137,34 @@ function compactSettingsLayout(layout: SettingsLayout, shown: SettingsShown): Se
     });
     out = next;
   }
-  if (!('restart' in out)) return out;
-  const gameplay = out;
-  const rows = (['restart', 'home'] as const).slice().sort((a, b) => gameplay[a].button.y - gameplay[b].button.y);
-  const actions = rows.filter((key) => shown[key]);
-  if (actions.length === 0 || actions.length === rows.length) return out;
+  const laid = out as SettingsLayout & SettingsRows;
+  const row = (key: SettingsRow): ReadyUiSkinSettingsActionLayout => laid[key] as ReadyUiSkinSettingsActionLayout;
+  const rows = (['restart', 'home', 'language'] as const).filter((key) => laid[key] !== undefined).sort((a, b) => row(a).button.y - row(b).button.y);
+  const visibleRows = rows.filter((key) => shown[key]);
+  if (rows.length === 0 || visibleRows.length === rows.length) return out;
   const bottom = (box: ReadyUiSkinBox): number => box.y + box.height;
-  const blockBottom = Math.max(...rows.map((key) => bottom(gameplay[key].button)));
-  const next: { -readonly [K in keyof ReadyUiSkinSettingsGameplayLayout]: ReadyUiSkinSettingsGameplayLayout[K] } = { ...gameplay };
-  let packedBottom = 0;
-  actions.forEach((key, index) => {
-    // label and icon are button-local: the action moves as one
-    const button = moveBox(gameplay[key].button, 0, gameplay[rows[index] as 'restart' | 'home'].button.y - gameplay[key].button.y);
-    if (key === 'restart') next.restart = { ...gameplay.restart, button };
-    else next.home = { ...gameplay.home, button };
-    packedBottom = Math.max(packedBottom, bottom(button));
-  });
+  const blockBottom = Math.max(...rows.map((key) => bottom(row(key).button)));
+  const next: { -readonly [K in keyof (SettingsLayout & SettingsRows)]: (SettingsLayout & SettingsRows)[K] } = { ...laid };
+  let packedBottom: number;
+  if (visibleRows.length > 0) {
+    packedBottom = 0;
+    visibleRows.forEach((key, index) => {
+      // label and icon are button-local: the row moves as one
+      const own = row(key);
+      const slot = row(rows[index] as SettingsRow);
+      const moved = { ...own, button: moveBox(own.button, 0, slot.button.y - own.button.y) };
+      next[key] = moved as never;
+      packedBottom = Math.max(packedBottom, bottom(moved.button));
+    });
+  } else {
+    // no row: what was under the block moves up to the toggles
+    const toggles = (['sound', 'music', 'haptic'] as const).flatMap((key) => (out[key] ? [bottom(out[key].button)] : []));
+    packedBottom = Math.max(...toggles);
+  }
   const lift = blockBottom - packedBottom;
-  if (gameplay.version.y >= blockBottom) next.version = moveBox(gameplay.version, 0, -lift);
-  next.window = { ...gameplay.window, height: gameplay.window.height - lift };
-  return next;
+  if (out.version.y >= blockBottom) next.version = moveBox(out.version, 0, -lift);
+  next.window = { ...out.window, height: out.window.height - lift };
+  return next as SettingsLayout;
 }
 
 /** The style drawing Settings, or null for the unchanged donor path. */
@@ -190,6 +220,11 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
   private readonly restartLabel: Text | null;
   private readonly restartIcon: Sprite;
   private readonly homeIcon: Sprite | null = null;
+  /** Styled with a language row in its layout: the row (built once, drawn only with languages and `onLanguage`). */
+  private readonly languageRow: { button: UiButton; label: Text; icon: Sprite | null } | null = null;
+  private readonly languages: readonly SettingsLanguage[];
+  private readonly onLanguage: ((locale: string) => void) | null;
+  private languageIndex = 0;
   private readonly hapticVisible: boolean;
   private readonly onToggle: (setting: 'sound' | 'music' | 'haptic', enabled: boolean) => void;
   private readonly onHome: (() => void) | null;
@@ -206,6 +241,8 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     this.onToggle = options.onToggle;
     this.onHome = options.onHome ?? null;
     this.onRestart = options.onRestart ?? null;
+    this.languages = options.languages ?? [];
+    this.onLanguage = options.onLanguage ?? null;
     this.hapticVisible = options.haptic ?? false;
     const t = this.textures;
 
@@ -319,9 +356,26 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       this.homeButton.addChildAt(this.homeIcon, 1);
     }
     this.toggleRow.addChild(this.homeButton, this.restartButton);
+    const languageLayout = layouts.gameplay.language ?? L.language;
+    if (languageLayout && A.settingsBtnLanguage) {
+      const caps = skin.assets[skinAssetKey(skin, 'settings', 'settingsBtnLanguage')]?.nineSlice;
+      const button = this.addButton(new UiButton({
+        ui: this.ui, id: `${this.id}:language`, theme: this.theme, texture: A.settingsBtnLanguage, ...(caps ? { nineSlice: caps } : {}),
+        width: languageLayout.button.width, height: languageLayout.button.height, pressScale: 0.9, onTap: () => this.nextLanguage()
+      }));
+      const caption = label('', languageLayout.label);
+      button.addChild(caption);
+      let icon: Sprite | null = null;
+      if (languageLayout.icon && A.settingsIconLanguage) {
+        icon = this.sprite(A.settingsIconLanguage, languageLayout.icon.width, languageLayout.icon.height);
+        button.addChildAt(icon, 1);
+      }
+      this.languageRow = { button, label: caption, icon };
+      this.toggleRow.addChild(button);
+    }
 
     const toggleParts = this.toggleViews().flatMap((toggle) => [toggle.off, toggle.label]);
-    const decorations = [this.surface, this.title, this.version, ...toggleParts, this.homeLabel, this.restartLabel, this.restartIcon, this.homeIcon];
+    const decorations = [this.surface, this.title, this.version, ...toggleParts, this.homeLabel, this.restartLabel, this.restartIcon, this.homeIcon, this.languageRow?.label, this.languageRow?.icon];
     for (const node of decorations) {
       if (node) node.eventMode = 'none';
     }
@@ -333,6 +387,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
 
   protected applyParams(params: SettingsWindowParams): void {
     this.settings = { sound: params.sound, music: params.music, haptic: params.haptic ?? true };
+    this.languageIndex = Math.max(0, this.languages.findIndex((language) => language.id === params.locale));
     this.version.text = params.version ?? '';
     this.version.visible = Boolean(params.version);
     if (!this.look) fitLabelWidth(this.version, 800);
@@ -348,6 +403,11 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
 
   get currentSettings(): SettingsState {
     return { ...this.settings };
+  }
+
+  /** The language the row shows (an id of `languages`), or null without languages. */
+  get currentLocale(): string | null {
+    return this.languages[this.languageIndex]?.id ?? null;
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
@@ -379,7 +439,13 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     this.homeButton.setEnabled(this.homeButton.visible);
     this.restartButton.setEnabled(this.restartButton.visible);
     if (this.look) {
-      this.applySkinLayout(showGame, { haptic: hapticShown, restart: this.restartButton.visible, home: this.homeButton.visible });
+      const layout = showGame ? this.look.layout.gameplay : this.look.layout.map;
+      const language = this.languageRow !== null && layout.language !== undefined && this.languages.length >= 2 && this.onLanguage !== null;
+      if (this.languageRow) {
+        this.languageRow.button.visible = language;
+        this.languageRow.button.setEnabled(language);
+      }
+      this.applySkinLayout(showGame, { haptic: hapticShown, restart: this.restartButton.visible, home: this.homeButton.visible, language });
       return;
     }
     const startX = -((visible.length - 1) * ITEM_GAP) / 2;
@@ -432,11 +498,28 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
       this.placeAction(G, this.restartButton, this.restartLabel as Text, this.restartIcon, G.restart);
       this.placeAction(G, this.homeButton, this.homeLabel as Text, this.homeIcon, G.home);
     }
+    if (this.languageRow?.button.visible && L.language) {
+      this.languageRow.label.text = this.languages[this.languageIndex]?.label ?? '';
+      this.placeAction(L, this.languageRow.button, this.languageRow.label, this.languageRow.icon, L.language);
+    }
     this.placeClose();
   }
 
+  /** The language row: the next language (wrapping), shown at once and reported; the window stays open. */
+  private nextLanguage(): void {
+    const L = this.activeLayout;
+    const row = this.languageRow;
+    if (!row || !L?.language || this.languages.length < 2) return;
+    this.languageIndex = (this.languageIndex + 1) % this.languages.length;
+    const language = this.languages[this.languageIndex] as SettingsLanguage;
+    row.label.text = language.label;
+    this.placeAction(L, row.button, row.label, row.icon, L.language);
+    applyTextResolution(row.label, this.fitScale * this.pixelRatio);
+    this.onLanguage?.(language.id);
+  }
+
   private placeAction(
-    layout: ReadyUiSkinSettingsGameplayLayout,
+    layout: SettingsLayout,
     button: UiButton,
     label: Text,
     icon: Sprite | null,
