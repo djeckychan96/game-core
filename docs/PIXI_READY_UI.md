@@ -539,6 +539,22 @@ EXIT / confetti / donor, 320 × 568 and 1280 × 800 shots, real taps (CONTINUE /
 backdrop dismiss), and no Result file request from the donor pages or the other Style 1 windows. Writes
 `showcase-shots/style1-result/`.
 
+### Ready UI gallery (both styles on one page)
+
+```bash
+npm run showcase -- --host 0.0.0.0 --port 5180              # then open http://127.0.0.1:5180/ui-gallery.html
+SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:gallery # screenshots of every style × screen × viewport
+```
+
+`examples/pixi-showcase/ui-gallery.html` shows every public Ready UI view of one style over that style's map screen:
+STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching reloads the page), a screen picker (HUD +
+LevelMap, Settings map / in level, Confirm Restart / Restart + OFFER / Exit, Lives minimal / REFILL + GET / full with
+the OFFER, Result WIN / FAIL), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
+donor look (Style 2 Result). Query: `?style=1|2&screen=<id>&locale=ru&ui=0` (`ui=0` hides the controls). The OFFER's
+booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
+`SCREENS`, `VIEWPORTS`, `LOCALE`) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png` and fails on a
+console error or a window that never opens. Dev page only: `showcase:build` ships `index.html` alone.
+
 ## Tests
 
 `tests/pixi/` runs the kit headlessly in Vitest (a tiny fake canvas 2D context behind Pixi's
