@@ -173,13 +173,17 @@
         158,
         158
       ],
-      "note": "icon_language 22:27117: its 158 SVG export (the white globe)",
+      "note": "icon_language 22:27117: Figma's own transparent 158 render (get_screenshot contentsOnly) — over the clean row button it matches Figma's btn_main render (mean |Δ| 2.8); Chrome's raster of its SVG export draws the drop shadow (spread 6, blur 5) as a dark halo (|Δ| 20)",
       "layers": [
         {
-          "svg": "svg/icon-language-22-27117.svg",
+          "image": "png/icon-language-22-27117.png",
           "at": [
             0,
             0
+          ],
+          "size": [
+            158,
+            158
           ]
         }
       ]

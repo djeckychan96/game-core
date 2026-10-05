@@ -23,7 +23,8 @@ the reward "1" box is 100 wide around its centre so the runtime "+1" fits. The b
 
 The language row's button (`png/btn-main-blue-clean-22-28918.png`) is Figma's render of `btn_main` with the columns of
 its globe + text (196–629) replaced by the clean column 120 (`btn_blue` is a vertical gradient: every other column
-matches it within 3/255); the globe is `icon_language`'s SVG. Figma has no RU / EN picker screen: the row is the control.
+matches it within 3/255); the globe is Figma's own transparent render of `icon_language` 22:27117 (its SVG export rasterised by Chrome drew
+the icon's drop shadow as a dark halo). Figma has no RU / EN picker screen: the row is the control.
 
 Reused (proved by pixel comparison of the raw image fills, mean |Δ| ≤ 0.6): `style2/icon_coin.webp` = `icon_coin_1`
 (the OFFER coin hero and its price coin), `style2/icon_heart.webp` = `icon_heart_1`, `style2/icon_tv.webp`; the popup,
