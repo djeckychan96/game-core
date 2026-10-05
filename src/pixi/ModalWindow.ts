@@ -212,6 +212,14 @@ export abstract class ModalWindow<TParams = void> extends Container {
     return new Rectangle(bounds.x, bounds.y, Math.max(1, bounds.width), Math.max(1, bounds.height));
   }
 
+  /**
+   * Where the composition's centre is, in panel units from the panel origin: the fit puts THIS point at the safe-area
+   * centre. Default the origin (every donor window); a window that grows to one side (an offer under it) moves it.
+   */
+  protected panelCentre(): { x: number; y: number } {
+    return { x: 0, y: 0 };
+  }
+
   /** Hook for view cleanup on hidden (already forced back to idle). */
   protected onHiddenView(_reason: WindowHiddenReason): void {}
 
@@ -298,7 +306,7 @@ export abstract class ModalWindow<TParams = void> extends Container {
     return { x: left, y: top, width: Math.max(1, this.viewportWidth - left - right), height: Math.max(1, this.viewportHeight - top - bottom) };
   }
 
-  /** Donor fit: scale = min(maxW / boundsW, maxH / boundsH); origin at the safe-area center. */
+  /** Donor fit: scale = min(maxW / boundsW, maxH / boundsH); origin (or `panelCentre()`) at the safe-area center. */
   protected layoutPanel(): void {
     this.placeClose();
     const bounds = this.panelBounds();
@@ -306,8 +314,9 @@ export abstract class ModalWindow<TParams = void> extends Container {
     this.fitScale = Math.min((safe.width * this.fit.widthRatio) / bounds.width, (safe.height * this.fit.heightRatio) / bounds.height);
     this.panel.scale.set(this.fitScale);
     this.panel.hitArea = new Rectangle(bounds.x, bounds.y, bounds.width, bounds.height);
-    this.idleX = safe.x + safe.width / 2;
-    this.idleY = safe.y + safe.height / 2;
+    const centre = this.panelCentre();
+    this.idleX = safe.x + safe.width / 2 - centre.x * this.fitScale;
+    this.idleY = safe.y + safe.height / 2 - centre.y * this.fitScale;
     this.panel.position.set(this.idleX, this.idleY);
     applyTextResolution(this.panel, this.fitScale * this.pixelRatio);
   }

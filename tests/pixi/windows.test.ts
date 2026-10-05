@@ -502,7 +502,7 @@ describe('LivesWindowView', () => {
   });
 });
 
-describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figma/lives)", () => {
+describe("LivesWindowView variant 'figma' (Style 1: theme_light_4 22:27562 on the screen/lives art, docs/figma/style1-theme-light-4)", () => {
   // Figma screen units → panel units: the Figma variant's panel origin is the screen centre (540, 1172)
   const X = (x: number) => x - 540;
   const Y = (y: number) => y - 1172;
@@ -542,36 +542,36 @@ describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figm
     const shell = drawing(panel, textures.windowBase) as NineSliceSprite;
     expect(shell).toBeInstanceOf(NineSliceSprite);
     expect([shell.leftWidth, shell.topHeight, shell.rightWidth, shell.bottomHeight]).toEqual([92, 187, 92, 110]);
-    const s = shell.getLocalBounds(); // ui/window/base 960 × 1059 at (60, 642) + the 4 / 4 / 4 / 8 bleed
-    expect([shell.x + s.x, shell.y + s.y, s.width, s.height]).toEqual([X(56), Y(638), 968, 1071]);
+    const s = shell.getLocalBounds(); // Component 9 960 × 990 at (60, 677) — the window alone, centred — + the 4 / 4 / 4 / 8 bleed
+    expect([shell.x + s.x, shell.y + s.y, s.width, s.height]).toEqual([X(56), Y(673), 968, 1002]);
     const inset = drawing(panel, textures.panelInset) as NineSliceSprite;
     expect(inset).toBeInstanceOf(NineSliceSprite);
     expect([inset.leftWidth, inset.topHeight, inset.rightWidth, inset.bottomHeight]).toEqual([58, 58, 58, 58]);
     const i = inset.getLocalBounds();
-    expect([inset.x + i.x, inset.y + i.y, i.width, i.height]).toEqual([X(90), Y(934), 900, 382]);
+    expect([inset.x + i.x, inset.y + i.y, i.width, i.height]).toEqual([X(90), Y(969), 900, 382]);
     const heart = drawing(panel, textures.livesHeart) as Sprite;
-    expect([heart.x, heart.y, heart.width, heart.height]).toEqual([X(152), Y(981), 326, 298]);
+    expect([heart.x, heart.y, heart.width, heart.height]).toEqual([X(152), Y(1016), 326, 298]);
     const close = field<UiButton>(view, 'closeButton');
     expect(close.background.texture).toBe(textures.windowClose);
-    expect([close.x, close.y, close.background.width, close.background.height]).toEqual([X(923 + 25.5), Y(703 + 25.5), 51, 51]);
+    expect([close.x, close.y, close.background.width, close.background.height]).toEqual([X(923 + 25.5), Y(738 + 25.5), 51, 51]);
 
     const refill = field<UiButton>(view, 'refillButton');
     expect(refill.background).toBeInstanceOf(NineSliceSprite);
     expect(refill.background.texture).toBe(textures.buttonGreen);
-    expect([refill.x, refill.y, refill.background.width, refill.background.height]).toEqual([X(90 + 185.5), Y(1432 + 103.5), 371, 207]);
+    expect([refill.x, refill.y, refill.background.width, refill.background.height]).toEqual([X(90 + 185.5), Y(1396 + 103.5), 371, 207]);
     const ad = field<UiButton>(view, 'adButton');
     expect(ad.background).toBeInstanceOf(NineSliceSprite);
     expect(ad.background.texture).toBe(textures.buttonOrange);
-    expect([ad.x, ad.y, ad.background.width, ad.background.height]).toEqual([X(483 + 253.5), Y(1432 + 103.5), 507, 207]);
-    // inside the ad button (origin = its centre 736.5, 1535.5), in the Figma order: highlight, GET, heart icon, +1, clapper
+    expect([ad.x, ad.y, ad.background.width, ad.background.height]).toEqual([X(483 + 253.5), Y(1396 + 103.5), 507, 207]);
+    // inside the ad button (origin = its centre 736.5, 1499.5), in the Figma order: highlight, GET, heart icon, +1, clapper
     const bx = (x: number) => x - 736.5;
-    const by = (y: number) => y - 1535.5;
+    const by = (y: number) => y - 1499.5;
     const highlight = drawing(ad, textures.buttonHighlight) as Sprite;
-    expect([highlight.x, highlight.y, highlight.width, highlight.height]).toEqual([bx(491), by(1437), 307, 172]);
+    expect([highlight.x, highlight.y, highlight.width, highlight.height]).toEqual([bx(491), by(1401), 307, 172]);
     const rewardIcon = drawing(ad, textures.iconHeart) as Sprite;
-    expect([rewardIcon.x, rewardIcon.y, rewardIcon.width, rewardIcon.height]).toEqual([bx(819), by(1448), 154, 154]);
+    expect([rewardIcon.x, rewardIcon.y, rewardIcon.width, rewardIcon.height]).toEqual([bx(819), by(1412), 154, 154]);
     const adIcon = drawing(ad, textures.iconAd) as Sprite;
-    expect([adIcon.x, adIcon.y, adIcon.width, adIcon.height]).toEqual([bx(511), by(1448), 128, 134]);
+    expect([adIcon.x, adIcon.y, adIcon.width, adIcon.height]).toEqual([bx(511), by(1412), 128, 134]);
     const adTexts = ad.children.filter((c) => (c as Text).text !== undefined) as Text[];
     expect(adTexts.map((t) => t.text)).toEqual(['GET', '+1']);
     expect(ad.children.indexOf(highlight)).toBeLessThan(ad.children.indexOf(adTexts[0]!));
@@ -580,34 +580,34 @@ describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figm
     // runtime text: centred / left runs, the font's line box centred in the Figma box
     const title = run(field<Text>(view, 'title'));
     within(title.center, X(540), 'title');
-    within(title.baseline, baseline(676, 104, 80), 'title');
+    within(title.baseline, baseline(711, 104, 80), 'title');
     const next = run(field<Text>(view, 'nextLabel'));
     within(next.center, X(531 + 221), 'next');
-    within(next.baseline, baseline(1052, 60, 50), 'next');
+    within(next.baseline, baseline(1087, 60, 50), 'next');
     const count = run(field<Text>(view, 'countText'));
     expect(field<Text>(view, 'countText').text).toBe('3');
     within(count.center, X(272 + 42), 'count');
-    within(count.baseline, baseline(1036, 180, 150), 'count');
+    within(count.baseline, baseline(1071, 180, 150), 'count');
     const timer = run(field<Text>(view, 'timerText'));
     within(timer.center, X(531 + 221), 'timer');
-    within(timer.baseline, baseline(1115, 84, 70), 'timer');
+    within(timer.baseline, baseline(1150, 84, 70), 'timer');
     const refillLabel = run(refill.children.find((c) => (c as Text).text === 'REFILL NOW!') as Text);
     within(refillLabel.center, 112 + 165.5 - 275.5, 'refill label');
-    within(refillLabel.baseline, baseline(1438, 84, 50, 1535.5), 'refill label');
+    within(refillLabel.baseline, baseline(1402, 84, 50, 1499.5), 'refill label');
     const get = run(adTexts[0]!);
     within(get.center, bx(620 + 233.199 / 2), 'GET');
-    within(get.baseline, baseline(1445, 159, 60, 1535.5), 'GET');
+    within(get.baseline, baseline(1409, 159, 60, 1499.5), 'GET');
     const plusOne = run(adTexts[1]!);
     within(plusOne.left, bx(859), '+1');
-    within(plusOne.baseline, baseline(1483, 72, 60, 1535.5), '+1');
+    within(plusOne.baseline, baseline(1447, 72, 60, 1499.5), '+1');
     // Frame 381: "900", a 1-unit gap and the 100 × 100 coin, one row centred on REFILL, centred in its 100 height
     const price = run(field<Text>(view, 'priceText'));
     const coin = field<Sprite>(view, 'priceCoin');
     expect(coin.texture).toBe(textures.iconCoin);
-    expect([coin.width, coin.height, coin.y]).toEqual([100, 100, 1508 - 1535.5]);
+    expect([coin.width, coin.height, coin.y]).toEqual([100, 100, 1472 - 1499.5]);
     within(coin.x, price.right + 1, 'coin follows the price');
     within(price.left + (coin.x + 100), 0, 'row centred on the button');
-    within(price.baseline, baseline(1508, 100, 64, 1535.5), 'price');
+    within(price.baseline, baseline(1472, 100, 64, 1499.5), 'price');
 
     for (const layer of [shell, inset, heart, field<Text>(view, 'title'), field<Text>(view, 'countText'), field<Text>(view, 'nextLabel'), field<Text>(view, 'timerText')]) {
       expect(layer.eventMode).toBe('none');
@@ -686,7 +686,7 @@ describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figm
     ru.destroy();
   });
 
-  it('fits like the Figma frame: the 960 × 1059 window keeps its place in the contain-fitted 1080 × 2344 screen', () => {
+  it('fits like the Figma frame: the 960 × 990 window keeps its place in the contain-fitted 1080 × 2344 screen', () => {
     for (const [w, h] of [[390, 844], [1280, 800], [1080, 2344]] as const) {
       const kit = createKit();
       const view = create(kit, [], kit.textures);
@@ -696,9 +696,9 @@ describe("LivesWindowView variant 'figma' (Figma screen/lives 85:8944, docs/figm
       const k = Math.min(w / 1080, h / 2344);
       const shell = (drawing(field<Container>(view, 'panel'), kit.textures.windowBase) as NineSliceSprite).getBounds();
       expect(shell.width, `${w}×${h}`).toBeCloseTo(968 * k, 6);
-      expect(shell.height, `${w}×${h}`).toBeCloseTo(1071 * k, 6);
+      expect(shell.height, `${w}×${h}`).toBeCloseTo(1002 * k, 6);
       expect(shell.x + 4 * k, `${w}×${h}`).toBeCloseTo(w / 2 + X(60) * k, 6);
-      expect(shell.y + 4 * k, `${w}×${h}`).toBeCloseTo(h / 2 + Y(642) * k, 6);
+      expect(shell.y + 4 * k, `${w}×${h}`).toBeCloseTo(h / 2 + Y(677) * k, 6);
       view.destroy();
     }
   });

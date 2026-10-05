@@ -42,7 +42,8 @@ export type { ResultWindowParams, ResultWindowViewOptions } from './ResultWindow
 export { LivesWindowView, LIVES_FIGMA_TEXTURES } from './LivesWindowView';
 export type { LivesWindowParams, LivesWindowViewOptions, LivesWindowVariant } from './LivesWindowView';
 export { ConfirmWindowView, CONFIRM_EXIT_FIGMA_TEXTURES } from './ConfirmWindowView';
-export type { ConfirmWindowViewOptions, ConfirmWindowVariant, ConfirmWindowAction } from './ConfirmWindowView';
+export type { ConfirmWindowParams, ConfirmWindowViewOptions, ConfirmWindowVariant, ConfirmWindowAction } from './ConfirmWindowView';
+export type { ReadyUiOffer, ReadyUiOfferArt, ReadyUiOfferItem } from './OfferPanel';
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
 export { SettingsWindowView } from './SettingsWindowView';
@@ -79,6 +80,8 @@ export type {
   ReadyUiSkinWindowText,
   ReadyUiSkinLivesLayout,
   ReadyUiSkinLivesTextBox,
+  ReadyUiSkinOfferLayout,
+  ReadyUiSkinOfferItemLayout,
   ReadyUiSkinHudLayout,
   ReadyUiSkinLevelMapLayout,
   ReadyUiSkinBottomNavLayout,

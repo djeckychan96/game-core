@@ -19,6 +19,7 @@ const CORE_KEYS = [
   'core.no_ads.description',
   'core.no_ads.word_ads',
   'core.no_ads.word_no',
+  'core.offer.title',
   'core.orientation.rotate_device',
   'core.result.completed',
   'core.result.continue',

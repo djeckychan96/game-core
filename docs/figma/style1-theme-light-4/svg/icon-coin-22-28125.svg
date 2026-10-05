@@ -1,0 +1,27 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="266.187" height="277.947" viewBox="0 0 266.187 277.947" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="icon_coin">
+<g id="Ellipse 19" filter="url(#filter0_d_0_4)">
+<ellipse cx="133.094" cy="137.427" rx="130" ry="134.333" fill="#E99009"/>
+<path d="M133.094 1.54668C205.792 1.54668 264.64 62.4304 264.64 137.427C264.64 212.423 205.792 273.307 133.094 273.307C60.3949 273.307 1.54668 212.423 1.54668 137.427C1.54684 62.4304 60.395 1.54668 133.094 1.54668Z" stroke="#261A30" stroke-width="3.09355"/>
+</g>
+<ellipse id="Ellipse 26" cx="134.539" cy="208.204" rx="73.6667" ry="63.5556" fill="#FFB20D"/>
+<circle id="Ellipse 20" cx="133.094" cy="127.315" r="124.222" fill="#FFE520"/>
+<path id="Subtract" d="M9.00566 121.538C12.0239 187.461 66.4251 239.982 133.095 239.982C199.761 239.982 254.16 187.465 257.181 121.544C257.269 123.457 257.316 125.381 257.316 127.316C257.316 195.922 201.7 251.537 133.095 251.538C64.4887 251.538 8.87217 195.922 8.87187 127.316C8.87187 125.379 8.91797 123.453 9.00566 121.538Z" fill="#FFEC60"/>
+<ellipse id="Ellipse 27" cx="74.508" cy="48.5448" rx="29.929" ry="21.5324" transform="rotate(-31.0619 74.508 48.5448)" fill="white"/>
+<ellipse id="Ellipse 24" cx="165.692" cy="177.668" rx="49.6221" ry="42.3856" transform="rotate(-31.0619 165.692 177.668)" fill="#FFFA60"/>
+<circle id="Ellipse 21" cx="133.094" cy="127.315" r="69.3333" fill="#FF9326"/>
+<ellipse id="Ellipse 22" cx="133.094" cy="133.093" rx="54.8889" ry="57.7778" fill="#FFB30D"/>
+<ellipse id="Ellipse 25" cx="126.807" cy="124.044" rx="46.5367" ry="39.7501" transform="rotate(-31.0619 126.807 124.044)" fill="#FFC400"/>
+</g>
+<defs>
+<filter id="filter0_d_0_4" x="0" y="0" width="266.187" height="277.947" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+<feFlood flood-opacity="0" result="BackgroundImageFix"/>
+<feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+<feOffset dy="3.09355"/>
+<feComposite in2="hardAlpha" operator="out"/>
+<feColorMatrix type="matrix" values="0 0 0 0 0.14902 0 0 0 0 0.101961 0 0 0 0 0.188235 0 0 0 1 0"/>
+<feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_4"/>
+<feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_4" result="shape"/>
+</filter>
+</defs>
+</svg>

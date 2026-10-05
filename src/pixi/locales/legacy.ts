@@ -19,6 +19,9 @@ export const READY_UI_LEGACY_TEXT = Object.freeze({
     adAction: READY_UI_EN['core.lives.ad_action'],
     full: READY_UI_EN['core.common.max']
   }),
+  offer: Object.freeze({
+    title: READY_UI_EN['core.offer.title']
+  }),
   settings: Object.freeze({
     title: READY_UI_EN['core.settings.title'],
     sound: READY_UI_EN['core.settings.sound'],

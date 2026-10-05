@@ -238,6 +238,8 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   at x −261 with `n/max`, `Next heart in` + countdown (`setTimer` while open; `MAX` when full),
   REFILL with the coin price and a "+1 for an ad" button at y 350; `onRefill`, `onWatchAd`. `refillOffer: false`
   (a game without a refill economy) hides REFILL, `adOffer: false` the ad button; the one shown takes the centre.
+  Styled: `show({ …, offer })` draws the style's OFFER panel under the window (see below), `onOffer(params)` is its buy
+  continuation; without `offer` (or `onOffer`) the window is alone and centred as before.
 - **ShopWindowView** — the donor's **full-screen** shop: striped awning tiled across the top
   (36/255 of the height), the 89-unit × at the top-right, then the blue `SPECIAL OFFER` ribbon
   and a 3-column grid of 318 × 418 pack cards (amount on top, coin pile, price on the bottom band)
@@ -262,6 +264,23 @@ Every window below is laid out from the donor's generated prefab + its runtime a
 
 Only one window is active per `UiRuntime` at a time (foundation rule); `ui.isBlocking()` is true
 while any of them is open.
+
+### OFFER panel (styled Lives / Confirm)
+
+A style with `windows.offer` draws an OFFER panel under Lives and Confirm (theme_light_4: a pack offered instead of
+waiting for a life or restarting). It is data only — `ReadyUiOffer` `{ title?, icon, iconLabel?, items?, price, badge? }`:
+the hero is the style's `'offerLivesArt'` (unlimited lives) / `'offerCoinArt'` or a host texture, `items` are at most two
+host icons with their counts (boosters are game content), `price` is a coin price on the buy button, `badge` the corner
+text (`x3`, `-60%`; none = no badge). `LivesWindowView.show({ …, offer })` / `ConfirmWindowView.show({ offer })` with
+`onOffer` set; the buy tap closes the window and runs `onOffer` (the purchase is the host's), the panel's × (when the
+style draws one) closes the window like the window's ×. The window and the panel are centred together; a show without
+an offer builds nothing and keeps the window alone. The donor look and the pre-style `include` path never draw it.
+
+```ts
+lives.show({ lives, maxLives, timerText, refillPrice: 900,
+  offer: { icon: 'offerLivesArt', iconLabel: '35d', items: [{ icon: lampTexture, label: '5' }, { icon: wandTexture, label: '10' }], price: 900, badge: 'x3' } });
+restartConfirm.show({ offer: { icon: 'offerCoinArt', iconLabel: '2000', price: 900 } });
+```
 
 ### ClickRippleEffect (Pixi FX)
 
@@ -356,9 +375,9 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 
 | View | Style 1 (`READY_UI_STYLE_1`, id `style-1`) | Style 2 (`READY_UI_STYLE_2`, id `style-2`) |
 | --- | --- | --- |
-| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit) | covered — `theme_light_3` 8:22049 Restart / 8:22069 Exit: the Style 1 window (its own files, window-scoped `confirm:*`, the kit font with 4 / 4 stroke / shadow); one view, `action: 'restart' \| 'exit'` picks the copy (docs/figma/style2-confirm) |
-| LivesWindowView | covered — Figma `screen/lives` (docs/figma/lives) | covered — `theme_light_3` 8:22838: the Settings popup, blur section, heart with the runtime count, green REFILL + price coin, orange GET + tv + heart "+1", no highlight (`adHighlight: null`) (docs/figma/style2-refill-hearts) |
-| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts | covered — `theme_light_3` 8:17493: Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings) |
+| ConfirmWindowView | covered — Figma `screen/confirm-exit` (docs/figma/confirm-exit); theme_light_4 Exit 22:28232 unchanged, Restart 22:28101 = the same window + the OFFER panel (docs/figma/style1-theme-light-4) | covered — `theme_light_3` 8:22049 Restart / 8:22069 Exit: the Style 1 window (its own files, window-scoped `confirm:*`, the kit font with 4 / 4 stroke / shadow); one view, `action: 'restart' \| 'exit'` picks the copy (docs/figma/style2-confirm) |
+| LivesWindowView | covered — theme_light_4 22:27562 on the `screen/lives` art: the 990-unit window (REFILL NOW / GET +1 71 units higher) + the optional OFFER panel (docs/figma/style1-theme-light-4) | covered — `theme_light_3` 8:22838: the Settings popup, blur section, heart with the runtime count, green REFILL + price coin, orange GET + tv + heart "+1", no highlight (`adHighlight: null`) (docs/figma/style2-refill-hearts) |
+| SettingsWindowView | covered — current SOUND / MUSIC / optional HAPTIC, close, version and optional HOME / RESTART surface; `map` / `gameplay` layouts; theme_light_4 22:28430: toggle row centred in the body, SETTINGS 100, plain version, the violet shell × | covered — `theme_light_3` 8:17493: Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |

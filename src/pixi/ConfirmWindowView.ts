@@ -1,5 +1,6 @@
 import { type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { OfferPanel, type ReadyUiOffer } from './OfferPanel';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -28,6 +29,15 @@ const ACTION_LABEL = {
   restart: { key: 'core.confirm.restart', legacy: READY_UI_LEGACY_TEXT.confirm.restart }
 } as const satisfies Record<ConfirmWindowAction, { key: string; legacy: string }>;
 
+/** `show()` params; every one optional (`show()` with none = the window alone). */
+export interface ConfirmWindowParams {
+  /**
+   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn only with `onOffer`), e.g. a
+   * pack offered instead of restarting. The window and the panel are centred together.
+   */
+  offer?: ReadyUiOffer | null;
+}
+
 export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   id?: string;
   /**
@@ -55,6 +65,8 @@ export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'>
   illustration?: boolean;
   /** The one action button, a close continuation. Cancel = the × or the backdrop → `onDismiss`. */
   onConfirm: () => void;
+  /** The OFFER panel's buy button (close continuation; the purchase is the host's). Without it no offer is drawn. */
+  onOffer?: (offer: ReadyUiOffer) => void;
 }
 
 type ConfirmLook = WindowSkinLook<'confirm'>;
@@ -119,7 +131,7 @@ function modalOptions(options: ConfirmWindowViewOptions, look: ConfirmLook | nul
  *
  * Both: the × and a backdrop tap cancel (`onDismiss`); the button runs `onConfirm`.
  */
-export class ConfirmWindowView extends ModalWindow {
+export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
   readonly variant: ConfirmWindowVariant;
   readonly action: ConfirmWindowAction;
   /** The Ready UI style drawing this window, or null (donor). */
@@ -135,6 +147,12 @@ export class ConfirmWindowView extends ModalWindow {
   private readonly heart: Sprite | null;
   private readonly lifeDelta: Text | null;
   private readonly confirmLabel: Text | null;
+  private readonly onOffer: ((offer: ReadyUiOffer) => void) | null;
+  /** Styled with a style OFFER layout (and its art): builds the panel under the window on its first offer. */
+  private readonly createOfferPanel: (() => OfferPanel) | null;
+  private offerPanel: OfferPanel | null = null;
+  private readonly ownFitHeight: number | undefined;
+  private offer: ReadyUiOffer | null = null;
 
   constructor(options: ConfirmWindowViewOptions) {
     const look = confirmLook(options);
@@ -144,6 +162,8 @@ export class ConfirmWindowView extends ModalWindow {
     this.layout = look?.layout ?? null;
     this.action = options.action ?? 'exit';
     this.onConfirm = options.onConfirm;
+    this.onOffer = options.onOffer ?? null;
+    this.ownFitHeight = options.fit?.heightRatio;
     const actionLabel = ACTION_LABEL[this.action];
     const confirmText = localizedText(options.confirmLabel, this.i18n, actionLabel.key, actionLabel.legacy);
     const onTap = (): void => { this.close('button', () => this.onConfirm()); };
@@ -165,6 +185,7 @@ export class ConfirmWindowView extends ModalWindow {
       this.panel.addChild(this.confirmButton);
       this.surface = this.glow = this.heart = null;
       this.lifeDelta = this.confirmLabel = null;
+      this.createOfferPanel = null;
       this.placeClose();
       return;
     }
@@ -213,15 +234,69 @@ export class ConfirmWindowView extends ModalWindow {
     this.panel.addChildAt(this.surface, 0);
     this.panel.addChildAt(this.title, 1);
     for (const node of [this.glow, this.confirmButton, this.body, this.heart, this.lifeDelta]) if (node) this.panel.addChild(node);
+    const offer = skin.windows.offer;
+    // the OFFER art is there only when required (a style with `windows.offer`, loaded with `{ skin }`)
+    this.createOfferPanel = offer && A.offerPanel && A.offerBadge && A.offerLivesArt && A.offerCoinArt && A.priceIcon
+      ? () => new OfferPanel({
+        ui: this.ui, theme: this.theme, i18n: this.i18n, id: this.id, skin, window: 'confirm', layout: offer, text,
+        art: { offerPanel: A.offerPanel, offerBadge: A.offerBadge, offerLivesArt: A.offerLivesArt, offerCoinArt: A.offerCoinArt, buttonPrimary: A.buttonPrimary, priceIcon: A.priceIcon, windowClose: A.windowClose },
+        register: (button) => this.addButton(button),
+        onBuy: () => {
+          const shown = this.offer;
+          if (shown) this.close('button', () => this.onOffer?.(shown));
+        },
+        onClose: () => this.close('button')
+      })
+      : null;
     this.placeClose();
   }
 
-  protected applyParams(): void {}
+  protected applyParams(params: ConfirmWindowParams | void): void {
+    const L = this.layout;
+    const offer = (params && params.offer) ?? null;
+    const show = L !== null && this.createOfferPanel !== null && offer !== null && this.onOffer !== null;
+    if (show && !this.offerPanel && this.createOfferPanel) this.offerPanel = this.createOfferPanel();
+    const panel = this.offerPanel;
+    this.offer = show ? offer : null;
+    if (panel) {
+      // only an offer on show is in the scene: a window without one keeps exactly its own layers
+      panel.visible = show;
+      panel.buyButton.setEnabled(show);
+      panel.closeButton?.setEnabled(show);
+      if (show && panel.parent !== this.panel) this.panel.addChild(panel);
+      else if (!show && panel.parent) panel.parent.removeChild(panel);
+      if (show && offer && L) {
+        panel.set(offer);
+        panel.position.set(px(L, 0), py(L, L.window.height + panel.layout.panel.gap));
+      }
+    }
+    if (L && this.skin && this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / this.skin.frame.height;
+  }
 
-  /** Styled: the style's window box (the fit, the backdrop test and the hit area; not the art's bleed). Donor: measured. */
+  /** The OFFER panel is parented only while an offer is shown: a detached one goes with the window too. */
+  override destroy(options?: Parameters<ModalWindow['destroy']>[0]): void {
+    const offer = this.offerPanel;
+    super.destroy(options);
+    if (offer && !offer.destroyed) offer.destroy({ children: true });
+  }
+
+  /**
+   * Styled: the style's window box, with the OFFER panel under it when one is shown (the fit, the backdrop test and the
+   * hit area; not the art's bleed). Donor: measured.
+   */
   protected override panelBounds(): Rectangle {
     const L = this.layout;
-    return L ? new Rectangle(px(L, 0), py(L, 0), L.window.width, L.window.height) : super.panelBounds();
+    if (!L) return super.panelBounds();
+    const offer = this.offerPanel?.visible ? this.offerPanel : null;
+    const extra = offer ? offer.layout.panel.gap + offer.panelHeight : 0;
+    return new Rectangle(px(L, 0), py(L, 0), L.window.width, L.window.height + extra);
+  }
+
+  /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */
+  protected override panelCentre(): { x: number; y: number } {
+    if (!this.layout || !this.offerPanel?.visible) return super.panelCentre();
+    const b = this.panelBounds();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {

@@ -126,7 +126,7 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect(pixiEntry.READY_UI_SKIN_VIEW_ROLES).toBe(READY_UI_SKIN_VIEW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
     expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result']);
-    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'result', 'settings']);
+    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'offer', 'result', 'settings']);
     expect('hud' in READY_UI_STYLE_1).toBe(true);
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
     // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles)
@@ -239,11 +239,16 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     expect(toggles.sound.button.background.texture).toBe(roles.settingsSound);
     expect(toggles.music.button.background.texture).toBe(roles.settingsMusic);
     expect(toggles.haptic.button.background.texture).toBe(roles.settingsHaptic);
-    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: -144 });
-    expect(toggles.music.button.position).toMatchObject({ x: 0, y: -144 });
-    expect(toggles.haptic.button.position).toMatchObject({ x: 306, y: -144 });
+    // theme_light_4 22:28430: the toggle row centred in the body (buttons at 478 of the 1090 window)
+    expect(toggles.sound.button.position).toMatchObject({ x: -306, y: 43 });
+    expect(toggles.music.button.position).toMatchObject({ x: 0, y: 43 });
+    expect(toggles.haptic.button.position).toMatchObject({ x: 306, y: 43 });
     expect(field<object>(view, 'activeLayout')).toBe(READY_UI_STYLE_1.windows.settings.map);
     expect(field<Text>(view, 'version').text).toBe('VERSION 1.2.3');
+    // theme_light_4: SETTINGS at 100, the version plain #716dd0 (no stroke / shadow), the shell's own violet ×
+    expect(field<Text>(view, 'title').style.fontSize).toBe(100);
+    expect([field<Text>(view, 'version').style.stroke, field<Text>(view, 'version').style.dropShadow]).toEqual([null, null]);
+    expect(READY_UI_STYLE_1.assets.settingsClose.file).toBe(READY_UI_STYLE_1.assets.windowClose.file);
     expect(toggles.sound.off.visible).toBe(false);
     expect(toggles.music.off.visible).toBe(true);
     tap(toggles.sound.button, kit);
@@ -274,8 +279,8 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
     const home = field<UiButton>(view, 'homeButton');
     expect(field<NineSliceSprite>(view, 'surface').height).toBe(1588); // 1576 logical + 4 top / 8 bottom bleed
     // haptic is never drawn in-level: the pair is centred (it used to keep the empty third slot at x 306)
-    expect(toggles.sound.button.position).toMatchObject({ x: -153, y: -387 });
-    expect(toggles.music.button.position).toMatchObject({ x: 153, y: -387 });
+    expect(toggles.sound.button.position).toMatchObject({ x: -153, y: -200 });
+    expect(toggles.music.button.position).toMatchObject({ x: 153, y: -200 });
     expect(toggles.haptic.button.visible).toBe(false);
     expect(restart.position).toMatchObject({ x: 0.5, y: 303.5 });
     expect(home.position).toMatchObject({ x: 0.5, y: 535.5 });

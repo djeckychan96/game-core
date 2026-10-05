@@ -1,5 +1,6 @@
 import { CanvasTextMetrics, Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
+import { OfferPanel, type ReadyUiOffer } from './OfferPanel';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -22,6 +23,11 @@ export interface LivesWindowParams {
    * is hidden and the rewarded button, when offered, takes the centre.
    */
   refillOffer?: boolean;
+  /**
+   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn only with `onOffer`). The window
+   * and the panel are centred together; absent / null = the window alone, centred as before.
+   */
+  offer?: ReadyUiOffer | null;
 }
 
 /**
@@ -58,6 +64,8 @@ export interface LivesWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   /** Close continuations. */
   onRefill: (params: LivesWindowParams) => void;
   onWatchAd?: (params: LivesWindowParams) => void;
+  /** The OFFER panel's buy button (close continuation; the purchase is the host's). Without it no offer is drawn. */
+  onOffer?: (params: LivesWindowParams) => void;
 }
 
 type LivesLook = WindowSkinLook<'lives'>;
@@ -143,6 +151,12 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   private readonly fullLabel: string;
   private readonly onRefill: (params: LivesWindowParams) => void;
   private readonly onWatchAd: ((params: LivesWindowParams) => void) | null;
+  private readonly onOffer: ((params: LivesWindowParams) => void) | null;
+  /** Styled with a style OFFER layout (and its art): builds the panel under the window on its first offer. */
+  private readonly createOfferPanel: (() => OfferPanel) | null;
+  private offerPanel: OfferPanel | null = null;
+  /** The caller's own fit height ratio (the styled fit otherwise follows the composition). */
+  private readonly ownFitHeight: number | undefined;
   private params: LivesWindowParams | null = null;
 
   constructor(options: LivesWindowViewOptions) {
@@ -153,6 +167,8 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.look = look;
     this.onRefill = options.onRefill;
     this.onWatchAd = options.onWatchAd ?? null;
+    this.onOffer = options.onOffer ?? null;
+    this.ownFitHeight = options.fit?.heightRatio;
     this.fullLabel = localizedText(options.fullLabel, this.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.lives.full);
 
     if (look) {
@@ -208,12 +224,24 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       for (const node of [surface, this.title, inset, heart, this.countText, this.nextLabel, this.timerText]) node.eventMode = 'none';
       this.panel.addChildAt(surface, 0);
       this.panel.addChild(this.title, inset, heart, this.countText, this.nextLabel, this.timerText, this.refillButton, this.adButton);
+      const offer = skin.windows.offer;
+      // the OFFER art is there only when required (a style with `windows.offer`, loaded with `{ skin }`)
+      this.createOfferPanel = offer && A.offerPanel && A.offerBadge && A.offerLivesArt && A.offerCoinArt
+        ? () => new OfferPanel({
+          ui: this.ui, theme: this.theme, i18n: this.i18n, id: this.id, skin, window: 'lives', layout: offer, text: textLook,
+          art: { offerPanel: A.offerPanel, offerBadge: A.offerBadge, offerLivesArt: A.offerLivesArt, offerCoinArt: A.offerCoinArt, buttonPrimary: A.buttonPrimary, priceIcon: A.priceIcon, windowClose: A.windowClose },
+          register: (button) => this.addButton(button),
+          onBuy: () => this.finish('offer'),
+          onClose: () => this.close('button')
+        })
+        : null;
       this.placeClose();
       return;
     }
 
     const t = this.textures;
     this.priceCoin = null;
+    this.createOfferPanel = null;
     this.panel.addChildAt(this.sprite(t.panelPurple, 968, 1070), 0);
     this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), { fontSize: 88, stroke: 11 });
     this.title.y = -440;
@@ -277,6 +305,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       this.refillButton.setEnabled(showRefill && !full);
       this.refillButton.x = showAd ? X(look, L.refill.x + L.refill.width / 2) : 0;
       this.adButton.x = showRefill ? X(look, L.ad.x + L.ad.width / 2) : 0;
+      this.layoutOffer(look, params);
       return;
     }
     this.params = params;
@@ -295,6 +324,13 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.adButton.x = showRefill ? 206 : 0;
   }
 
+  /** The OFFER panel is parented only while an offer is shown: a detached one goes with the window too. */
+  override destroy(options?: Parameters<ModalWindow['destroy']>[0]): void {
+    const offer = this.offerPanel;
+    super.destroy(options);
+    if (offer && !offer.destroyed) offer.destroy({ children: true });
+  }
+
   /** Live countdown update while the window is open. */
   setTimer(timerText: string): void {
     if (!this.params || this.params.lives >= this.params.maxLives) return;
@@ -303,12 +339,47 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     if (this.look) placeFigmaLabel(this.timerText, { ...panelBox(this.look, this.look.layout.timer), align: this.look.layout.timer.align ?? 'center' });
   }
 
-  /** Styled: the style's window box (the fit, the backdrop test and the hit area; not the art's bleed). Donor: measured. */
+  /**
+   * Styled: the style's window box, with the OFFER panel under it when one is shown (the fit, the backdrop test and the
+   * hit area; not the art's bleed). Donor: measured.
+   */
   protected override panelBounds(): Rectangle {
     const look = this.look;
     if (!look) return super.panelBounds();
     const w = look.layout.window;
-    return new Rectangle(X(look, w.x), Y(look, w.y), w.width, w.height);
+    const offer = this.offerPanel?.visible ? this.offerPanel : null;
+    const extra = offer ? offer.layout.panel.gap + offer.panelHeight : 0;
+    return new Rectangle(X(look, w.x), Y(look, w.y), w.width, w.height + extra);
+  }
+
+  /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */
+  protected override panelCentre(): { x: number; y: number } {
+    if (!this.look || !this.offerPanel?.visible) return super.panelCentre();
+    const b = this.panelBounds();
+    return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  /** Shows / hides the OFFER panel under the window and gives the styled fit the composition's share of the frame. */
+  private layoutOffer(look: LivesLook, params: LivesWindowParams): void {
+    const offer = params.offer ?? null;
+    const show = this.createOfferPanel !== null && offer !== null && this.onOffer !== null;
+    if (show && !this.offerPanel && this.createOfferPanel) this.offerPanel = this.createOfferPanel();
+    const panel = this.offerPanel;
+    if (panel) {
+      // only an offer on show is in the scene: a window without one keeps exactly its own layers
+      panel.visible = show;
+      panel.buyButton.setEnabled(show);
+      panel.closeButton?.setEnabled(show);
+      if (show && panel.parent !== this.panel) this.panel.addChild(panel);
+      else if (!show && panel.parent) panel.parent.removeChild(panel);
+    }
+    const w = look.layout.window;
+    if (show && panel && offer) {
+      panel.set(offer);
+      panel.position.set(X(look, w.x), Y(look, w.y + w.height + panel.layout.panel.gap));
+      this.placeClose();
+    }
+    if (this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / look.skin.frame.height;
   }
 
   protected override closeButtonPosition(): { x: number; y: number } {
@@ -330,12 +401,13 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.priceCoin.position.set(left + advance + L.priceRow.gap, L.coin.y === undefined ? top : L.coin.y - L.refill.y - L.refill.height / 2);
   }
 
-  private finish(action: 'refill' | 'ad'): void {
+  private finish(action: 'refill' | 'ad' | 'offer'): void {
     const params = this.params;
     if (!params) return;
     this.close('button', () => {
       if (action === 'refill') this.onRefill(params);
-      else this.onWatchAd?.(params);
+      else if (action === 'ad') this.onWatchAd?.(params);
+      else this.onOffer?.(params);
     });
   }
 }

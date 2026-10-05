@@ -261,7 +261,7 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     const L = layouts.map;
     const textLook = skinTextLook(skin);
     const label = (text: string, box: ReadyUiSkinSettingsTextBox, fill?: number): Text => {
-      const node = createFigmaLabel(this.theme, text, box.fontSize, textLook);
+      const node = createFigmaLabel(this.theme, text, box.fontSize, box.outline === false ? { ...textLook, strokeOutside: 0, shadowY: 0 } : textLook);
       const color = box.fill ?? fill;
       if (color !== undefined) node.style.fill = color;
       return node;

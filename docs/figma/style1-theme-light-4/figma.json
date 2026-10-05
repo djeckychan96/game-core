@@ -1,0 +1,42 @@
+{
+  "about": "Style 1 (old purple Pixel Flow) in theme_light_4: the reads behind src/pixi/skins/style1.ts windows.lives / windows.offer / windows.settings (2026-10-05) and the inputs of the three new OFFER textures. Run: node scripts/figma-assets.mjs docs/figma/style1-theme-light-4 [--check]",
+  "snapshot": "Figma section 22:26884 theme_light_4 as of 2026-10-05 (frozen for this task)",
+  "source": { "file": "5FWFwdO4QGeDfeQtloLNOS", "section": "22:26884", "row": "Окна на переделку 22:27249, purple row y 6052" },
+  "screens": {
+    "22:27562": "попап восполнить жизни — Lives: Component 9 960 x 990 at 60, 332 + OFFER (Component 9 960 x 640 at 60, 1372)",
+    "22:28101": "попап рестарт — Confirm RESTART (the confirm-exit window, 960 x 994 at 60, 330) + the same OFFER at 66, 1374",
+    "22:28232": "попап выйти — Confirm EXIT, unchanged (960 x 994 at 60, 675)",
+    "22:28251": "победа — Result WIN, unchanged boxes; its x2 rewarded offer is still not Core's",
+    "22:28430": "настройки гл экран — Settings map: 960 x 1090 at 60, 627; toggles 62 / 368 / 674 at y 478 (labels 391), version 994",
+    "22:28152": "REJECTED as a draft: placeholder 'Нужна иконка сломанной звезды' instead of art (RESPAWN / GET 3 STARS)"
+  },
+  "assets": [
+    {
+      "key": "style1-offer-badge",
+      "file": "window/style1_offer_badge@2x.webp",
+      "scale": 2,
+      "size": [300, 300],
+      "note": "icon_sale 22:28091 without its text: Union 22:28092 + Union 22:28094 turned -30 deg (svg/offer-badge.svg composes the two Figma SVG exports). Box = offer-panel-local (-80, -45, 300, 300)",
+      "layers": [{ "svg": "svg/offer-badge.svg", "at": [0, 0] }]
+    },
+    {
+      "key": "style1-offer-lives",
+      "file": "icons/style1_offer_lives@2x.webp",
+      "scale": 2,
+      "size": [326, 298],
+      "note": "icon_heart 22:28071 without '35d': Group 170 (the Lives heart, render 325.4 x 298) + Group 378, the infinity glyph (render 133.6 x 85.05 at 96, 103 of the heart render)",
+      "layers": [
+        { "svg": "svg/heart-group170.svg", "at": [0, 0] },
+        { "svg": "svg/infinity-group378.svg", "at": [96, 103] }
+      ]
+    },
+    {
+      "key": "style1-offer-coin",
+      "file": "icons/style1_offer_coin@2x.webp",
+      "scale": 2,
+      "size": [267, 278],
+      "note": "icon_coin 22:28125 (260 x 268.67, render 266.19 x 277.95) without '2000'",
+      "layers": [{ "svg": "svg/icon-coin-22-28125.svg", "at": [0, 0] }]
+    }
+  ]
+}

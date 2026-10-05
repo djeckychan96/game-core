@@ -692,7 +692,7 @@ describe('Style 2 — Confirm (Restart 8:22049 / Exit 8:22069) through the exist
 
   it('is part of the Style 2 package: covered, Style 1\'s own files (window-scoped where Lives draws the same role), Style 1 unchanged', () => {
     expect(READY_UI_STYLE_2.covers).toContain('confirm');
-    expect(requiredSkinRoles(READY_UI_STYLE_2, 'confirm')).toEqual(READY_UI_SKIN_WINDOW_ROLES.confirm);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'confirm')).toEqual(['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary']);
     // the approved Style 2 Confirm IS the Style 1 window: the same file + caps objects, no duplicate under style2/
     const A = READY_UI_STYLE_2.assets as ReadyUiSkin['assets'];
     expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', 'windowSurface')).toBe('confirm:windowSurface');
@@ -707,9 +707,9 @@ describe('Style 2 — Confirm (Restart 8:22049 / Exit 8:22069) through the exist
     // the same roles in Lives keep the Style 2 popup art (no window key there)
     expect(skinAssetKey(READY_UI_STYLE_2, 'lives', 'windowSurface')).toBe('windowSurface');
     expect(A.windowSurface?.file).toBe('style2/settings_panel.webp');
-    // Style 1 has no window keys and its Confirm needs the same roles as before
+    // Style 1 has no window keys; its Confirm needs the same roles as before plus its OFFER panel's (theme_light_4)
     expect(Object.keys(READY_UI_STYLE_1.assets).some((key) => key.includes(':'))).toBe(false);
-    expect(requiredSkinRoles(READY_UI_STYLE_1, 'confirm')).toEqual(['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary']);
+    expect(requiredSkinRoles(READY_UI_STYLE_1, 'confirm')).toEqual(['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary', 'offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'priceIcon']);
     // a window key must name a role of a covered window
     const stray = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, 'lives:heroGlow': { file: 'x.webp' } } } as unknown as ReadyUiSkin;
     expect(() => validateReadyUiSkin(stray)).toThrow("ReadyUiSkin 'style-2': asset 'lives:heroGlow' names no role of a window the style covers");

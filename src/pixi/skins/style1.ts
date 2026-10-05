@@ -4,6 +4,11 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
 /**
  * Style 1 — the Figma "HAMSTER PIXEL FLOW" Ready UI.
  *
+ * theme_light_4 (file 5FWFwdO4QGeDfeQtloLNOS, section 22:26884, the purple row; docs/figma/style1-theme-light-4) is the
+ * current snapshot: Lives 22:27562 (shorter window), the OFFER panel under Lives / Restart (22:28069 / 22:28122),
+ * Settings 22:28430 (toggle row centred, SETTINGS 100, plain version, violet ×); Exit 22:28232 and WIN 22:28251 are
+ * the boxes below unchanged.
+ *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
  * docs/figma/lives), the current runtime surface of `settings`, HUD and LevelMap from the canonical level-select
  * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301), and the level `result` WIN / FAIL
@@ -47,8 +52,8 @@ export const READY_UI_STYLE_1 = {
     adIcon: { file: 'icons/icon_ad@2x.webp' },
     /** Settings window shell. Its 968 × 1102 export is the 960 × 1090 logical map box plus 4 / 4 / 4 / 8 bleed. */
     settingsPanel: { file: 'settings/panel.webp', nineSlice: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } } },
-    /** Settings close glyph (51 × 51). */
-    settingsClose: { file: 'button/btn_close.webp' },
+    /** Settings close glyph (51 × 51): theme_light_4 22:28868 draws the shell's own violet × (the window's), not the red donor one. */
+    settingsClose: { file: 'window/window_close@2x.webp' },
     settingsSound: { file: 'settings/btn_sound.webp' },
     settingsMusic: { file: 'settings/btn_music.webp' },
     settingsHaptic: { file: 'settings/btn_haptic.webp' },
@@ -90,7 +95,15 @@ export const READY_UI_STYLE_1 = {
     /** Result `icon_coin_128` at 256: the reward coin (render box). */
     rewardCoin: { file: 'result/style1_reward_coin@2x.webp' },
     /** Result FAIL EXIT (no Figma node): Style 1's RETURN HOME surface — the gameplay Settings home button art. */
-    buttonExit: { file: 'settings/btn_home.webp' }
+    buttonExit: { file: 'settings/btn_home.webp' },
+    /** theme_light_4 OFFER panel (22:28069 / 22:28122): the same `Component 9` window shell at 960 × 640 — the window file and caps. */
+    offerPanel: { file: 'window/window_base@2x.webp', nineSlice: { left: 92, top: 187, right: 92, bottom: 110, pad: { left: 4, top: 4, right: 4, bottom: 8 } } },
+    /** `icon_sale` 22:28091 without its text: the red burst turned −30° (docs/figma/style1-theme-light-4). */
+    offerBadge: { file: 'window/style1_offer_badge@2x.webp' },
+    /** `icon_heart` 22:28071 without its caption: the Lives heart with the ∞ glyph (unlimited lives). */
+    offerLivesArt: { file: 'icons/style1_offer_lives@2x.webp' },
+    /** `icon_coin` 22:28125 without its amount. */
+    offerCoinArt: { file: 'icons/style1_offer_coin@2x.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -158,84 +171,126 @@ export const READY_UI_STYLE_1 = {
       /** the button's @content / slot/label, button-local; Fira Sans Black 80 */
       buttonLabel: { x: 25, y: 27, width: 550, height: 128, fontSize: 80 }
     },
-    /** Figma `screen/lives`: frame boxes (modal/lives 95:22202 is 960 × 1059 at 60, 642). */
+    /**
+     * theme_light_4 `попап восполнить жизни` 22:27562 (`refill_hearts` 22:27999: Component 9 at 960 × 990): frame boxes
+     * with the window alone centred (y 677; Figma draws it at 332 above the OFFER panel — the composition is centred).
+     * The pre-theme_light_4 window was 1059 high with the buttons 71 lower; the art and the other boxes are unchanged.
+     */
     lives: {
-      /** ui/window/base 85:9689: the confirm-exit shell at 960 × 1059 */
-      window: { x: 60, y: 642, width: 960, height: 1059 },
+      /** Component 9 22:28000: the confirm-exit shell at 960 × 990 */
+      window: { x: 60, y: 677, width: 960, height: 990 },
       /** slot/title: CENTER / CENTER, Fira Sans Black 80 */
-      title: { x: 195, y: 676, width: 690, height: 104, fontSize: 80 },
+      title: { x: 195, y: 711, width: 690, height: 104, fontSize: 80 },
       /** action/close (its 51 × 51 SVG box) */
-      close: { x: 923, y: 703, width: 51, height: 51 },
-      /** section/next-life Rectangle 65858: flat #a2a0f4, radius 50 */
-      inset: { x: 90, y: 934, width: 900, height: 382 },
-      /** Group 377: the heart */
-      heart: { x: 152, y: 981, width: 326, height: 298 },
-      /** Group 378 "1": 150; the box is the hug box of "1", the count is centred on it */
-      count: { x: 272, y: 1036, width: 84, height: 180, fontSize: 150 },
+      close: { x: 923, y: 738, width: 51, height: 51 },
+      /** Rectangle 65858 22:28002: flat #a2a0f4, radius 50 */
+      inset: { x: 90, y: 969, width: 900, height: 382 },
+      /** Group 412: the heart */
+      heart: { x: 152, y: 1016, width: 326, height: 298 },
+      /** "1": 150; the box is the hug box of "1", the count is centred on it */
+      count: { x: 272, y: 1071, width: 84, height: 180, fontSize: 150 },
       /** NEXT HEART IN: 50, centre */
-      nextLabel: { x: 531, y: 1052, width: 442, height: 60, fontSize: 50 },
+      nextLabel: { x: 531, y: 1087, width: 442, height: 60, fontSize: 50 },
       /** 24:15: 70, centre */
-      timer: { x: 531, y: 1115, width: 442, height: 84, fontSize: 70 },
-      /** action/refill-coins: ui/button/surface green */
-      refill: { x: 90, y: 1432, width: 371, height: 207 },
-      refillLabel: { x: 112, y: 1438, width: 331, height: 84, fontSize: 50 },
+      timer: { x: 531, y: 1150, width: 442, height: 84, fontSize: 70 },
+      /** Group 381 22:28017: ui/button/surface green */
+      refill: { x: 90, y: 1396, width: 371, height: 207 },
+      refillLabel: { x: 112, y: 1402, width: 331, height: 84, fontSize: 50 },
       /** Frame 381: price text + 1 + coin, hugging, centred on the button, rows centred in 100 */
-      priceRow: { y: 1508, height: 100, gap: 1, fontSize: 64 },
+      priceRow: { y: 1472, height: 100, gap: 1, fontSize: 64 },
       coin: { width: 100, height: 100 },
-      /** action/rewarded-life: ui/button/surface orange + the gold highlight */
-      ad: { x: 483, y: 1432, width: 507, height: 207 },
-      adHighlight: { x: 491, y: 1437, width: 307, height: 172 },
-      adLabel: { x: 620, y: 1445, width: 233.199, height: 159, fontSize: 60 },
+      /** Group 396 22:28037: ui/button/surface orange + the gold highlight */
+      ad: { x: 483, y: 1396, width: 507, height: 207 },
+      adHighlight: { x: 491, y: 1401, width: 307, height: 172 },
+      adLabel: { x: 620, y: 1409, width: 233.199, height: 159, fontSize: 60 },
       /** Group 385: the rewarded-ad clapper (render box) */
-      adIcon: { x: 511, y: 1448, width: 128, height: 134 },
-      rewardIcon: { x: 819, y: 1448, width: 154, height: 154 },
+      adIcon: { x: 511, y: 1412, width: 128, height: 134 },
+      rewardIcon: { x: 819, y: 1412, width: 154, height: 154 },
       /** +1: LEFT, hugging */
-      rewardLabel: { x: 859, y: 1483, width: 68, height: 72, fontSize: 60 }
+      rewardLabel: { x: 859, y: 1447, width: 68, height: 72, fontSize: 60 }
+    },
+    /**
+     * theme_light_4 OFFER (22:28069 under Lives, 22:28122 under Restart): a 960 × 640 Component 9, 50 under the window.
+     * Panel-local boxes. Its × is the shell's own (it closes the window). The bubble under it ("Продолжить с +3★",
+     * bubble_2) is game copy about the game's stars — not part of the Core panel.
+     */
+    offer: {
+      panel: { width: 960, height: 640, gap: 50 },
+      title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+      close: { x: 863, y: 61, width: 51, height: 51 },
+      /** icon_sale render (300 × 300 canvas around the turned burst) */
+      badge: { x: -80, y: -45, width: 300, height: 300 },
+      /** "х3": Fira Sans Black 90, its 107.5 × 117.27 box centred at 64.79, 92.58, turned −30° */
+      badgeLabel: { x: 11.04, y: 33.95, width: 107.5, height: 117.27, fontSize: 90, rotation: -30 },
+      /** a host hero: the coin's logical box (260 × 268.67 centred at 229, 370.33) */
+      icon: { x: 99, y: 236, width: 260, height: 268.67 },
+      /** the style's heroes at their render boxes: the heart (Group 170 render at 65.98, 230.9), the coin (22:28125 render) */
+      iconArt: {
+        offerLivesArt: { x: 65.98, y: 230.9, width: 326, height: 298 },
+        offerCoinArt: { x: 95.9, y: 232.9, width: 267, height: 278 }
+      },
+      /** "35d" / "2000": Fira Sans Black 100, centred at 235, 519.41 */
+      iconLabel: { x: 70, y: 459.41, width: 330, height: 120, fontSize: 100 },
+      /** tips 22:28084: the two 162 boosters and their counts (Fira Sans Black 80) */
+      items: [
+        { icon: { x: 503, y: 192, width: 162, height: 162 }, label: { x: 487, y: 296, width: 106, height: 96, fontSize: 80 } },
+        { icon: { x: 695, y: 192, width: 162, height: 162 }, label: { x: 679, y: 296, width: 106, height: 96, fontSize: 80 } }
+      ],
+      /** Btn_base 22:28089 (green, 428 × 180) */
+      button: { x: 458, y: 408, width: 428, height: 180 },
+      /** "900" (80) + the 100 coin, no gap, one row centred at 78 from the button top */
+      price: { y: 23, height: 110, gap: 0, fontSize: 80 },
+      coin: { width: 100, height: 100, y: 28 }
     },
     /**
      * Current SettingsWindowView only. All boxes are local to the window's top-left. The legacy notification,
      * privacy and restore controls are intentionally absent: the current runtime has no state or callbacks for them.
+     * theme_light_4 `настройки гл экран` 22:28430 (Component 9 960 × 1090 at 60, 627): the toggle row sits centred in
+     * the body — labels at 391, buttons at 478 (before: 204 / 291, with the legacy controls under them); the version
+     * stays at 994. theme_light_4 has no Style 1 in-level screen: `gameplay` keeps its rule — the map window with the
+     * action rows inserted above the version — so its toggle row follows the map's. SETTINGS is 100 (the other
+     * windows' titles 80); the version #716dd0 40 is plain (no stroke / shadow).
      */
     settings: {
       /** map-a / map-b collapse to the one current map layout; their unsupported legacy controls are not represented. */
       map: {
         window: { width: 960, height: 1090 },
-        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 100 },
         close: { x: 863, y: 61, width: 51, height: 51 },
         sound: {
-          button: { x: 62, y: 291, width: 224, height: 220 },
-          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
+          button: { x: 62, y: 478, width: 224, height: 220 },
+          label: { x: 77, y: 391, width: 194, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         music: {
-          button: { x: 368, y: 291, width: 224, height: 220 },
-          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
+          button: { x: 368, y: 478, width: 224, height: 220 },
+          label: { x: 393, y: 391, width: 174, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         haptic: {
-          button: { x: 674, y: 291, width: 224, height: 220 },
-          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
+          button: { x: 674, y: 478, width: 224, height: 220 },
+          label: { x: 688, y: 391, width: 197, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
-        version: { x: 267, y: 994, width: 439, height: 48, fontSize: 40 }
+        version: { x: 267, y: 994, width: 439, height: 48, fontSize: 40, outline: false }
       },
       gameplay: {
         window: { width: 960, height: 1576 },
-        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
+        title: { x: 135, y: 34, width: 690, height: 104, fontSize: 100 },
         close: { x: 863, y: 61, width: 51, height: 51 },
         sound: {
-          button: { x: 62, y: 291, width: 224, height: 220 },
-          label: { x: 77, y: 204, width: 194, height: 72, fontSize: 60 },
+          button: { x: 62, y: 478, width: 224, height: 220 },
+          label: { x: 77, y: 391, width: 194, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         music: {
-          button: { x: 368, y: 291, width: 224, height: 220 },
-          label: { x: 393, y: 204, width: 174, height: 72, fontSize: 60 },
+          button: { x: 368, y: 478, width: 224, height: 220 },
+          label: { x: 393, y: 391, width: 174, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         haptic: {
-          button: { x: 674, y: 291, width: 224, height: 220 },
-          label: { x: 688, y: 204, width: 197, height: 72, fontSize: 60 },
+          button: { x: 674, y: 478, width: 224, height: 220 },
+          label: { x: 688, y: 391, width: 197, height: 72, fontSize: 60 },
           off: { x: 32.5, y: 29, width: 159, height: 162 }
         },
         restart: {
@@ -247,7 +302,7 @@ export const READY_UI_STYLE_1 = {
           button: { x: 181, y: 1220, width: 599, height: 207 },
           label: { x: 25, y: 27, width: 549, height: 128, fontSize: 70 }
         },
-        version: { x: 267, y: 1476, width: 439, height: 48, fontSize: 40 }
+        version: { x: 267, y: 1476, width: 439, height: 48, fontSize: 40, outline: false }
       }
     },
     /**

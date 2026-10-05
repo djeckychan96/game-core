@@ -9,6 +9,7 @@ export const READY_UI_EN = Object.freeze({
   'core.lives.next': 'Next heart in',
   'core.lives.refill': 'REFILL',
   'core.lives.ad_action': 'GET',
+  'core.offer.title': 'OFFER',
   'core.common.max': 'MAX',
   'core.settings.title': 'SETTINGS',
   'core.settings.sound': 'SOUND',

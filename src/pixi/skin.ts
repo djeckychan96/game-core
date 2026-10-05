@@ -19,8 +19,11 @@ export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNa
 
 /** The roles each covered window draws with, in the view's order. A covering style must give every one an asset. */
 export const READY_UI_SKIN_WINDOW_ROLES = {
-  confirm: ['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary'],
-  lives: ['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon'],
+  confirm: ['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary', 'priceIcon', 'offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt'],
+  lives: [
+    'windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon',
+    'offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt'
+  ],
   settings: [
     'settingsPanel', 'settingsClose', 'settingsSound', 'settingsMusic', 'settingsHaptic', 'settingsOff', 'settingsBtnHome', 'settingsBtnRestart', 'settingsIconRestart',
     'settingsSoundOff', 'settingsMusicOff', 'settingsHapticOff', 'settingsIconHome'
@@ -59,7 +62,10 @@ export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typ
 export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel'];
+
+/** The roles of the OFFER panel (`windows.offer`) that Lives and Confirm draw under themselves; required only with that layout. */
+const OFFER_ROLES: readonly ReadyUiSkinRole[] = ['offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'buttonPrimary', 'priceIcon'];
 
 /** One asset of a style: its file under the served `assets/pixi-ui/` folder, and its caps when it stretches. */
 export interface ReadyUiSkinAsset {
@@ -158,9 +164,52 @@ export interface ReadyUiSkinLivesLayout {
   readonly rewardLabel: ReadyUiSkinLivesTextBox;
 }
 
-/** A Settings text box; `fill` = this text's colour (absent: the style's text fill, the theme's version colour for the version). */
+/** One OFFER item: its icon box (the host's texture, contain-fit) and its count under it. Panel-local. */
+export interface ReadyUiSkinOfferItemLayout {
+  readonly icon: ReadyUiSkinBox;
+  readonly label: ReadyUiSkinLivesTextBox;
+}
+
+/**
+ * The OFFER panel a window may show under itself (Lives, Confirm): its own shell (`offerPanel`, 9-slice), title, an
+ * optional corner badge (`offerBadge` + rotated runtime text), the hero (the style's `offerLivesArt` / `offerCoinArt`
+ * or a host texture) with its caption, up to two host items with their counts, and the buy button (`buttonPrimary`)
+ * with the coin price (`priceIcon`). Boxes are PANEL-LOCAL (x / y from the panel box's top-left); the price row is
+ * button-local. The window above and the panel are one composition, centred together; without an offer the window is
+ * alone and centred as before.
+ */
+export interface ReadyUiSkinOfferLayout {
+  /** The panel box; `gap` = its distance under the window box above it. */
+  readonly panel: { readonly width: number; readonly height: number; readonly gap: number };
+  readonly title: ReadyUiSkinLivesTextBox;
+  /** The panel's own × (closes the window like the window's ×); `null` = none. */
+  readonly close: ReadyUiSkinBox | null;
+  /** `offerBadge` render box (it may stick out of the panel). */
+  readonly badge: ReadyUiSkinBox;
+  /** The badge text (`x3`, `-60%`): centred on the box, turned by `rotation` degrees (clockwise positive). */
+  readonly badgeLabel: ReadyUiSkinLivesTextBox & { readonly rotation: number };
+  /** The hero: a host texture contain-fits this box … */
+  readonly icon: ReadyUiSkinBox;
+  /** … the style's own hero art is drawn at its own render box. */
+  readonly iconArt: { readonly offerLivesArt: ReadyUiSkinBox; readonly offerCoinArt: ReadyUiSkinBox };
+  /** The hero's caption (`35d`, `2000`). */
+  readonly iconLabel: ReadyUiSkinLivesTextBox;
+  /** Two item slots; a single item takes the centre between them. */
+  readonly items: readonly [ReadyUiSkinOfferItemLayout, ReadyUiSkinOfferItemLayout];
+  /** `buttonPrimary` */
+  readonly button: ReadyUiSkinBox;
+  /** Button-local: the price text, `gap`, the `priceIcon` (`coin`), as one row centred on the button; `y` = the row's top. */
+  readonly price: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number };
+  readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+}
+
+/**
+ * A Settings text box; `fill` = this text's colour (absent: the style's text fill, the theme's version colour for the
+ * version); `outline: false` = plain text without the style's stroke and shadow.
+ */
 export interface ReadyUiSkinSettingsTextBox extends ReadyUiSkinTextBox {
   readonly fill?: number;
+  readonly outline?: boolean;
 }
 
 /** One current Settings toggle: the button and label are window-local; `off` is button-local. */
@@ -369,6 +418,8 @@ export interface ReadyUiSkinResultLayout {
 export interface ReadyUiSkinLayouts {
   readonly confirm?: ReadyUiSkinConfirmLayout;
   readonly lives?: ReadyUiSkinLivesLayout;
+  /** The OFFER panel under Lives / Confirm (absent: those windows never show an offer). */
+  readonly offer?: ReadyUiSkinOfferLayout;
   readonly settings?: ReadyUiSkinSettingsLayouts;
   readonly result?: ReadyUiSkinResultLayout;
 }
@@ -422,9 +473,21 @@ function viewLayout(skin: ReadyUiSkin, view: ReadyUiSkinView): unknown {
   return STANDALONE_VIEWS.includes(view) ? skin[view as ReadyUiSkinStandaloneView] : skin.windows[view as ReadyUiSkinWindow];
 }
 
+/** Lives / Confirm without the OFFER panel. */
+function windowOwnRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly ReadyUiSkinRole[] {
+  if (view === 'confirm') return ['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary'];
+  return ['windowSurface', 'windowClose', 'buttonPrimary', 'buttonRewarded', ...(skin.windows.lives?.adHighlight === null ? [] : ['buttonHighlight' as const]), 'panelInset', 'lifeArt', 'priceIcon', 'rewardIcon', 'adIcon'];
+}
+
+/** The OFFER panel's roles a window does not already draw. */
+function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly ReadyUiSkinRole[] {
+  const own = windowOwnRoles(skin, view);
+  return OFFER_ROLES.filter((role) => !own.includes(role));
+}
+
 /**
  * The roles `skin` must ship for `view`: every role of Confirm / Lives (Lives without `buttonHighlight` when its
- * layout has no highlight); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
+ * layout has no highlight; the OFFER panel's roles only when the style has `windows.offer`); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
  * art, `background` → the map background). BottomNav item icons are never required.
  */
@@ -448,7 +511,11 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
-  if (view === 'lives' && skin.windows.lives?.adHighlight === null) return READY_UI_SKIN_WINDOW_ROLES.lives.filter((role) => role !== 'buttonHighlight');
+  if (view === 'lives' || view === 'confirm') {
+    // the window's own roles, then the OFFER panel's when the style has one
+    const own = windowOwnRoles(skin, view);
+    return skin.windows.offer ? [...own, ...offerOnlyRoles(skin, view)] : own;
+  }
   if (view === 'settings') {
     const layouts = skin.windows.settings;
     const haptic = layouts?.map.haptic !== null || layouts?.gameplay.haptic !== null;
@@ -585,8 +652,12 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
   const layout = skin.windows[window] as NonNullable<ReadyUiSkinLayouts[W]> | undefined;
   if (!skin.covers.includes(window) || !layout) throw new Error(`${view}: ReadyUiSkin '${skin.id}' does not cover '${window}'`);
   const roles = READY_UI_SKIN_WINDOW_ROLES[window] as readonly ReadyUiSkinRole[];
-  const required = requiredSkinRoles(skin, window);
   const loaded = textures.skins?.[skin.id];
+  // the pre-style path (Style 1's files loaded by `include`, below) predates the OFFER panel: it never draws one
+  const included = !loaded && skin === READY_UI_STYLE_1;
+  const withOffer = requiredSkinRoles(skin, window);
+  const offerOnly = window === 'lives' || window === 'confirm' ? offerOnlyRoles(skin, window) : [];
+  const required = included ? withOffer.filter((role) => !offerOnly.includes(role)) : withOffer;
   const key = (role: ReadyUiSkinRole): ReadyUiSkinAssetKey => skinAssetKey(skin, window, role);
   const pick = (source: (role: ReadyUiSkinRole) => Texture | undefined): { art: Record<string, Texture>; missing: ReadyUiSkinRole[] } => {
     const art: Record<string, Texture> = {};
@@ -603,7 +674,6 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
     new Error(`${view} style '${skin.id}': no ${missing.map((role) => `${role} (${fileOf(role)})`).join(', ')} in textures — load them with loadReadyUiAssets({ skin })`);
 
   // the pre-style path: Style 1's files loaded by `include` under their kit names
-  const included = !loaded && skin === READY_UI_STYLE_1;
   const found = pick(included ? (role) => {
     const name = (STYLE_1_INCLUDE_NAMES as Partial<Record<ReadyUiSkinRole, ReadyUiOptionalTextureName>>)[role];
     return name ? textures[name] : undefined;

@@ -9,6 +9,7 @@ export const READY_UI_RU = Object.freeze({
   'core.lives.next': 'Новая жизнь через',
   'core.lives.refill': 'ПОПОЛНИТЬ!',
   'core.lives.ad_action': 'ВЗЯТЬ',
+  'core.offer.title': 'ПРЕДЛОЖЕНИЕ',
   'core.common.max': 'МАКС',
   'core.settings.title': 'НАСТРОЙКИ',
   'core.settings.sound': 'ЗВУК',
