@@ -7,6 +7,7 @@ import type { OfferPanel, ReadyUiOffer } from '../../src/pixi/OfferPanel';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
 import { requiredSkinRoles, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
 import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from '../../src/pixi/skins/style1';
+import { READY_UI_STYLE_2 } from '../../src/pixi/skins/style2';
 import { formatAmount } from '../../src/pixi/text';
 import type { UiButton } from '../../src/pixi/UiButton';
 
@@ -42,7 +43,7 @@ function roles(skin: ReadyUiSkin): ReadyUiSkinTextures {
   return out;
 }
 
-const styled = (kit: Kit, art = roles(S1)): ReadyUiTextures => ({ ...requiredOnly(kit), skins: { [S1.id]: art } });
+const styled = (kit: Kit, art = roles(S1), skin: ReadyUiSkin = S1): ReadyUiTextures => ({ ...requiredOnly(kit), skins: { [skin.id]: art } });
 
 const LIVES: LivesWindowParams = { lives: 1, maxLives: 5, timerText: '24:15', refillPrice: 900 };
 const lamp = booster('lamp');
@@ -237,5 +238,68 @@ describe('theme_light_4 OFFER panel (Style 1) under Lives / Confirm', () => {
     expect(offerOf(legacy)).toBeNull();
     legacy.destroy();
     expect(log).toEqual([]);
+  });
+});
+
+describe('Lives without REFILL and without the rewarded button: the button row closes up', () => {
+  for (const [skin, lift] of [[S1, 1603 - 1351], [READY_UI_STYLE_2, 1474 - 1289]] as const) {
+    it(`${skin.id}: the window ends ${lift} units higher (the margin under the content stays), centred again`, () => {
+      const kit = createKit();
+      const view = new LivesWindowView({ ui: kit.ui, motion: kit.motion, textures: styled(kit, roles(skin), skin), theme: { skin }, id: 'lives', onRefill: () => {}, onWatchAd: () => {} });
+      view.resize(1080, 2344);
+      const W = skin.windows.lives.window;
+      view.show({ ...LIVES, refillOffer: false, adOffer: false });
+      advance(kit.core, 400);
+      const height = W.height - lift;
+      expect(panelOf(view).hitArea).toMatchObject({ width: 960, height });
+      const surface = field<NineSliceSprite>(view, 'surface');
+      const pad = skin.assets.windowSurface.nineSlice.pad;
+      expect(surface.height).toBeCloseTo(height + (pad?.top ?? 0) + (pad?.bottom ?? 0), 9);
+      // the collapsed window is centred on the frame
+      expect(panelOf(view).y + (W.y - 1172)).toBeCloseTo(1172 - height / 2, 9);
+      view.close('button');
+      advance(kit.core, 300);
+      // one action back: the full window again
+      view.show({ ...LIVES, adOffer: false });
+      advance(kit.core, 400);
+      expect(panelOf(view).hitArea).toMatchObject({ height: W.height });
+      expect(surface.height).toBeCloseTo(W.height + (pad?.top ?? 0) + (pad?.bottom ?? 0), 9);
+      view.destroy();
+    });
+  }
+});
+
+describe('theme_light_4 OFFER panel (Style 2): the orange popup 100 under the window, 14 right of it', () => {
+  it('draws the style data: offset panel, its own caption look per hero, the coin art as the price coin, no ×', () => {
+    const kit = createKit();
+    const art = roles(READY_UI_STYLE_2);
+    const log: string[] = [];
+    const view = new LivesWindowView({
+      ui: kit.ui, motion: kit.motion, textures: styled(kit, art, READY_UI_STYLE_2), theme: { skin: READY_UI_STYLE_2 }, id: 'lives',
+      onRefill: () => {}, onWatchAd: () => {}, onOffer: (p) => log.push(`offer:${p.offer?.price}`)
+    });
+    view.resize(1080, 2344);
+    view.show({ ...LIVES, offer: OFFER });
+    advance(kit.core, 400);
+    const offer = offerOf(view) as OfferPanel;
+    expect([offer.x, offer.y]).toEqual([74 - 540, 794 + 756 + 100 - 1172]);
+    expect(panelOf(view).hitArea).toMatchObject({ x: -480, width: 974, height: 756 + 100 + 600 });
+    expect(offer.closeButton).toBeNull();
+    expect(field<Sprite>(offer, 'priceCoin').texture).toBe(art.offerCoinArt);
+    const caption = field<Text>(offer, 'heroLabel');
+    expect([caption.text, caption.style.fontSize, caption.style.fill, caption.style.fontFamily]).toEqual(['35d', 70, 0x3f598c, 'Carlito']);
+    view.close('button');
+    advance(kit.core, 300);
+    view.show({ ...LIVES, offer: { ...OFFER, icon: 'offerCoinArt', iconLabel: '2000' } });
+    advance(kit.core, 400);
+    const coinCaption = field<Text>(offer, 'heroLabel');
+    expect([coinCaption.text, coinCaption.style.fontSize, coinCaption.style.fill]).toEqual(['2000', 90, 0xffffff]);
+    expect(coinCaption.style.stroke).toMatchObject({ color: 0x963304, width: 8 });
+    expect(field<Sprite>(offer, 'hero').texture).toBe(art.offerCoinArt);
+    tap(offer.buyButton, kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['offer:900']);
+    view.destroy();
+    expect(kit.ui.getStats().buttons).toBe(0);
   });
 });

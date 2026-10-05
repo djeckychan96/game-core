@@ -108,7 +108,7 @@ export class OfferPanel extends Container {
   private readonly badge: Sprite;
   private readonly badgeLabel: Text;
   private readonly hero: Sprite;
-  private readonly heroLabel: Text;
+  private heroLabel: Text;
   private readonly items: { icon: Sprite; label: Text }[];
   private readonly priceText: Text;
   private readonly priceCoin: Sprite;
@@ -136,7 +136,7 @@ export class OfferPanel extends Container {
     }));
     this.buyButton.position.set(L.button.x + L.button.width / 2, L.button.y + L.button.height / 2);
     this.priceText = createFigmaLabel(this.theme, '0', L.price.fontSize, this.textLook);
-    this.priceCoin = new Sprite(A.priceIcon);
+    this.priceCoin = new Sprite(L.coin.art ? A[L.coin.art] : A.priceIcon);
     this.priceCoin.width = L.coin.width;
     this.priceCoin.height = L.coin.height;
     this.buyButton.addChild(this.priceText, this.priceCoin);
@@ -162,26 +162,30 @@ export class OfferPanel extends Container {
     this.addChild(this.badge, this.badgeLabel);
   }
 
-  /** The panel box height (the composition adds `gap` above it). */
-  get panelHeight(): number {
-    return this.layout.panel.height;
-  }
-
   set(offer: ReadyUiOffer): void {
     const L = this.layout;
     this.title.text = localizedText(offer.title, this.i18n, 'core.offer.title', READY_UI_LEGACY_TEXT.offer.title);
     placeFigmaLabel(this.title, { ...L.title, align: L.title.align ?? 'center' });
 
+    let captionBox = L.iconLabel;
     if (typeof offer.icon === 'string') {
+      const art = L.iconArt[offer.icon];
       this.hero.texture = this.art[offer.icon];
-      place(this.hero, L.iconArt[offer.icon]);
+      place(this.hero, art);
+      captionBox = art.label ?? L.iconLabel;
     } else {
       this.hero.texture = offer.icon;
       containInto(this.hero, L.icon);
     }
-    this.heroLabel.text = offer.iconLabel ?? '';
-    this.heroLabel.visible = this.heroLabel.text !== '';
-    placeFigmaLabel(this.heroLabel, { ...L.iconLabel, align: L.iconLabel.align ?? 'center' });
+    // the caption's look follows its box (a style may letter each hero's caption differently)
+    const caption = createFigmaLabel(this.theme, offer.iconLabel ?? '', captionBox.fontSize, boxLook(this.textLook, captionBox));
+    caption.eventMode = 'none';
+    caption.visible = caption.text !== '';
+    placeFigmaLabel(caption, { ...captionBox, align: captionBox.align ?? 'center' });
+    this.addChildAt(caption, this.getChildIndex(this.heroLabel));
+    this.removeChild(this.heroLabel);
+    this.heroLabel.destroy();
+    this.heroLabel = caption;
 
     const items = (offer.items ?? []).slice(0, 2);
     // one item takes the centre between the two slots

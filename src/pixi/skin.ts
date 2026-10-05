@@ -98,22 +98,23 @@ export interface ReadyUiSkinWindowText {
 
 /**
  * Confirm (exit / restart with a life lost). Boxes are WINDOW-LOCAL: x / y from the window box's top-left (the panel
- * origin is the window centre); `buttonLabel` is button-local. The art boxes are the render (export) boxes.
+ * origin is the window centre); `buttonLabel` is button-local. The art boxes are the render (export) boxes. A text box
+ * may carry its own `fill` / `stroke` / `align` (absent: the style's look; `lifeDelta` left-aligned, the others centred).
  */
 export interface ReadyUiSkinConfirmLayout {
   readonly window: { readonly width: number; readonly height: number };
   /** This window's own text look (absent: the style's text look and font). */
   readonly text?: ReadyUiSkinWindowText;
-  readonly title: ReadyUiSkinTextBox;
+  readonly title: ReadyUiSkinLivesTextBox;
   readonly close: ReadyUiSkinBox;
   /** `heroGlow` */
   readonly glow: ReadyUiSkinBox;
   /** `lifeLostArt` */
   readonly heart: ReadyUiSkinBox;
-  readonly lifeDelta: ReadyUiSkinTextBox;
-  readonly body: ReadyUiSkinTextBox;
+  readonly lifeDelta: ReadyUiSkinLivesTextBox;
+  readonly body: ReadyUiSkinLivesTextBox;
   readonly button: ReadyUiSkinBox;
-  readonly buttonLabel: ReadyUiSkinTextBox;
+  readonly buttonLabel: ReadyUiSkinLivesTextBox;
 }
 
 /**
@@ -179,8 +180,8 @@ export interface ReadyUiSkinOfferItemLayout {
  * alone and centred as before.
  */
 export interface ReadyUiSkinOfferLayout {
-  /** The panel box; `gap` = its distance under the window box above it. */
-  readonly panel: { readonly width: number; readonly height: number; readonly gap: number };
+  /** The panel box; `gap` = its distance under the window box above it, `x` = its left edge from the window's (default 0). */
+  readonly panel: { readonly width: number; readonly height: number; readonly gap: number; readonly x?: number };
   readonly title: ReadyUiSkinLivesTextBox;
   /** The panel's own × (closes the window like the window's ×); `null` = none. */
   readonly close: ReadyUiSkinBox | null;
@@ -190,8 +191,11 @@ export interface ReadyUiSkinOfferLayout {
   readonly badgeLabel: ReadyUiSkinLivesTextBox & { readonly rotation: number };
   /** The hero: a host texture contain-fits this box … */
   readonly icon: ReadyUiSkinBox;
-  /** … the style's own hero art is drawn at its own render box. */
-  readonly iconArt: { readonly offerLivesArt: ReadyUiSkinBox; readonly offerCoinArt: ReadyUiSkinBox };
+  /** … the style's own hero art is drawn at its own render box, with its own caption box when it has one. */
+  readonly iconArt: {
+    readonly offerLivesArt: ReadyUiSkinBox & { readonly label?: ReadyUiSkinLivesTextBox };
+    readonly offerCoinArt: ReadyUiSkinBox & { readonly label?: ReadyUiSkinLivesTextBox };
+  };
   /** The hero's caption (`35d`, `2000`). */
   readonly iconLabel: ReadyUiSkinLivesTextBox;
   /** Two item slots; a single item takes the centre between them. */
@@ -200,7 +204,8 @@ export interface ReadyUiSkinOfferLayout {
   readonly button: ReadyUiSkinBox;
   /** Button-local: the price text, `gap`, the `priceIcon` (`coin`), as one row centred on the button; `y` = the row's top. */
   readonly price: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number };
-  readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+  /** The price coin: `priceIcon`, or the style's `offerCoinArt` when `art` names it. */
+  readonly coin: { readonly width: number; readonly height: number; readonly y: number; readonly art?: 'offerCoinArt' };
 }
 
 /**

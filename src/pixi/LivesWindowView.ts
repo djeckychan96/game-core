@@ -1,4 +1,4 @@
-import { CanvasTextMetrics, Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
+import { CanvasTextMetrics, Container, type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { OfferPanel, type ReadyUiOffer } from './OfferPanel';
 import type { ReadyUiOptionalTextureName } from './assets';
@@ -155,6 +155,10 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   /** Styled with a style OFFER layout (and its art): builds the panel under the window on its first offer. */
   private readonly createOfferPanel: (() => OfferPanel) | null;
   private offerPanel: OfferPanel | null = null;
+  /** Styled: the window shell (resized when the button row collapses). */
+  private readonly surface: NineSliceSprite | null;
+  /** Styled: how much shorter the window is this show (no REFILL and no rewarded button → their row closes up). */
+  private collapse = 0;
   /** The caller's own fit height ratio (the styled fit otherwise follows the composition). */
   private readonly ownFitHeight: number | undefined;
   private params: LivesWindowParams | null = null;
@@ -176,6 +180,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       const textLook = skinTextLook(skin);
       const label = (text: string, box: ReadyUiSkinLivesTextBox): Text => createFigmaLabel(this.theme, text, box.fontSize, boxLook(textLook, box));
       const surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface', 'lives'), L.window.width, L.window.height);
+      this.surface = surface;
       surface.position.set(X(look, L.window.x + L.window.width / 2), Y(look, L.window.y + L.window.height / 2));
       this.title = label(localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), L.title);
       placeFigmaLabel(this.title, { ...panelBox(look, L.title), align: L.title.align ?? 'center' });
@@ -242,6 +247,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const t = this.textures;
     this.priceCoin = null;
     this.createOfferPanel = null;
+    this.surface = null;
     this.panel.addChildAt(this.sprite(t.panelPurple, 968, 1070), 0);
     this.title = createLabel(this.theme, localizedText(options.title, this.i18n, 'core.lives.title', READY_UI_LEGACY_TEXT.lives.title), { fontSize: 88, stroke: 11 });
     this.title.y = -440;
@@ -305,6 +311,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       this.refillButton.setEnabled(showRefill && !full);
       this.refillButton.x = showAd ? X(look, L.refill.x + L.refill.width / 2) : 0;
       this.adButton.x = showRefill ? X(look, L.ad.x + L.ad.width / 2) : 0;
+      this.layoutCollapse(look, !showAd && !showRefill);
       this.layoutOffer(look, params);
       return;
     }
@@ -347,16 +354,41 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const look = this.look;
     if (!look) return super.panelBounds();
     const w = look.layout.window;
-    const offer = this.offerPanel?.visible ? this.offerPanel : null;
-    const extra = offer ? offer.layout.panel.gap + offer.panelHeight : 0;
-    return new Rectangle(X(look, w.x), Y(look, w.y), w.width, w.height + extra);
+    const height = w.height - this.collapse;
+    const offer = this.offerPanel?.visible ? this.offerPanel.layout.panel : null;
+    if (!offer) return new Rectangle(X(look, w.x), Y(look, w.y), w.width, height);
+    const left = Math.min(0, offer.x ?? 0);
+    const right = Math.max(w.width, (offer.x ?? 0) + offer.width);
+    return new Rectangle(X(look, w.x + left), Y(look, w.y), right - left, height + offer.gap + offer.height);
   }
 
   /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */
   protected override panelCentre(): { x: number; y: number } {
-    if (!this.look || !this.offerPanel?.visible) return super.panelCentre();
+    if (!this.look || (!this.offerPanel?.visible && this.collapse === 0)) return super.panelCentre();
     const b = this.panelBounds();
     return { x: b.x + b.width / 2, y: b.y + b.height / 2 };
+  }
+
+  /**
+   * No REFILL and no rewarded button: their row closes up — the window ends that much higher, keeping the margin it had
+   * under the buttons below the content above them (the parts whose box ends above the buttons' bottom).
+   */
+  private layoutCollapse(look: LivesLook, collapsed: boolean): void {
+    const L = look.layout;
+    const rowTop = Math.min(L.refill.y, L.ad.y);
+    const rowBottom = Math.max(L.refill.y + L.refill.height, L.ad.y + L.ad.height);
+    const above = [L.inset, L.heart, L.count, L.nextLabel, L.timer]
+      .filter((box) => box.y < rowTop && box.y + box.height <= rowBottom)
+      .map((box) => box.y + box.height);
+    this.collapse = collapsed && above.length > 0 ? Math.max(0, rowBottom - Math.max(...above)) : 0;
+    const surface = this.surface;
+    if (!surface) return;
+    const spec = skinNineSlice(look.skin, 'windowSurface', 'lives');
+    const pad = spec.pad ?? { left: 0, top: 0, right: 0, bottom: 0 };
+    const height = L.window.height - this.collapse;
+    surface.height = height + pad.top + pad.bottom;
+    surface.anchor.set(surface.anchor.x, (pad.top + height / 2) / (height + pad.top + pad.bottom));
+    surface.y = Y(look, L.window.y + height / 2);
   }
 
   /** Shows / hides the OFFER panel under the window and gives the styled fit the composition's share of the frame. */
@@ -376,7 +408,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     const w = look.layout.window;
     if (show && panel && offer) {
       panel.set(offer);
-      panel.position.set(X(look, w.x), Y(look, w.y + w.height + panel.layout.panel.gap));
+      panel.position.set(X(look, w.x + (panel.layout.panel.x ?? 0)), Y(look, w.y + w.height - this.collapse + panel.layout.panel.gap));
       this.placeClose();
     }
     if (this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / look.skin.frame.height;

@@ -5,7 +5,7 @@ import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinConfirmLayout, type WindowSkinLook } from './skin';
+import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinConfirmLayout, type ReadyUiSkinLivesTextBox, type WindowSkinLook } from './skin';
 import { createFigmaLabel, createLabel, fitLabelWidth, placeFigmaLabel, type FigmaTextLook } from './text';
 import { UiButton } from './UiButton';
 
@@ -91,6 +91,17 @@ function withoutIllustration(layout: ReadyUiSkinConfirmLayout): ReadyUiSkinConfi
   const lift = next - top;
   const up = <B extends ReadyUiSkinBox>(box: B): B => (box.y >= next ? { ...box, y: box.y - lift } : box);
   return { ...layout, window: { ...layout.window, height: layout.window.height - lift }, body: up(layout.body), button: up(layout.button) };
+}
+
+/** A text box's look: the window's, with the box's own fill / stroke over it. */
+function boxLook(look: FigmaTextLook, box: ReadyUiSkinLivesTextBox): FigmaTextLook {
+  const own: FigmaTextLook = { ...look };
+  if (box.fill !== undefined) own.fill = box.fill;
+  if (box.stroke) {
+    own.strokeOutside = box.stroke.width;
+    own.strokeColor = box.stroke.color;
+  }
+  return own;
 }
 
 /** Window-local style x / y → panel units (the panel origin is the window box centre). */
@@ -194,8 +205,8 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
     // the window's own text look (the kit font) or the style's
     const text: FigmaTextLook = L.text ? { ...L.text } : skinTextLook(skin);
     this.surface = createNineSlice(A.windowSurface, skinNineSlice(skin, 'windowSurface', 'confirm'), L.window.width, L.window.height);
-    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), L.title.fontSize, text);
-    placeFigmaLabel(this.title, { ...this.box(L.title), align: 'center' });
+    this.title = createFigmaLabel(this.theme, localizedText(options.title, this.i18n, 'core.confirm.title', READY_UI_LEGACY_TEXT.confirm.title), L.title.fontSize, boxLook(text, L.title));
+    placeFigmaLabel(this.title, { ...this.box(L.title), align: L.title.align ?? 'center' });
     if (this.closeButton) {
       this.closeButton.background.texture = A.windowClose;
       this.closeButton.background.width = L.close.width;
@@ -216,16 +227,16 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
       onTap
     }));
     this.confirmButton.position.set(px(L, L.button.x + L.button.width / 2), py(L, L.button.y + L.button.height / 2));
-    this.confirmLabel = createFigmaLabel(this.theme, confirmText, L.buttonLabel.fontSize, text);
+    this.confirmLabel = createFigmaLabel(this.theme, confirmText, L.buttonLabel.fontSize, boxLook(text, L.buttonLabel));
     const label = L.buttonLabel;
-    placeFigmaLabel(this.confirmLabel, { x: label.x - L.button.width / 2, y: label.y - L.button.height / 2, width: label.width, height: label.height, align: 'center' });
+    placeFigmaLabel(this.confirmLabel, { x: label.x - L.button.width / 2, y: label.y - L.button.height / 2, width: label.width, height: label.height, align: label.align ?? 'center' });
     this.confirmButton.addChild(this.confirmLabel);
 
-    this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, text);
-    placeFigmaLabel(this.body, { ...this.box(L.body), align: 'center' });
+    this.body = createFigmaLabel(this.theme, localizedText(options.body, this.i18n, 'core.confirm.lose_life', READY_UI_LEGACY_TEXT.confirm.styledBody), L.body.fontSize, boxLook(text, L.body));
+    placeFigmaLabel(this.body, { ...this.box(L.body), align: L.body.align ?? 'center' });
     this.heart = illustration ? this.art(A.lifeLostArt, L.heart) : null;
-    this.lifeDelta = illustration ? createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, text) : null;
-    if (this.lifeDelta) placeFigmaLabel(this.lifeDelta, { ...this.box(L.lifeDelta), align: 'left' });
+    this.lifeDelta = illustration ? createFigmaLabel(this.theme, options.lifeDelta ?? '-1', L.lifeDelta.fontSize, boxLook(text, L.lifeDelta)) : null;
+    if (this.lifeDelta) placeFigmaLabel(this.lifeDelta, { ...this.box(L.lifeDelta), align: L.lifeDelta.align ?? 'left' });
 
     // Decorative layers never take input: the glow lies over the × and Pixi hit-tests every child of the interactive
     // panel, so a hit on it would stop at the panel. Taps on them still land inside the panel's hit area (no backdrop).
@@ -267,7 +278,7 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
       else if (!show && panel.parent) panel.parent.removeChild(panel);
       if (show && offer && L) {
         panel.set(offer);
-        panel.position.set(px(L, 0), py(L, L.window.height + panel.layout.panel.gap));
+        panel.position.set(px(L, panel.layout.panel.x ?? 0), py(L, L.window.height + panel.layout.panel.gap));
       }
     }
     if (L && this.skin && this.ownFitHeight === undefined) this.fit.heightRatio = this.panelBounds().height / this.skin.frame.height;
@@ -287,9 +298,11 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
   protected override panelBounds(): Rectangle {
     const L = this.layout;
     if (!L) return super.panelBounds();
-    const offer = this.offerPanel?.visible ? this.offerPanel : null;
-    const extra = offer ? offer.layout.panel.gap + offer.panelHeight : 0;
-    return new Rectangle(px(L, 0), py(L, 0), L.window.width, L.window.height + extra);
+    const offer = this.offerPanel?.visible ? this.offerPanel.layout.panel : null;
+    if (!offer) return new Rectangle(px(L, 0), py(L, 0), L.window.width, L.window.height);
+    const left = Math.min(0, offer.x ?? 0);
+    const right = Math.max(L.window.width, (offer.x ?? 0) + offer.width);
+    return new Rectangle(px(L, left), py(L, 0), right - left, L.window.height + offer.gap + offer.height);
   }
 
   /** Styled with an OFFER panel: the window and the panel are centred together (the window alone: the origin, as before). */

@@ -241,9 +241,11 @@ describe('Confirm — optional illustration', () => {
     expect(top(field<Text>(view, 'title').y)).toBeCloseTo(field<Text>(full, 'title').y + L.window.height / 2, 6);
     expect(top(field<UiButton>(view, 'closeButton').y)).toBe(field<UiButton>(full, 'closeButton').y + L.window.height / 2);
     expect(field<number>(view, 'fitScale')).toBeCloseTo(field<number>(full, 'fitScale'), 9);
-    // Style 2's Confirm (the Style 1 geometry) closes the same way; the donor art bakes its heart in and ignores it
+    // Style 2's own theme_light_4 Confirm closes by the same rule (its band: heart 148 → body 467); the donor art bakes
+    // its heart in and ignores it
+    const L2 = READY_UI_STYLE_2.windows.confirm;
     const style2 = confirm({ illustration: false }, [], READY_UI_STYLE_2);
-    expect(panel(style2).hitArea).toMatchObject({ height });
+    expect(panel(style2).hitArea).toMatchObject({ height: L2.window.height - (L2.body.y - L2.heart.y) });
     const donor = confirm({}, [], null);
     const donorNoArt = confirm({ illustration: false }, [], null);
     expect(scene(panel(donorNoArt))).toEqual(scene(panel(donor)));

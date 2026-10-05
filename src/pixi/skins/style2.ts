@@ -1,5 +1,4 @@
 import type { ReadyUiSkin } from '../skin';
-import { READY_UI_STYLE_1 } from './style1';
 
 /** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
 const POPUP = {
@@ -7,9 +6,18 @@ const POPUP = {
   nineSlice: { left: 191, top: 167, right: 191, bottom: 88, pad: { left: 0, top: 49, right: 0, bottom: 0 } }
 } as const;
 
+/** The blur of `frame_blur_bg` (800 × 520, blur 200): its render box drawn whole (caps 0: it never stretches). */
+const BLUE_GLOW = { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, top: 0, right: 0, bottom: 0 } } as const;
+
 /**
- * Style 2 — the artist's light-blue `theme_light_3` (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1, Settings,
- * Confirm and Refill Hearts.
+ * Style 2 — the artist's light-blue style (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1, Settings, Confirm,
+ * Refill Hearts and the OFFER panel.
+ *
+ * theme_light_4 (section 22:26884, the light row; docs/figma/style2-theme-light-4) is the current snapshot for Confirm
+ * (its own light popup now: `popart_restart` 22:28984 / `popart_leave` 22:29021), Lives (`screen_refill_hearts`
+ * 22:28924: a shorter popup, the rewarded button's icons on its corners) and the orange OFFER under both; Settings
+ * (22:28904 / 22:28915) is unchanged but for a Language row Core has no control for; the LevelMap screen and the HUD
+ * below are the theme_light_3 reads. Result (22:29110 / 22:29036) stays uncovered (see that README).
  *
  * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from the approved `screen_gameplay_pc` 8:23174
  * (docs/figma/style2-level-map-screen); `settings`, from the approved `настройки` 8:17493 (docs/figma/style2-settings);
@@ -91,8 +99,8 @@ export const READY_UI_STYLE_2 = {
     /** `btn_green` 8:22858 / `btn_yellow` 8:22851 (the 214 components at 354 / 460 × 214): vertical gradients, only the width stretches. */
     buttonPrimary: { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
     buttonRewarded: { file: 'style2/button_rewarded.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
-    /** `frame_blur_bg` 8:22841: a soft blue blur, drawn whole at its render box (caps 0: it never stretches there). */
-    panelInset: { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, top: 0, right: 0, bottom: 0 } },
+    /** `frame_blur_bg` 8:22841 / 22:27095: a soft blue blur, drawn whole at its render box (caps 0: it never stretches there). */
+    panelInset: BLUE_GLOW,
     /** `icon_heart_1` 8:17643: the HUD heart, drawn at 338 (the lives count over it is runtime) and at 128 (the reward). */
     lifeArt: { file: 'style2/icon_heart.webp' },
     rewardIcon: { file: 'style2/icon_heart.webp' },
@@ -101,15 +109,23 @@ export const READY_UI_STYLE_2 = {
     /** `icon_tv_1` 8:17637: the rewarded-ad icon. */
     adIcon: { file: 'style2/icon_tv.webp' },
     /**
-     * Confirm 8:22049 / 8:22069 is the Style 1 window (`Component 8` 1:937, `Btn_base` 1:969, the broken heart): its
-     * render matches Style 1's confirm-exit reference (mean |Δ| 0.0), so it draws Style 1's own files — window-scoped
-     * where Lives draws the same role with the Style 2 popup art.
+     * Confirm theme_light_4 22:28984 / 22:29021: the Style 2 popup now (the theme_light_3 screens drew the Style 1
+     * window) — the same popup / close / green button files as Lives; the glow is `frame_blur_bg` again.
      */
-    'confirm:windowSurface': READY_UI_STYLE_1.assets.windowSurface,
-    'confirm:windowClose': READY_UI_STYLE_1.assets.windowClose,
-    'confirm:buttonPrimary': READY_UI_STYLE_1.assets.buttonPrimary,
-    heroGlow: READY_UI_STYLE_1.assets.heroGlow,
-    lifeLostArt: READY_UI_STYLE_1.assets.lifeLostArt
+    heroGlow: { file: BLUE_GLOW.file },
+    /** `icon_heart_2` (the broken heart) as drawn at 338: its raw image at 354.4, centred and clipped (the "-1" is runtime). */
+    lifeLostArt: { file: 'style2/confirm_heart.webp' },
+    /**
+     * OFFER theme_light_4 (22:28956 under Lives, 22:28986 under Restart): `popup_back_orange` + `header_back_orange`
+     * (no title) as a 9-slice with the blue popup's caps — the header 49 above the 960 × 600 box.
+     */
+    offerPanel: { file: 'style2/offer_panel.webp', nineSlice: { left: 191, top: 167, right: 191, bottom: 88, pad: { left: 0, top: 49, right: 0, bottom: 0 } } },
+    /** `icon_sticker_1`: the red sale sticker (its raw image at 200; the "30%" is runtime). */
+    offerBadge: { file: 'style2/offer_badge@2x.webp' },
+    /** `icon_heart_1` at 320 with the ∞ vector "8" over it. */
+    offerLivesArt: { file: 'style2/offer_lives.webp' },
+    /** `icon_coin_1`: the HUD coin's 288 export (the same image fill), the hero and the price coin of the OFFER. */
+    offerCoinArt: { file: 'style2/icon_coin.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
@@ -117,64 +133,102 @@ export const READY_UI_STYLE_2 = {
   backdrop: { color: 0x080b0d, alpha: 0.8 },
   windows: {
     /**
-     * Confirm 8:22049 (RESTART) / 8:22069 (EXIT): one window, the button's copy is the host's action. The Style 1
-     * geometry (window-local, the window box at 60, 675) and the Style 1 type: Fira Sans Black with 4 units of outside
-     * stroke and a 4-unit hard shadow — the kit font, not Carlito.
+     * Confirm theme_light_4 `popart_restart` 22:28984 / `popart_leave` 22:29021: one window, the button's copy is the
+     * host's action. Window-local boxes of the 960 × 980 popup (Exit at 60, 646 — Figma draws it 36 above the centre;
+     * Core centres it). Calibri Bold → Carlito: title / button white, the body #3f598c, the "-1" white with #9b170b 5.
      */
     confirm: {
-      window: { width: 960, height: 994 },
-      text: { strokeOutside: 4, shadowY: 4 },
-      title: { x: 135, y: 34, width: 690, height: 104, fontSize: 80 },
-      close: { x: 863, y: 61, width: 51, height: 51 },
-      /** Rectangle 218 8:22054: 450 × 354 r138 under a 225.7 layer blur (its render box) */
-      glow: { x: 29.3, y: 5.3, width: 902, height: 806 },
-      /** Group 377 / 378: the broken heart (render box, 10 units of stroke / shadow bleed) */
-      heart: { x: 317.001, y: 264, width: 326, height: 298 },
-      /** "-1" 8:22068: Fira Sans Black 150, LEFT / CENTER */
-      lifeDelta: { x: 543, y: 345, width: 146, height: 180, fontSize: 150 },
-      /** "YOU WILL LOSE 1 HEART" 8:22056: 834 × 113, Fira Sans Black 50 */
-      body: { x: 63, y: 586, width: 834, height: 113, fontSize: 50 },
-      /** Btn_base 8:22055 */
-      button: { x: 180, y: 725, width: 600, height: 206 },
-      /** Frame 498 (button-local); "RESTART" / "EXIT" Fira Sans Black 80 */
-      buttonLabel: { x: 25, y: 27, width: 550, height: 128, fontSize: 80 }
+      window: { width: 960, height: 980 },
+      /** the popup's title, popup-local 166, −2: Calibri Bold 65 */
+      title: { x: 166, y: -2, width: 628, height: 79, fontSize: 65 },
+      /** `btn_close` render box (popup-local 847, −37) */
+      close: { x: 847, y: -37, width: 153, height: 158 },
+      /** `frame_blur_bg` (800 × 520 at 140, 812 of the frame) render box 0, 612, 1080 × 920 */
+      glow: { x: -60, y: -34, width: 1080, height: 920 },
+      /** `icon_heart_2` 338 at 371, 794 */
+      heart: { x: 311, y: 148, width: 338, height: 338 },
+      /** "-1" 22:29028: Calibri Bold 140, 200 × 160 centred on the heart */
+      lifeDelta: { x: 380, y: 247, width: 200, height: 160, fontSize: 140, stroke: { width: 5, color: 0x9b170b }, align: 'center' },
+      /** "You will lose 1 heart" 22:29032: 780 × 200, Calibri Bold 70 */
+      body: { x: 90, y: 467, width: 780, height: 200, fontSize: 70, fill: 0x3f598c },
+      /** `btn_green` 528.7 × 214 */
+      button: { x: 215, y: 686, width: 528.716, height: 214 },
+      /** "RESTART" / "EXIT": 450 × 134, Calibri Bold 80 */
+      buttonLabel: { x: 40, y: 40, width: 450, height: 134, fontSize: 80 }
     },
     /**
-     * Refill Hearts 8:22838: frame boxes (the popup box at 60, 647). Calibri Bold → Carlito: title / buttons white,
-     * "Next heart in" and the timer #3f598c, the lives count and the reward "+1" white with a #9b170b outside stroke.
-     * No highlight on the rewarded button. The top HUD of the sample screen is the host's HudView (context).
+     * Refill Hearts theme_light_4 22:28924: frame boxes with the 960 × 756 popup alone centred (y 794; Figma draws it
+     * at 486 above the OFFER). Calibri Bold → Carlito: title / buttons white, "Next heart in" and the timer #3f598c, the
+     * lives count and the reward "1" white with a #9b170b outside stroke. No highlight on the rewarded button; its tv and
+     * heart sit on its corners (`btn_yellow_ads`).
      */
     lives: {
-      window: { x: 60, y: 647, width: 960, height: 1050 },
+      window: { x: 60, y: 794, width: 960, height: 756 },
       /** the popup's title, popup-local 166, −2 */
-      title: { x: 226, y: 645, width: 628, height: 79, fontSize: 65 },
+      title: { x: 226, y: 792, width: 628, height: 79, fontSize: 65 },
       /** `btn_close` render box (popup-local 847, −37) */
-      close: { x: 907, y: 610, width: 153, height: 158 },
-      /** `frame_blur_bg` render box (the instance at 140, 813, 800 × 520, blur 200; clipped by the frame at 0 / 1080) */
-      inset: { x: 0, y: 613, width: 1080, height: 920 },
-      heart: { x: 150, y: 904, width: 338, height: 338 },
-      /** "56" 8:22844: Calibri Bold 140, stroke 5 */
-      count: { x: 219, y: 993, width: 200, height: 160, fontSize: 140, stroke: { width: 5, color: 0x9b170b } },
-      /** `txt` 8:22845 (vertical auto-layout, centred): "Next heart in" / "24:15", Calibri Bold 70 */
-      nextLabel: { x: 488, y: 992, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
-      timer: { x: 488, y: 1077, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
-      refill: { x: 120, y: 1403, width: 354, height: 214 },
-      /** "REFILL NOW" 8:22859: Calibri Bold 60 */
-      refillLabel: { x: 144, y: 1431, width: 305.883, height: 105, fontSize: 60 },
-      /** Frame 1244 8:22860: "900" 60 + 5 + the 46 coin (13 below the row top); the content's centre is 289.5, not the button's 297 */
-      priceRow: { x: 289.5, y: 1510, height: 80, gap: 5, fontSize: 60 },
-      coin: { width: 46, height: 46, y: 1523 },
-      ad: { x: 500, y: 1403, width: 460, height: 214 },
+      close: { x: 907, y: 757, width: 153, height: 158 },
+      /** `frame_blur_bg` render box (the instance at 140, 652 + 308) */
+      inset: { x: 0, y: 760, width: 1080, height: 920 },
+      heart: { x: 150, y: 951, width: 338, height: 338 },
+      /** "56" 22:28930: Calibri Bold 140, stroke 5 */
+      count: { x: 219, y: 1040, width: 200, height: 160, fontSize: 140, stroke: { width: 5, color: 0x9b170b } },
+      /** `txt` 22:28931: "Next heart in" / "24:15", Calibri Bold 70 */
+      nextLabel: { x: 488, y: 1011, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
+      timer: { x: 488, y: 1096, width: 442, height: 85, fontSize: 70, fill: 0x3f598c },
+      refill: { x: 120, y: 1260, width: 354, height: 214 },
+      /** "REFILL NOW" 22:28952: Calibri Bold 60 */
+      refillLabel: { x: 144, y: 1288, width: 305.883, height: 105, fontSize: 60 },
+      /** Frame 1244 22:28953: "900" 60 + 5 + the 46 coin (13 below the row top); the content's centre is 289.5 */
+      priceRow: { x: 289.5, y: 1367, height: 80, gap: 5, fontSize: 60 },
+      coin: { width: 46, height: 46, y: 1380 },
+      /** `btn_yellow` inside `btn_yellow_ads` (480, 841): 460 × 214 at 500, 952 */
+      ad: { x: 500, y: 1260, width: 460, height: 214 },
       adHighlight: null,
       /**
-       * "GET" 8:22852 (162 × 146 at 652, Calibri Bold 60): Figma's box runs under the tv (to 672) and the heart (from
-       * 810); the slot is the free space between them around the same centre 733, so a longer word shrinks, never hides.
+       * "GET" 22:28949 (274 × 146 at 593, Calibri Bold 60, centre 730): Core's slot is the free run between the tv (to
+       * 619) and the heart (from 841) around the same centre, so a longer word shrinks instead of running under them.
        */
-      adLabel: { x: 672, y: 1437, width: 122, height: 146, fontSize: 60 },
-      adIcon: { x: 522, y: 1435, width: 150, height: 150 },
-      rewardIcon: { x: 810, y: 1446, width: 128, height: 128 },
-      /** "1" 8:22855 (50 × 70 at 847, CENTER): the box widened to 100 around its centre 872, so "+1" fits; Calibri Bold 59.73, stroke 2 */
-      rewardLabel: { x: 822, y: 1473, width: 100, height: 70, fontSize: 59.733, stroke: { width: 2, color: 0x9b170b }, align: 'center' }
+      adLabel: { x: 619, y: 1294, width: 222, height: 146, fontSize: 60 },
+      /** `icon_tv_1` 127.5 on the bottom-left corner */
+      adIcon: { x: 491.27, y: 1359.25, width: 127.5, height: 127.5 },
+      /** `icon_heart_1` 128 on the top-right corner */
+      rewardIcon: { x: 841, y: 1224, width: 128, height: 128 },
+      /** "1" (50 × 70 at 878): the box widened to 100 around its centre 903, so "+1" fits; Calibri Bold 59.73, stroke 2 */
+      rewardLabel: { x: 853, y: 1251, width: 100, height: 70, fontSize: 59.733, stroke: { width: 2, color: 0x9b170b }, align: 'center' }
+    },
+    /**
+     * OFFER theme_light_4 (22:28956 under Lives, 22:28986 under Restart): the orange popup (960 × 600, its header 49
+     * above) 100 under the window and 14 right of it (Figma: x 74 under a window at 60, in both screens). Panel-local
+     * boxes. No × (the artist hides `btn_close`). The bubble under it (`bubble_1`, «Продолжить с +3★») is game copy, not
+     * Core's. Calibri Bold → Carlito: title / price / "30%" white, the counts and "35d" #3f598c, "2000" white + #963304 4.
+     */
+    offer: {
+      panel: { width: 960, height: 600, gap: 100, x: 14 },
+      title: { x: 166, y: -2, width: 628, height: 79, fontSize: 65 },
+      close: null,
+      /** `icon_sticker_1` 200 at 46, 1292 */
+      badge: { x: -28, y: -50, width: 200, height: 200 },
+      /** "30%" 22:28972: Calibri Bold 60, centred at 72.5, 50.5, turned −30° */
+      badgeLabel: { x: 8.785, y: -7.36, width: 127.43, height: 115.72, fontSize: 60, rotation: -30 },
+      icon: { x: 74, y: 154, width: 320, height: 320 },
+      iconArt: {
+        /** `pic` 22:28962: the heart 320 at 148, 1496; "35d" 70 #3f598c under it */
+        offerLivesArt: { x: 74, y: 154, width: 320, height: 320, label: { x: 84, y: 432, width: 300, height: 100, fontSize: 70, fill: 0x3f598c } },
+        /** `pic` 22:28992: the coin 288.84 at 163, 1547 (panel 74, 1383); "2000" 90 white + #963304 4 over its foot */
+        offerCoinArt: { x: 89, y: 164, width: 288.84, height: 288.84, label: { x: 109.06, y: 397.68, width: 248.72, height: 110.32, fontSize: 90, stroke: { width: 4, color: 0x963304 } } }
+      },
+      iconLabel: { x: 84, y: 432, width: 300, height: 100, fontSize: 70, fill: 0x3f598c },
+      /** `tips` 22:28973: the two 162 boosters and their counts (Calibri Bold 70 #3f598c) */
+      items: [
+        { icon: { x: 487, y: 130, width: 162, height: 162 }, label: { x: 471, y: 240, width: 106, height: 85, fontSize: 70, fill: 0x3f598c } },
+        { icon: { x: 679, y: 130, width: 162, height: 162 }, label: { x: 663, y: 240, width: 106, height: 85, fontSize: 70, fill: 0x3f598c } }
+      ],
+      /** `btn_green` 428 × 200 at 516, 1665 */
+      button: { x: 442, y: 323, width: 428, height: 200 },
+      /** `txt_coins`: "900" (70) + 1 + `icon_coin_1` 84, one row centred on the button */
+      price: { y: 38.32, height: 124.3, gap: 1, fontSize: 70 },
+      coin: { width: 84, height: 84, y: 58.47, art: 'offerCoinArt' }
     },
     /**
      * Settings 8:17493: boxes local to the popup box (40, 647 of the frame). The approved screen is the in-level one

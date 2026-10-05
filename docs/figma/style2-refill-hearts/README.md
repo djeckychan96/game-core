@@ -1,5 +1,7 @@
 # Figma → Core: Style 2 Refill Hearts
 
+> **Superseded (2026-10-05)** by the theme_light_4 read in [docs/figma/style2-theme-light-4](../style2-theme-light-4/README.md): this folder records the earlier theme_light_3 snapshot only.
+
 Source: file `5FWFwdO4QGeDfeQtloLNOS`, section `8:17492` `theme_light_3`, screen `8:22838` `screen_refill_hearts`
 (1080 × 2344); leaf components from `8:17503` «компоненты для художников». Read 2026-10-02. **Provisional approved
 snapshot**: the artist is still working on Style 2; this is what the current implementation follows, not a frozen style.

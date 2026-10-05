@@ -1,0 +1,146 @@
+{
+  "about": "Style 2 (the artist's light-blue style) in theme_light_4: the reads behind src/pixi/skins/style2.ts windows.confirm / windows.lives / windows.offer (2026-10-05) and the inputs of its new textures. Run: node scripts/figma-assets.mjs docs/figma/style2-theme-light-4 [--check]",
+  "snapshot": "Figma section 22:26884 theme_light_4 as of 2026-10-05 (frozen for this task)",
+  "source": {
+    "file": "5FWFwdO4QGeDfeQtloLNOS",
+    "section": "22:26884",
+    "row": "Окна на переделку 22:27249, light row y 2583; leaf components in 22:26895 «компоненты для художников light_theme»"
+  },
+  "screens": {
+    "22:28984": "popart_restart — Confirm RESTART: popup 960 x 980 at 60, 303 (header tab, ×), frame_blur_bg, icon_heart_2 338 + '-1', 'You will lose 1 heart', btn_green 528.7 x 214; OFFER popup at 74, 1383",
+    "22:29021": "popart_leave — Confirm EXIT: the same window at 60, 646",
+    "22:28924": "screen_refill_hearts — Lives: popup 960 x 756 at 60, 486; btn_green 354 x 214 / btn_yellow 460 x 214 at y 952 with the tv (bottom-left) and the heart '1' (top-right) on its corners; OFFER popup at 74, 1342",
+    "22:28904 / 22:28915": "Settings in-level / map: unchanged boxes; a new Language row (no SettingsWindowView API) — not drawn",
+    "22:29110": "screen_victory — not used: Result is not covered by Style 2 (its FAIL counterpart 22:29036 is a NO STARS continue offer, not a Result FAIL)",
+    "22:29036": "defeat_screen — not used (NO STARS / Get 3 stars continue offer; REFILL NOW / x2 sample buttons)"
+  },
+  "assets": [
+    {
+      "key": "style2-offer-panel",
+      "file": "style2/offer_panel.webp",
+      "scale": 1,
+      "size": [
+        960,
+        393
+      ],
+      "note": "OFFER popup: popup_back_orange 22:27111 (its 960 x 344 render) with the header_back_orange rect 22:27115 (render 714 x 164, at 123, -48 of the popup) on top; no title (runtime). The header sits 49 above the panel box, like the blue popup's",
+      "nineSlice": {
+        "figma": {
+          "left": 191,
+          "top": 118,
+          "right": 191,
+          "bottom": 88
+        },
+        "gutter": 2,
+        "strip": 8,
+        "tolerance": 4
+      },
+      "layers": [
+        {
+          "image": "png/popup-back-orange-22-27111.png",
+          "at": [
+            0,
+            49
+          ],
+          "size": [
+            960,
+            344
+          ]
+        },
+        {
+          "image": "png/header-back-orange-rect-22-27115.png",
+          "at": [
+            123,
+            1
+          ],
+          "size": [
+            714,
+            164
+          ]
+        }
+      ],
+      "pad": {
+        "left": 0,
+        "top": 49,
+        "right": 0,
+        "bottom": 0
+      }
+    },
+    {
+      "key": "style2-confirm-heart",
+      "file": "style2/confirm_heart.webp",
+      "scale": 1,
+      "size": [
+        338,
+        338
+      ],
+      "note": "icon_heart_2 (22:27034, the broken heart) as drawn at 338 in 22:29026: its raw image fill at 354.431, centred and clipped by the 338 frame; the '-1' is runtime text",
+      "layers": [
+        {
+          "image": "png/icon-heart-2-raw-22-27035.png",
+          "at": [
+            -8.2155,
+            -8.2155
+          ],
+          "size": [
+            354.431,
+            354.431
+          ]
+        }
+      ]
+    },
+    {
+      "key": "style2-offer-lives",
+      "file": "style2/offer_lives.webp",
+      "scale": 1,
+      "size": [
+        320,
+        320
+      ],
+      "note": "OFFER hero 22:28962 without '35d': icon_heart_1 at 320 (its raw image at 335.556, centred, clipped) + the infinity vector '8' 22:28964 (render 140.99 x 80.99 centred at 159, 160 of the heart box)",
+      "layers": [
+        {
+          "image": "png/icon-heart-1-raw-22-27033.png",
+          "at": [
+            -7.778,
+            -7.778
+          ],
+          "size": [
+            335.556,
+            335.556
+          ]
+        },
+        {
+          "svg": "svg/infinity-8-22-28964.svg",
+          "at": [
+            88.504,
+            119.504
+          ]
+        }
+      ]
+    },
+    {
+      "key": "style2-offer-badge",
+      "file": "style2/offer_badge@2x.webp",
+      "scale": 2,
+      "size": [
+        200,
+        200
+      ],
+      "note": "icon_sticker_1 22:27040: its raw image (icon_sale_sticker) at 200; the '30%' is runtime text",
+      "layers": [
+        {
+          "image": "png/icon-sale-sticker-raw-22-27041.png",
+          "at": [
+            0,
+            0
+          ],
+          "size": [
+            200,
+            200
+          ]
+        }
+      ]
+    }
+  ]
+}

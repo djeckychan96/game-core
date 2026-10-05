@@ -1,5 +1,7 @@
 # Figma → Core: Style 2 Confirm (Restart / Exit)
 
+> **Superseded (2026-10-05)** by the theme_light_4 read in [docs/figma/style2-theme-light-4](../style2-theme-light-4/README.md): this folder records the earlier theme_light_3 snapshot only.
+
 Source: file `5FWFwdO4QGeDfeQtloLNOS`, section `8:17492` `theme_light_3`, screens `8:22049` `попап рестарт` and
 `8:22069` `попап выйти` (1080 × 2344). Read 2026-10-02. **Provisional approved snapshot**: the artist is still working
 on Style 2; this is what the current implementation follows, not a frozen style.
