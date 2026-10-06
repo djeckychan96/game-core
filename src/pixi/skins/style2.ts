@@ -16,8 +16,13 @@ const BLUE_GLOW = { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, t
  * theme_light_4 (section 22:26884, the light row; docs/figma/style2-theme-light-4) is the current snapshot for Confirm
  * (its own light popup now: `popart_restart` 22:28984 / `popart_leave` 22:29021), Lives (`screen_refill_hearts`
  * 22:28924: a shorter popup, the rewarded button's icons on its corners) and the orange OFFER under both; Settings
- * (22:28904 / 22:28915) is unchanged but for a Language row Core has no control for; the LevelMap screen and the HUD
- * below are the theme_light_3 reads. Result (22:29110 / 22:29036) stays uncovered (see that README).
+ * (22:28904 / 22:28915) is unchanged but for a Language row Core has no control for; the map and the HUD below are the
+ * theme_light_3 reads. Result (22:29110 / 22:29036) stays uncovered (see that README).
+ *
+ * theme_light_5 (section 24:35889, `screen_gameplay_pc` 24:38532; docs/figma/theme-light-5-level-map-nav) is the current
+ * snapshot for PLAY and the SHOP | HOME | LOCK navigation: the same PLAY, panel, selected column and SHOP / HOME icons
+ * (pixel-identical renders), HOME selected, the inactive slots' own icon / caption boxes, and LOCK captioned with its
+ * own lock render (`navLock`).
  *
  * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from the approved `screen_gameplay_pc` 8:23174
  * (docs/figma/style2-level-map-screen); `settings`, from the approved `настройки` 8:17493 (docs/figma/style2-settings);
@@ -65,7 +70,8 @@ export const READY_UI_STYLE_2 = {
     navPanel: { file: 'style2/nav_panel.webp', nineSlice: { left: 0, top: 20, right: 0, bottom: 14 } },
     /** `blue_active` 8:23254: the measured caps (the 50 corners + 6 shadow, a 2-unit gutter) around an 8-unit centre. */
     navSelected: { file: 'style2/nav_selected.webp', nineSlice: { left: 56, top: 58, right: 57, bottom: 2 } },
-    navLock: { file: 'style2/icon_lock.webp' },
+    /** theme_light_5 `icon_lock` 24:36028: the same lock drawn smaller and lower in its 288 box than the map's `levelLock`. */
+    navLock: { file: 'style2/nav_lock.webp' },
     /** Item icons a host may name in a BottomNavView item (`icon: 'iconShop'`). */
     iconShop: { file: 'style2/icon_shop.webp' },
     iconHome: { file: 'style2/icon_home.webp' },
@@ -359,30 +365,34 @@ export const READY_UI_STYLE_2 = {
     ],
     starsOnHardBadge: false
   },
+  /**
+   * theme_light_5 24:38532: `navigation_shop` / `_home` / `_lock` (352 × 396, top 1948 = 110 units above the panel rect
+   * at 2058) centred at 1420 / 2084 / 2748 — on the frame's centre now.
+   */
   bottomNav: {
     /** `bottom_panel` rect: 286 high at 2058 (to the frame bottom). */
     panelHeight: 286,
     panelBleedTop: 10,
-    /** Slot centres 1457.4 / 2122 / 2785. */
     pitch: 664,
-    /** `blue_active` render 1275.2, 2030, 364.3 × 314 around the slot centre 1457.4. */
+    /** `blue_active` render −6, 82.776, 364 × 313.2 of the component (the committed 365 × 314 render of the same art). */
     selectedBackground: { x: -182.169, y: -28, width: 365, height: 314 },
     selected: {
-      /** `icon_market` 288 at 1313, 1948. */
-      icon: { x: 0, y: 34, size: 288 },
-      /** "SHOP" 1315, 2230, 284 × 71, Calibri Bold 60. */
-      label: { x: -142.398, y: 172, width: 284, height: 71, fontSize: 60 }
+      /** state=home_active: `icon_home` 288 at 33, 9 (shop / lock actives at 32, 10 / 32, 9). */
+      icon: { x: 0, y: 43, size: 288 },
+      /** "HOME" 35, 283, 284 × 70, Calibri Bold 60 (centred on the slot). */
+      label: { x: -142, y: 173, width: 284, height: 70, fontSize: 60 }
     },
     normal: {
-      /** `icon_home` 220 at 2012, 2034. */
-      icon: { x: 0, y: 86, size: 220 },
-      /** "HOME" 1977, 2246, 290 × 49, Calibri Bold 40. */
-      label: { x: -145, y: 188, width: 290, height: 49, fontSize: 40 }
+      /** state=shop_inactive: `icon_shop` 267.034 at 42.482, 70. */
+      icon: { x: 0, y: 93.517, size: 267.034 },
+      /** "SHOP" 0, 290, 352 × 74, Calibri Bold 40. */
+      label: { x: -176, y: 180, width: 352, height: 74, fontSize: 40 }
     },
     locked: {
-      /** `icon_lock` 8:23251: the 220.3 image centred at 2784.95, 2151.95, no label. */
-      icon: { x: 0, y: 93.95, size: 220.3 },
-      label: null
+      /** state=lock_inactive: `icon_lock` 267.034 at 42.482, 74. */
+      icon: { x: 0, y: 97.517, size: 267.034 },
+      /** "LOCK" 0, 291.059, 352 × 74, Calibri Bold 40. */
+      label: { x: -176, y: 181.059, width: 352, height: 74, fontSize: 40 }
     },
     textFill: 0xffffff
   },

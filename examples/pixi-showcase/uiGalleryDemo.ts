@@ -2,7 +2,9 @@
 // The style is the game's one choice (`theme: { skin }` + `loadReadyUiAssets({ skin })`), so switching it reloads the
 // page. Query:
 //   ?style=1 | 2     the style (default 1)
-//   ?screen=<id>     the window over the map screen (default map = no window); ids in SCREENS below
+//   ?screen=<id>     the window over the map screen (default map = no window); ids in SCREENS below. Both styles draw
+//                    the same LevelMapScreen contract (select a level → PLAY, SHOP | HOME | LOCK); every callback lands
+//                    in the status line ("last: …")
 //   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
 //   ?ui=0            hide the gallery controls (screenshots)
 // Demo data only; nothing is bought, no level is played. The booster icons of the OFFER (gallery/*.webp, the Figma
@@ -11,9 +13,8 @@ import { Application, Assets, type Texture } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import {
   ConfirmWindowView,
-  HudView,
+  type HudView,
   LevelMapScreen,
-  LevelMapView,
   LivesWindowView,
   READY_UI_STYLE_1,
   READY_UI_STYLE_2,
@@ -32,7 +33,8 @@ import { DEMO_SHOP_ITEMS } from './demoData';
 import { createShowcaseLocalization } from './localizationDemo';
 
 const SCREENS = [
-  { id: 'map', label: 'HUD + LevelMap' },
+  { id: 'map', label: 'LevelMap — PLAY + SHOP | HOME | LOCK' },
+  { id: 'map-disabled', label: 'LevelMap — SHOP / LOCK disabled' },
   { id: 'settings-map', label: 'Settings — compact, no language' },
   { id: 'settings-map-lang', label: 'Settings — with language' },
   { id: 'settings-level', label: 'Settings in level — no language' },
@@ -76,13 +78,17 @@ for (const screen of SCREENS) select.add(new Option(screen.label, screen.id, fal
 select.addEventListener('change', () => go({ screen: select.value }));
 localeSelect.value = i18n.locale;
 localeSelect.addEventListener('change', () => go({ locale: localeSelect.value }));
+const stage = document.getElementById('stage') as HTMLDivElement;
 (document.getElementById('toggle') as HTMLButtonElement).addEventListener('click', () => bar.classList.toggle('hidden'));
 
 // --- the host: one Pixi app, the Core runtimes, the host clock ---
 const resolution = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
 const app = new Application();
-await app.init({ resizeTo: window, resolution, autoDensity: true, antialias: true, backgroundAlpha: 0 });
-document.body.insertBefore(app.canvas, bar);
+await app.init({ resizeTo: stage, resolution, autoDensity: true, antialias: true, backgroundAlpha: 0 });
+stage.appendChild(app.canvas);
+// the bar docks under the stage and changes height (collapsed, a wrapped status line): Pixi's resizeTo only hears
+// window resizes, so the stage's own size drives the canvas
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => app.resize()).observe(stage);
 const core = new CoreRuntime();
 const motion = new MotionRuntime();
 const ui = new UiRuntime({ motion });
@@ -110,41 +116,24 @@ const CURRENT = 12;
 const levels: LevelMapLevel[] = [];
 for (let i = 1; i <= 40; i++) levels.push({ index: i, stars: i < CURRENT ? [3, 2, 1, 3, 0][i % 5] ?? 0 : 0, ...(i % 7 === 0 ? { hard: true } : {}) });
 let refillSeconds = 24 * 60 + 15;
-type Insets = { top: number; right: number; bottom: number; left: number };
-let screen: { resize(w: number, h: number, o: { insets: Insets; pixelRatio: number }): void };
-let hud: HudView;
-if (styleNo === 2) {
-  const mapScreen = new LevelMapScreen({
-    ...base, id: 'map-screen',
-    map: { levels, currentLevel: CURRENT, onSelectLevel: (level) => log(`level:${level}`), onLockedTap: (level) => log(`locked:${level}`) },
-    hud: { coins: 9990, lives: 3, maxLives: 5, stars: 9990, onLivesTap: () => go({ screen: 'lives-full' }), onCoinsTap: () => log('hud:coins') },
-    nav: {
-      items: [{ id: 'shop', icon: 'iconShop', label: 'SHOP' }, { id: 'home', icon: 'iconHome', label: 'HOME' }, { id: 'events', label: 'EVENTS', locked: true }],
-      selectedId: 'home',
-      onSelect: (id) => { log(`nav:${id}`); mapScreen.nav.setSelected(id); },
-      onLockedTap: (id) => log(`nav-locked:${id}`)
-    },
-    onPlay: (level) => log(`play:${level}`)
-  });
-  hud = mapScreen.hud;
-  screen = mapScreen;
-  app.stage.addChild(mapScreen);
-} else {
-  // Style 1 covers HUD + LevelMap (no bottom nav / LevelMapScreen): the host composes the two, the map under the HUD row
-  const map = new LevelMapView({ ...base, id: 'map', levels, currentLevel: CURRENT, onSelectLevel: (level) => log(`level:${level}`), onLockedTap: (level) => log(`locked:${level}`) });
-  const styleHud = new HudView({
-    ...base, id: 'hud', coins: 12450, lives: 3, maxLives: 5,
+// the same LevelMapScreen contract for both styles: a node tap selects its level, PLAY launches the selected one, the
+// navigation is SHOP | HOME | LOCK (a slot without onTap is disabled); only the look is the style's
+const navDisabled = screenId === 'map-disabled';
+const mapScreen = new LevelMapScreen({
+  ...base, id: 'map-screen',
+  map: { levels, currentLevel: CURRENT, onLockedTap: (level) => log(`locked:${level}`), onFocusChange: ({ selectedLevel }) => log(`selected:${selectedLevel}`) },
+  hud: {
+    coins: styleNo === 2 ? 9990 : 12450, lives: 3, maxLives: 5, ...(styleNo === 2 ? { stars: 9990 } : {}),
     onLivesTap: () => go({ screen: 'lives-full' }), onCoinsTap: () => log('hud:coins'), onSettingsTap: () => go({ screen: 'settings-map' })
-  });
-  hud = styleHud;
-  screen = {
-    resize: (w, h, o) => {
-      styleHud.resize(w, h, o);
-      map.resize(w, h, { insets: { ...o.insets, top: styleHud.barHeight }, pixelRatio: o.pixelRatio });
-    }
-  };
-  app.stage.addChild(map, styleHud);
-}
+  },
+  nav: navDisabled
+    ? { home: { onTap: () => log('nav:home') } }
+    : { shop: { onTap: () => log('nav:shop') }, home: { onTap: () => log('nav:home') }, lock: { onTap: () => log('nav:lock') } },
+  onPlay: (level) => log(`play:${level}`)
+});
+const hud: HudView = mapScreen.hud;
+const screen = mapScreen;
+app.stage.addChild(mapScreen);
 hud.setLives(3, formatTimer(refillSeconds));
 
 // --- the window of this screen ---
@@ -230,7 +219,7 @@ if (view) app.stage.addChild(view);
 /** What this style draws for the screen: its own art, or the donor look where the style has no design. */
 function coverage(): string {
   const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId === 'win' || screenId === 'fail' ? 'result'
-    : screenId === 'map' ? 'levelMap' : screenId === 'shop' ? 'shop' : 'confirm';
+    : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'shop' ? 'shop' : 'confirm';
   const covered = skin.covers.includes(window as never);
   return `Style ${styleNo} · ${SCREENS.find((s) => s.id === screenId)?.label}: ${covered ? 'style art' : 'NOT in this style — donor look'}`;
 }
@@ -241,7 +230,9 @@ const readSafe = () => {
   const probe = document.getElementById('safe-probe');
   const style = probe ? getComputedStyle(probe) : null;
   const px = (value: string | undefined) => Math.max(0, parseFloat(value ?? '') || 0);
-  return { top: px(style?.paddingTop), right: px(style?.paddingRight), bottom: px(style?.paddingBottom), left: px(style?.paddingLeft) };
+  // the docked bar takes the bottom safe area when it is shown
+  const bottom = bar.style.display === 'none' ? px(style?.paddingBottom) : 0;
+  return { top: px(style?.paddingTop), right: px(style?.paddingRight), bottom, left: px(style?.paddingLeft) };
 };
 const layout = (): void => {
   const options = { insets: readSafe(), pixelRatio: resolution };

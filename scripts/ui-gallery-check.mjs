@@ -13,7 +13,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.SHOWCASE_URL ?? 'http://127.0.0.1:5180/';
 const STYLES = (process.env.STYLES ?? '1,2').split(',');
-const SCREENS = (process.env.SCREENS ?? 'map,settings-map,settings-map-lang,settings-level,settings-level-lang,restart,restart-offer,exit,lives-minimal,lives,lives-full,win,fail,shop').split(',');
+const SCREENS = (process.env.SCREENS ?? 'map,map-disabled,settings-map,settings-map-lang,settings-level,settings-level-lang,restart,restart-offer,exit,lives-minimal,lives,lives-full,win,fail,shop').split(',');
 const VIEWPORTS = (process.env.VIEWPORTS ?? '390x844,320x568,1280x800').split(',').map((v) => v.split('x').map(Number));
 const LOCALE = process.env.LOCALE ?? '';
 const out = resolve('showcase-shots/ui-gallery');

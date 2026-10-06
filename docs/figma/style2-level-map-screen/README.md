@@ -56,7 +56,7 @@ node scripts/figma-assets.mjs docs/figma/style2-level-map-screen --check  # re-r
 | `levelNodeLocked` | `level_node_locked.webp` 288² | 8:17671 at (0, 2.098) + 8:17673 at (0, 13.82) |
 | `levelStarGold` / `hudStar` | `icon_star.webp` 288² | `icon_star_1` 8:17647 |
 | `levelStarGoldL` / `R` | `level_star_l/r.webp` 174 × 198 | the render of 8:17667 (`F·R(30)` of the image) and its mirror (= the hidden right star `R(30)`) |
-| `levelLock`, `navLock` | `icon_lock.webp` 288² | `icon_lock` 8:17651 |
+| `levelLock` (and `navLock` until theme_light_5: now `nav_lock.webp`, docs/figma/theme-light-5-level-map-nav) | `icon_lock.webp` 288² | `icon_lock` 8:17651 |
 | `levelRail` | `level_rail.webp` 80 × 32 | 32 rows from the middle of `pic_light_ray` 8:23222 (uniform within the ±3 dither) |
 | `levelMapBackground` | `bg_sky.webp` 1672 × 941 | the raw `bg_2` image (sha1 = imageHash `8516046e…`), `cwebp -q 90`, 46 KB |
 | `hudCapsule` | `hud_capsule.webp` 515 × 182 | `header_back` 8:17609 (its bar clips the right shadow, kept) |
@@ -80,7 +80,7 @@ metadata: not a Modified Version per the OFL FAQ, so the Reserved Font Name stay
 | nodes | blue 288 (centres 834, 456), orange 384 = 288 × 4/3 at the focus (centre 1260); number "25" @75 at +31, "3" @140 at +80.5 (×0.75 → @105, +60.4); lock 86.4 at +100 | open / locked art + number boxes; the orange size is the host's `focusBoost: 4/3` |
 | rail | 80 wide, centre x 2086, from the top to under the current node | `levelRail` per segment |
 | PLAY | 550 × 280 centred at 2084, 1762; "PLAY" @120, "Level N" @70 | `levelMapScreen.play`: 296 units above the nav panel top |
-| nav | panel rect 0, 2058, 4168 × 286; slots 1457.4 / 2122 / 2785; selected column 1275.2, 2030, 364.3 × 314; selected icon 288 at y 2092, "SHOP" @60; normal icon 220 at 2144, "HOME" @40; locked: lock 220.3 at 2152, no label | `bottomNav`: pitch 664 centred on the viewport |
+| nav (superseded by theme_light_5: docs/figma/theme-light-5-level-map-nav) | panel rect 0, 2058, 4168 × 286; slots 1457.4 / 2122 / 2785; selected column 1275.2, 2030, 364.3 × 314; selected icon 288 at y 2092, "SHOP" @60; normal icon 220 at 2144, "HOME" @40; locked: lock 220.3 at 2152, no label | `bottomNav`: pitch 664 centred on the viewport |
 
 ## Implementation adaptations (not from Figma)
 

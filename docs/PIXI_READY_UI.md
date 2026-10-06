@@ -186,26 +186,50 @@ bases would compound and leave the icon enlarged.
 
 ### BottomNavView
 
-A generic bottom navigation bar (no donor art: it needs a style that covers `bottomNav`, today Style 2). Items are
-host data — `{ id, icon?: Texture | role, label? | labelKey?, locked? }` — and routing stays with the host:
+A generic bottom navigation bar (no donor art: it needs a style that covers `bottomNav` — Style 1 and Style 2). Items
+are host data — `{ id, icon?: Texture | role, label? | labelKey?, locked?, disabled? }` — and routing stays with the host:
 
 | Option / member | Meaning |
 | --- | --- |
 | `items`, `selectedId` | stable ids; the icon a texture or a style role (`'iconShop'`); `label` wins over `labelKey` (through `i18n`), neither = no label |
-| `onSelect(id)` | settled tap on an item that is not locked, selected or not — the view never changes its own selection |
-| `onLockedTap(id)` | settled tap on a locked item (it shows the style's lock instead of its icon and label) |
-| `setSelected(id \| null)`, `setLocked(id, locked)`, `selectedId`, `isLocked(id)` | the host's routing result / unlocks |
+| `onSelect(id)` | settled tap on an item that is neither locked nor disabled, selected or not — the view never changes its own selection |
+| `onLockedTap(id)` | settled tap on a locked item (it shows the style's lock instead of its icon, with its caption where the style's locked state has one) |
+| `disabled` | the item keeps its look (no style has disabled art) and is inert: no press feedback, no callback |
+| `setSelected(id \| null)`, `setLocked(id, locked)`, `setDisabled(id, disabled)`, `selectedId`, `isLocked(id)`, `isDisabled(id)` | the host's routing result / unlocks |
 | `resize(w, h, { insets, pixelRatio })`, `top`, `barHeight` | the panel `panelHeight` units above the bottom inset, reaching through it; slots `pitch` apart, shrinking on a narrow screen |
 
 ### LevelMapScreen
 
-The minimal level-map screen composition: `LevelMapView` (with the style's background), PLAY, `BottomNavView` and
-`HudView`, bottom to top, laid out together — the HUD at the top, the nav at the bottom edge, PLAY the style's
-distance above the nav, the map from the top inset down to PLAY. PLAY shows `core.level_map.play` and
-`core.level_map.level` with the map's playable level under the focus (`map.selectedLevel`, refreshed on every focus
-change) and calls `onPlay(level)`. Options are grouped per part (`map`, `hud`, `nav`); the parts stay reachable
-(`screen.map`, `screen.hud`, `screen.nav`, `screen.play`). It owns no game state, routing or timer — not a screen
-framework. Needs a style that covers `levelMapScreen`.
+The level-map screen composition and its **one functional contract for every style**: `LevelMapView` (with the
+style's background), PLAY, `BottomNavView` and `HudView`, bottom to top, laid out together — the HUD at the top, the
+nav at the bottom edge, PLAY the style's distance above the nav, the map from the top inset down to PLAY. It owns no
+game state, routing or timer — not a screen framework. Needs a style that covers `levelMapScreen` (Style 1, Style 2).
+
+```ts
+const screen = new LevelMapScreen({
+  ...readyUi, id: 'map-screen',
+  map: { levels, currentLevel },                     // a node tap SELECTS its level (scrolls it under the focus)
+  hud: { coins, lives, maxLives, onLivesTap, onSettingsTap },
+  nav: {
+    shop: { onTap: openShop },                       // or no onTap / disabled: true = drawn, inert
+    home: { onTap: () => screen.map.scrollToLevel(currentLevel) },
+    lock: {}                                         // the future feature: the style's locked state, callback optional
+  },
+  onPlay: (level) => startLevel(level)               // PLAY launches the selected level
+});
+```
+
+| Contract | Meaning |
+| --- | --- |
+| select level | `map.selectedLevel` / `screen.playLevel` = the playable level under the focus (scroll, fling, or a tap on an open node, which scrolls it there); PLAY shows `core.level_map.play` (+ `core.level_map.level` when the style draws a level line) |
+| `onPlay(level)` | settled tap on PLAY with the selected level |
+| `nav.shop` / `nav.home` / `nav.lock` | `{ onTap?, disabled?, label? }`: SHOP \| HOME \| LOCK, always all three, HOME selected, LOCK locked; a slot without `onTap` is disabled for good (inert); `disabled: true` with an `onTap` starts it disabled and `screen.nav.setDisabled(id, false)` enables it later; captions `core.nav.shop` / `home` / `lock` or `label` |
+| `map.onSelectLevel` (optional) | still told about every node tap, as before — a host that launched from the node keeps working |
+| `nav: { items, selectedId, onSelect, onLockedTap }` | the earlier generic item list, kept |
+
+The style decides only the look (files, boxes, caption look, whether PLAY has a level line) — never whether PLAY or a
+slot exists. A host that launches straight from a node uses `LevelMapView` alone: its node tap still calls
+`onSelectLevel` and nothing else.
 
 ### UiButton
 
@@ -384,7 +408,7 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | SettingsWindowView | covered — SOUND / MUSIC / optional HAPTIC, close, version, optional HOME / RESTART and the language row (Style 1's blue `Btn`, no Figma node) as one dense column (`map` / `gameplay`); theme_light_4 22:28430 type: SETTINGS 100, plain version, the violet shell × | covered — theme_light_4 22:28904 (in-level) / 22:28915 (map): Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, the Language row (`btn_main` + globe), no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings, docs/figma/style2-theme-light-4) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
-| BottomNavView, LevelMapScreen | not covered | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen) |
+| BottomNavView, LevelMapScreen | covered — theme_light_5 24:37523 / 24:37548 + the dark nav components: PLAY without a level line, SHOP \| HOME \| LOCK with the raised blue column, #261a30-outlined captions (docs/figma/theme-light-5-level-map-nav) | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen); theme_light_5 24:38532 slot boxes, HOME selected, LOCK captioned (docs/figma/theme-light-5-level-map-nav) |
 | ResultWindowView | covered — Figma `screen/result-win` 1:3854 / `screen/result-fail` 1:4029: red / grey ribbon with its tinted ×, glow band, reward coin, CONTINUE + RETRY (orange with the highlight; Figma's rewarded x2 offer is not Core's), fail broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | not covered — donor look (theme_light_4 has a WIN 22:29110 but no Result FAIL: 22:29036 is a NO STARS continue offer) |
 | Shop, NoAds, StarterPack | not covered — donor look (no Style 1 screen) | not covered — donor look |
 
@@ -549,9 +573,10 @@ npm run showcase -- --host 0.0.0.0 --port 5180              # then open http://1
 SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:gallery # screenshots of every style × screen × viewport
 ```
 
-`examples/pixi-showcase/ui-gallery.html` shows every public Ready UI view of one style over that style's map screen:
-STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching reloads the page), a screen picker (HUD +
-LevelMap, Settings compact / with language / in level with and without language, Confirm Restart / Restart + OFFER /
+`examples/pixi-showcase/ui-gallery.html` shows every public Ready UI view of one style over that style's map screen —
+the same `LevelMapScreen` for both styles (PLAY + SHOP | HOME | LOCK; every callback lands in the status line as
+`last: play:12`, `nav:shop`, `selected:9`…): STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching
+reloads the page), a screen picker (LevelMap with every slot active, LevelMap with SHOP / LOCK disabled, Settings compact / with language / in level with and without language, Confirm Restart / Restart + OFFER /
 Exit, Lives minimal / REFILL + GET / full with the OFFER, Result WIN / FAIL, the coin Shop), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
 donor look (Style 2 Result). Query: `?style=1|2&screen=<id>&locale=ru&ui=0` (`ui=0` hides the controls). The OFFER's
 booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
@@ -590,3 +615,7 @@ and `fonts/Carlito-Bold.woff` (OFL 1.1, `fonts/Carlito-OFL.txt`); provenance and
 docs/figma/style2-level-map-screen/README.md, docs/figma/style2-settings/README.md and
 docs/figma/style2-refill-hearts/README.md. Style 2's Confirm ships no file of its own: it draws Style 1's
 (docs/figma/style2-confirm/README.md).
+
+theme_light_5 PLAY and navigation (docs/figma/theme-light-5-level-map-nav/README.md): Style 1's `button/style1_play.webp`
+and `nav/style1_*.webp` (~110 KB, loaded only with `skin: READY_UI_STYLE_1`) and Style 2's `style2/nav_lock.webp` —
+Figma's own renders.

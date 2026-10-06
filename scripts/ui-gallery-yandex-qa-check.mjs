@@ -25,7 +25,7 @@ const zip = path.resolve(process.argv[2] ?? (() => {
   if (found.length !== 1) throw new Error(`pass the zip: release/ has ${found.length} Yandex QA zips`);
   return path.join(ROOT, 'release', found[0]);
 })());
-const SCREENS = ['map', 'settings-map', 'settings-map-lang', 'settings-level', 'settings-level-lang', 'restart', 'restart-offer', 'exit', 'lives-minimal', 'lives', 'lives-full', 'win', 'fail', 'shop'];
+const SCREENS = ['map', 'map-disabled', 'settings-map', 'settings-map-lang', 'settings-level', 'settings-level-lang', 'restart', 'restart-offer', 'exit', 'lives-minimal', 'lives', 'lives-full', 'win', 'fail', 'shop'];
 const FOLDER = '/games/app-qa/draft-1/'; // the package lives below the origin root, /sdk.js at the root
 const SHOTS = process.env.SHOTS ? path.resolve(process.env.SHOTS) : null;
 // headless SwiftShader noise, not the page

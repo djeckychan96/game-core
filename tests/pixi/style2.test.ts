@@ -134,7 +134,7 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(requiredSkinRoles(READY_UI_STYLE_2, 'hud')).toEqual(['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudStar']);
     expect(requiredSkinRoles(READY_UI_STYLE_2, 'levelMap')).toEqual(['levelNodeNormal', 'levelLock', 'levelRail', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground']);
     expect(requiredSkinRoles(READY_UI_STYLE_2, 'bottomNav')).toEqual(['navPanel', 'navSelected', 'navLock']);
-    expect(requiredSkinRoles(READY_UI_STYLE_2, 'levelMapScreen')).toEqual(['playButton']);
+    expect(requiredSkinRoles(READY_UI_STYLE_2, 'levelMapScreen')).toEqual(['playButton', 'iconShop', 'iconHome']);
     // a role the layout draws is still strict: dropping the locked-node art breaks the package
     const broken = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, levelNodeLocked: undefined } } as unknown as ReadyUiSkin;
     expect(() => validateReadyUiSkin(broken)).toThrow("ReadyUiSkin 'style-2' covers 'levelMap' but has no asset for role 'levelNodeLocked'");
@@ -317,7 +317,7 @@ describe('BottomNavView — generic items, host routing', () => {
       .toThrow("BottomNavView: item 'x' names icon role 'iconHome', which style 'style-2' did not load");
   });
 
-  it('selected state: the raised background, the Figma icon / label boxes; normal and locked states', () => {
+  it('selected state: the raised background, the theme_light_5 icon / label boxes; normal and locked states', () => {
     const kit = createKit();
     const { nav } = createNav(kit);
     const shop = nav.getItemContainer('shop')!;
@@ -330,17 +330,18 @@ describe('BottomNavView — generic items, host routing', () => {
     // the selected background reaches the viewport bottom: from -28 to the panel's bottom (286, no inset)
     expect(background(shop).height).toBeCloseTo(286 + 28, 6);
     expect(spriteByLabel(shop, 'style-2:iconShop').width).toBeCloseTo(288, 6);
-    expect(spriteByLabel(shop, 'style-2:iconShop').y).toBe(34);
-    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(220, 6);
-    expect(spriteByLabel(home, 'style-2:iconHome').y).toBe(86);
+    expect(spriteByLabel(shop, 'style-2:iconShop').y).toBe(43);
+    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(267.034, 6);
+    expect(spriteByLabel(home, 'style-2:iconHome').y).toBe(93.517);
     const shopLabel = descendants(shop, Text)[0]!;
     const homeLabel = descendants(home, Text)[0]!;
     expect([shopLabel.text, shopLabel.style.fontSize, shopLabel.style.fill, shopLabel.style.fontFamily]).toEqual(['SHOP', 60, 0xffffff, 'Carlito']);
     expect([homeLabel.text, homeLabel.style.fontSize]).toEqual(['HOME', 40]);
-    // locked: the style's lock instead of the icon, no label
+    // locked: the style's lock instead of the icon, with the item's caption (theme_light_5 captions its LOCK slot)
     expect(labels(events)).toEqual(['style-2:navLock']);
-    expect(texts(events)).toEqual([]);
-    expect(spriteByLabel(events, 'style-2:navLock').width).toBeCloseTo(220.3, 6);
+    expect(texts(events)).toEqual(['EVENTS']);
+    expect(spriteByLabel(events, 'style-2:navLock').width).toBeCloseTo(267.034, 6);
+    expect(spriteByLabel(events, 'style-2:navLock').y).toBe(97.517);
     // slots: pitch 664 around the centre
     expect([shop.x, home.x, events.x]).toEqual([-664, 0, 664]);
     // the host moves the selection

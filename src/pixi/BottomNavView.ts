@@ -1,7 +1,7 @@
 import { Container, type FederatedPointerEvent, NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { ButtonController, LocalizationTextProvider, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
-import { resolveSkinView, selectSkinView, skinNineSlice, type ReadyUiSkinBottomNavItemLayout, type ReadyUiSkinBottomNavLayout, type ReadyUiSkinRole, type SkinViewLook } from './skin';
+import { resolveSkinView, selectSkinView, skinNineSlice, skinTextLook, type ReadyUiSkinBottomNavItemLayout, type ReadyUiSkinBottomNavLayout, type ReadyUiSkinRole, type SkinViewLook } from './skin';
 import { applyTextResolution, createFigmaLabel, placeFigmaLabel } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
 
@@ -15,8 +15,13 @@ export interface BottomNavItem {
   readonly label?: string;
   /** A localization key resolved through the view's `i18n` provider when there is no `label`. Neither = no label. */
   readonly labelKey?: string;
-  /** A locked item shows the style's lock instead of its icon and label, and never selects. Default false. */
+  /** A locked item shows the style's lock instead of its icon (with its label where the style's locked state has one) and never selects. Default false. */
   readonly locked?: boolean;
+  /**
+   * A disabled item keeps its look (no style has disabled art) but is inert: no press feedback, no callback, no
+   * pointer cursor. Default false.
+   */
+  readonly disabled?: boolean;
 }
 
 export interface BottomNavInsets {
@@ -42,9 +47,9 @@ export interface BottomNavViewOptions {
   items: readonly BottomNavItem[];
   /** The item drawn as selected (the host's current destination). Default none. */
   selectedId?: string | null;
-  /** Settled tap on an item that is not locked — selected or not. The view does not change its own selection: the host routes, then calls `setSelected`. */
+  /** Settled tap on an item that is neither locked nor disabled — selected or not. The view does not change its own selection: the host routes, then calls `setSelected`. */
   onSelect: (id: string) => void;
-  /** Settled tap on a locked item (`onSelect` is never called for it). */
+  /** Settled tap on a locked item that is not disabled (`onSelect` is never called for it). */
   onLockedTap?: (id: string) => void;
   width?: number;
   height?: number;
@@ -53,6 +58,7 @@ export interface BottomNavViewOptions {
 interface NavItemNode {
   readonly item: BottomNavItem;
   locked: boolean;
+  disabled: boolean;
   /** Slot position and the fit scale. */
   readonly root: Container;
   /** Press feedback lives one level down. */
@@ -68,9 +74,9 @@ const PRESS_SCALE = 0.94;
 
 /**
  * Bottom navigation bar: a full-width panel at the bottom edge with N items, one of them drawn as selected and any of
- * them locked. Visuals come only from the selected style (`theme.skin` covering `bottomNav`: panel, selected
- * background, lock, geometry, label boxes, text colour); behaviour is the same for every style. Each item is a
- * ButtonController, so a press cancelled by a swipe, `cancelScope` or `core.cancelAll()` never calls back.
+ * them locked or disabled. Visuals come only from the selected style (`theme.skin` covering `bottomNav`: panel,
+ * selected background, lock, geometry, label boxes, text colour and outline); behaviour is the same for every style.
+ * Each item is a ButtonController, so a press cancelled by a swipe, `cancelScope` or `core.cancelAll()` never calls back.
  *
  * Layout: slots `pitch` design units apart, centred on the viewport (shrinking to fit a narrow screen; an item scales
  * down only when its selected background no longer fits its slot), the panel's top edge `panelHeight` units above the
@@ -123,7 +129,9 @@ export class BottomNavView extends Container {
     this.panel.eventMode = 'none';
     this.content.addChild(this.panel);
 
-    const textLook = { strokeOutside: 0, shadowY: 0, fill: this.layout.textFill, ...(skin.font ? { fontFamily: skin.font.family } : {}) };
+    // the style's text look, the nav's own outline over it, the nav's label colour
+    const outline = this.layout.text;
+    const textLook = { ...skinTextLook(skin), ...(outline ? { strokeOutside: outline.strokeOutside, shadowY: outline.shadowY } : {}), ...(outline?.strokeColor !== undefined ? { strokeColor: outline.strokeColor } : {}), fill: this.layout.textFill };
     for (const item of options.items) {
       const root = new Container();
       const inner = new Container();
@@ -150,13 +158,14 @@ export class BottomNavView extends Container {
 
       const controller = options.ui.createButton({
         id: `${this.id}:item:${item.id}`,
+        enabled: item.disabled !== true,
         pressDurationMs: 70,
         releaseDurationMs: 140,
         releaseEase: 'backOut',
         onProgress: (progress) => inner.scale.set(1 - (1 - PRESS_SCALE) * progress),
         onTap: () => this.onItemTap(item.id)
       });
-      const node: NavItemNode = { item, locked: item.locked === true, root, inner, background, icon, lock, label, controller };
+      const node: NavItemNode = { item, locked: item.locked === true, disabled: item.disabled === true, root, inner, background, icon, lock, label, controller };
       root.on('pointerdown', (event: FederatedPointerEvent) => controller.pointerDown(event.pointerId, event.global.x, event.global.y));
       root.on('pointermove', (event: FederatedPointerEvent) => controller.pointerMove(event.pointerId, event.global.x, event.global.y));
       root.on('pointerup', (event: FederatedPointerEvent) => controller.pointerUp(event.pointerId, event.global.x, event.global.y, true));
@@ -191,6 +200,10 @@ export class BottomNavView extends Container {
     return this.node(id).locked;
   }
 
+  isDisabled(id: string): boolean {
+    return this.node(id).disabled;
+  }
+
   /** The item's slot container (for host FX and checks), or null for an unknown id. */
   getItemContainer(id: string): Container | null {
     return this.nodes.find((node) => node.item.id === id)?.root ?? null;
@@ -206,6 +219,14 @@ export class BottomNavView extends Container {
   /** Locks or unlocks an item; a locked item shows the lock and only reports `onLockedTap`. */
   setLocked(id: string, locked: boolean): void {
     this.node(id).locked = locked;
+    this.layoutItems();
+  }
+
+  /** Disables or enables an item; a disabled item keeps its look and ignores taps (a press in progress is cancelled). */
+  setDisabled(id: string, disabled: boolean): void {
+    const node = this.node(id);
+    node.disabled = disabled;
+    node.controller.setEnabled(!disabled);
     this.layoutItems();
   }
 
@@ -301,13 +322,14 @@ export class BottomNavView extends Container {
           placeFigmaLabel(node.label, { x: box.x, y: box.y, width: box.width, height: box.height, align: 'center' });
         }
       }
-      node.root.cursor = node.locked ? 'default' : 'pointer';
+      node.root.cursor = node.locked || node.disabled ? 'default' : 'pointer';
     }
   }
 
   private onItemTap(id: string): void {
     if (this.disposed) return;
     const node = this.node(id);
+    if (node.disabled) return;
     if (node.locked) {
       this.onLockedTap?.(id);
       return;

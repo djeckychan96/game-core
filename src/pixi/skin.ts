@@ -40,13 +40,14 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * map with its own background or locked-node art), so the roles a covering style must ship are
  * `requiredSkinRoles(skin, view)`. `iconShop` / `iconHome` are item icons a style may ship for a BottomNavView item
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
+ * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons.
  */
 export const READY_UI_SKIN_VIEW_ROLES = {
   ...READY_UI_SKIN_WINDOW_ROLES,
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton']
+  levelMapScreen: ['playButton', 'iconShop', 'iconHome']
 } as const satisfies Record<ReadyUiSkinView, readonly string[]>;
 
 export type ReadyUiSkinRole = (typeof READY_UI_SKIN_VIEW_ROLES)[ReadyUiSkinView][number];
@@ -343,6 +344,13 @@ export interface ReadyUiSkinBottomNavItemLayout {
   readonly label: ReadyUiSkinTextBox | null;
 }
 
+/** A view's own text outline over the style's: OUTSIDE stroke width and hard shadow offset (0 = none), and their colour (absent: the theme's stroke colour). */
+export interface ReadyUiSkinTextOutline {
+  readonly strokeOutside: number;
+  readonly shadowY: number;
+  readonly strokeColor?: number;
+}
+
 /**
  * BottomNavView geometry. Units are design units; x is relative to an item's slot centre, y to the TOP of the panel
  * (its rect, without the shadow). The panel spans the viewport width and reaches down through the bottom inset.
@@ -358,22 +366,29 @@ export interface ReadyUiSkinBottomNavLayout {
   readonly selectedBackground: ReadyUiSkinBox;
   readonly selected: ReadyUiSkinBottomNavItemLayout;
   readonly normal: ReadyUiSkinBottomNavItemLayout;
-  /** A locked item shows the style's lock (`navLock`) instead of its icon. */
+  /** A locked item shows the style's lock (`navLock`) instead of its icon; its label box (the item's own caption) when the style has one. */
   readonly locked: ReadyUiSkinBottomNavItemLayout;
   /** Label colour. */
   readonly textFill: number;
+  /** The labels' outline; absent = the style's text look. */
+  readonly text?: ReadyUiSkinTextOutline;
 }
 
-/** The level-map screen composition: PLAY (`playButton`, its labels runtime text) above the bottom navigation. */
+/**
+ * The level-map screen composition: PLAY (`playButton`, its labels runtime text in the style's text look) above the
+ * bottom navigation. Whether PLAY and the navigation exist is not the style's: every covering style draws both.
+ */
 export interface ReadyUiSkinLevelMapScreenLayout {
   readonly play: {
+    /** The `playButton` art box; its centre is the button's centre. */
     readonly width: number;
     readonly height: number;
     /** The PLAY centre sits this many design units above the nav panel's top edge. */
     readonly aboveNav: number;
     /** Button-local text boxes (from the button centre). */
     readonly label: ReadyUiSkinTextBox;
-    readonly level: ReadyUiSkinTextBox;
+    /** The playable level's caption (`Level N`); `null` = this style's PLAY shows the word only. */
+    readonly level: ReadyUiSkinTextBox | null;
     readonly textFill: number;
   };
 }
@@ -503,7 +518,8 @@ function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly 
  * The roles `skin` must ship for `view`: every role of Confirm / Lives (Lives without `buttonHighlight` when its
  * layout has no highlight; the OFFER panel's roles only when the style has `windows.offer`); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
- * art, `background` → the map background). BottomNav item icons are never required.
+ * art, `background` → the map background). BottomNav item icons are never required by the nav alone; LevelMapScreen
+ * requires PLAY and the icons of its SHOP / HOME slots.
  */
 export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): readonly ReadyUiSkinRole[] {
   if (view === 'hud') {

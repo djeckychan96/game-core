@@ -7,14 +7,17 @@
     <link rel="icon" href="data:," />
     <style>
       html, body { margin: 0; height: 100%; overflow: hidden; background: linear-gradient(#483191, #274caf); font: 13px/1.3 -apple-system, system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
       body[data-style="2"] { background: linear-gradient(#1b2350, #0e1430); }
+      /* the Ready UI canvas fills the stage; the gallery bar docks under it, so it never covers the bottom navigation */
+      #stage { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
       canvas { display: block; }
       #safe-probe { position: fixed; inset: 0; pointer-events: none; visibility: hidden;
         padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
-      /* the gallery's own controls: plain DOM over the canvas, never part of the Ready UI */
-      #gallery { position: fixed; left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); z-index: 10;
-        display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px; border-radius: 10px;
-        background: rgba(10, 12, 24, 0.82); color: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4); }
+      /* the gallery's own controls: plain DOM under the canvas, never part of the Ready UI */
+      #gallery { flex: 0 0 auto; position: relative; z-index: 10;
+        display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+        background: rgba(10, 12, 24, 0.92); color: #fff; box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.4); }
       #gallery.hidden > :not(#toggle) { display: none; }
       #gallery button, #gallery select { font: inherit; color: #fff; background: #2b3160; border: 1px solid #4a5299; border-radius: 6px; padding: 5px 9px; }
       #gallery button[aria-pressed="true"] { background: #f0b429; color: #111; border-color: #f0b429; font-weight: 700; }
@@ -24,6 +27,7 @@
   </head>
   <body>
     <div id="safe-probe"></div>
+    <div id="stage"></div>
     <div id="gallery" role="toolbar" aria-label="Ready UI gallery">
       <button id="toggle" type="button" title="Hide / show the gallery controls">☰</button>
       <span>STYLE</span>

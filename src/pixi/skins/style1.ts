@@ -11,9 +11,11 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  *
  * COVERS: `confirm` (screen/confirm-exit 820:77655, docs/figma/confirm-exit) and `lives` (screen/lives 85:8944,
  * docs/figma/lives), the current runtime surface of `settings`, HUD and LevelMap from the canonical level-select
- * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301), and the level `result` WIN / FAIL
- * (screen/result-win 1:3854, screen/result-fail 1:4029, docs/figma/style1-result). NOT COVERED — donor look: Shop,
- * NoAds, StarterPack (no Style 1 screen exists for them).
+ * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301), the level `result` WIN / FAIL
+ * (screen/result-win 1:3854, screen/result-fail 1:4029, docs/figma/style1-result), and `bottomNav` + `levelMapScreen`
+ * — PLAY and the SHOP | HOME | LOCK navigation — from theme_light_5 (section 24:35889, the purple main screen 24:37472
+ * and the dark nav components 24:38867 / 24:38858 / 24:38849; docs/figma/theme-light-5-level-map-nav). NOT COVERED —
+ * donor look: Shop, NoAds, StarterPack (no Style 1 screen exists for them).
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -23,7 +25,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -108,7 +110,20 @@ export const READY_UI_STYLE_1 = {
     /** `icon_heart` 22:28071 without its caption: the Lives heart with the ∞ glyph (unlimited lives). */
     offerLivesArt: { file: 'icons/style1_offer_lives@2x.webp' },
     /** `icon_coin` 22:28125 without its amount. */
-    offerCoinArt: { file: 'icons/style1_offer_coin@2x.webp' }
+    offerCoinArt: { file: 'icons/style1_offer_coin@2x.webp' },
+    /** theme_light_5 PLAY 24:37524 (the green `Group 189`, no text): its 522 × 228 render box (stroke and shadow included). */
+    playButton: { file: 'button/style1_play.webp' },
+    /**
+     * theme_light_5 nav panel 24:37551: the centre columns of its render — 6 rows of the #261a30 stroke over the
+     * #303e8f → #222a5d gradient. The gradient runs down the panel, so the middle rows stretch only under a bottom inset.
+     */
+    navPanel: { file: 'nav/style1_panel.webp', nineSlice: { left: 0, top: 8, right: 0, bottom: 2 } },
+    /** `blue_active_dark` 24:38870: the raised column's render without the stroke under it; rows are uniform from 62 (top cap 64). */
+    navSelected: { file: 'nav/style1_selected.webp', nineSlice: { left: 60, top: 64, right: 60, bottom: 2 } },
+    /** The dark nav icons (288 components, their PNG@1x exports): `icon_lock_dark` 24:38823 is the LOCK slot's art. */
+    navLock: { file: 'nav/style1_icon_lock.webp' },
+    iconShop: { file: 'nav/style1_icon_shop.webp' },
+    iconHome: { file: 'nav/style1_icon_home.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -153,6 +168,42 @@ export const READY_UI_STYLE_1 = {
     ],
     /** The violet HARD surface sits across the top rim (Figma), so a HARD node's crown rests on it. */
     starsOnHardBadge: true
+  },
+  /**
+   * theme_light_5: the dark nav components (352 × 396, their top 110 units above the panel rect) on the 24:37551 panel.
+   * Slot centres 364 apart (the theme_light_5 bottom strip 24:36128: three 352 slots, 12 apart); a slot centre is 176
+   * into its component.
+   */
+  bottomNav: {
+    panelHeight: 286,
+    /** The panel's 6-unit #261a30 stroke above its rect. */
+    panelBleedTop: 6,
+    pitch: 364,
+    /** `blue_active_dark` render −6, 82 of the component, 364 × 314 (cut at the screen bottom). */
+    selectedBackground: { x: -182, y: -28, width: 364, height: 314 },
+    /** state=active: the icon 288 at 32, 17; "SHOP" / "HOME" 34, 305, 284 × 70, Fira Sans Black 54. */
+    selected: { icon: { x: 0, y: 51, size: 288 }, label: { x: -142, y: 195, width: 284, height: 70, fontSize: 54 } },
+    /** state=inactive: the icon 220 at 66, 98; the label 0, 299, 352 × 74 at 40. */
+    normal: { icon: { x: 0, y: 98, size: 220 }, label: { x: -176, y: 189, width: 352, height: 74, fontSize: 40 } },
+    /** `navigation_lock_dark` state=inactive: `icon_lock_dark` 220 at 66, 98 with its "LOCK" caption. */
+    locked: { icon: { x: 0, y: 98, size: 220 }, label: { x: -176, y: 189, width: 352, height: 74, fontSize: 40 } },
+    textFill: 0xffffff,
+    /** White Fira Sans Black with a 3-unit OUTSIDE #261a30 stroke and its 4-unit hard shadow. */
+    text: { strokeOutside: 3, shadowY: 4, strokeColor: 0x261a30 }
+  },
+  levelMapScreen: {
+    play: {
+      /** PLAY 24:37523: box 284, 1663, 512 × 210; render 279, 1658, 522 × 228 (centre 540, 1772). */
+      width: 522,
+      height: 228,
+      /** The render centre 1772, the panel rect top 2058. */
+      aboveNav: 286,
+      /** "PLAY" 24:37525: 334, 1704, 412 × 104, Fira Sans Black 110, the kit's 4 / 4 outline. */
+      label: { x: -206, y: -68, width: 412, height: 104, fontSize: 110 },
+      /** Style 1's PLAY shows no level line. */
+      level: null,
+      textFill: 0xffffff
+    }
   },
   windows: {
     /** Figma `screen/confirm-exit`: window-local boxes (the `ui/window/base` box sits at 60, 675 of the frame). */

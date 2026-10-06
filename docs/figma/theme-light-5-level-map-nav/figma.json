@@ -1,0 +1,81 @@
+{
+  "about": "Figma source of truth for the shared LevelMap screen contract (PLAY + the SHOP | HOME | LOCK bottom navigation) of READY_UI_STYLE_1 (style-1) and READY_UI_STYLE_2 (style-2). Read 2026-10-06 through the Figma MCP: get_metadata, read-only use_figma dumps, download_assets (component PNG@1x exports) and get_screenshot with contentsOnly (transparent renders). Coordinates are Figma units = Ready UI design units (both frames are 2344 high like the portrait design box). Item geometry is relative to the slot centre (x) and the TOP of the nav panel rect (y), like ReadyUiSkinBottomNavLayout.",
+  "source": {
+    "fileKey": "5FWFwdO4QGeDfeQtloLNOS",
+    "section": { "id": "24:35889", "name": "theme_light_5", "note": "the only current snapshot for LevelMap / navigation; theme_light_3 / theme_light_4 are superseded for these parts" },
+    "screenSection": { "id": "24:36295", "name": "Окна на переделку" },
+    "componentsDark": { "id": "24:38634", "name": "компоненты для художников dark_theme" },
+    "componentsLight": { "id": "24:35900", "name": "компоненты для художников light_theme" }
+  },
+  "style1": {
+    "screen": { "id": "24:37472", "name": "настройки гл экран", "size": [1080, 2344], "note": "the purple main screen (with the Settings window open over it): PLAY and the nav are read here" },
+    "play": {
+      "group": { "id": "24:37523", "name": "Group 14", "box": [284, 1663, 512, 210], "render": [279, 1658, 522, 228] },
+      "background": { "id": "24:37524", "name": "Group 189", "type": "INSTANCE of 1:933 Property 1=Variant2",
+        "children": { "Rectangle 18": "#029437, stroke #261a30 w5 OUTSIDE, DROP_SHADOW 0,8 r0 #261a30, r51", "Rectangle 19": "[10, 0, 492, 185] linear #48f025 -> #30c510, INNER_SHADOW 0,-5 r9.6 #3ad819, r49" },
+        "core": "playButton = button/style1_play.webp (its 522 x 228 render box; the layout box is that render box, centred at 540, 1772)" },
+      "label": { "id": "24:37525", "text": "PLAY", "box": [334, 1704, 412, 104], "font": "Fira Sans Black 110", "fill": "#ffffff", "stroke": "#000000 w4 OUTSIDE", "effects": ["DROP_SHADOW 0,4 r0 #000000"], "align": "CENTER/CENTER",
+        "core": "levelMapScreen.play.label (render-box-centre local: -206, -68, 412 x 104); the style's kit text look (4 / 4, the theme's #000 stroke)" },
+      "level": "none: Style 1's PLAY has no level line (levelMapScreen.play.level = null)",
+      "aboveNav": "PLAY render centre 1772, the panel rect top 2058 -> 286"
+    },
+    "nav": {
+      "group": { "id": "24:37548", "name": "Group 270", "box": [0, 1939, 1080, 405] },
+      "panel": { "id": "24:37551", "name": "Rectangle 19", "box": [0, 2058, 1080, 286], "render": [0, 2052, 1080, 292], "fill": { "linear": ["#303e8f", "#222a5d"] }, "stroke": "#261a30 w6 OUTSIDE",
+        "core": "navPanel = nav/style1_panel.webp: the centre 8 columns of the render (rows 0..5 the stroke, 6..291 the gradient); panelHeight 286, panelBleedTop 6; hand caps 0 / 8 / 0 / 2 (a vertical gradient: the middle rows stretch only under a bottom inset, like Style 2's panel)" },
+      "selectedColumn": { "id": "24:37553", "box": [362, 2036, 352, 308], "note": "HOME's column in the screen: 352 wide at 362 (centre 538)" },
+      "oldArt": "the screen's own HOME bear (24:37580) and lock (24:37554) are older drawings; the dark components below are the current slot art (the user's node list)",
+      "components": {
+        "shop": { "id": "24:38867", "name": "navigation_shop_dark", "active": "24:38868", "inactive": "24:38873", "icon": "24:38641 icon_shop_dark" },
+        "home": { "id": "24:38858", "name": "navigation_home_dark", "active": "24:38859", "inactive": "24:38864", "icon": "24:38820 icon_house_dark" },
+        "lock": { "id": "24:38849", "name": "navigation_lock_dark", "active": "24:38850", "inactive": "24:38855", "icon": "24:38823 icon_lock_dark" },
+        "frame": "352 x 396, placed with its top 110 units above the panel rect top (1948 vs 2058)",
+        "active": {
+          "column": { "id": "24:38870 (blue_active_dark)", "box": [0, 88, 352, 308], "render": [-6, 82, 364, 320], "fill": { "linear": ["#2aadff", "#0073f0"] }, "stroke": "#261a30 w6 OUTSIDE", "effects": ["INNER_SHADOW 0,20 r7 #50c5ff"], "cornerRadius": [50, 50, 0, 0],
+            "core": "navSelected = nav/style1_selected.webp: the render cut at 314 rows (no bottom stroke: the column reaches the viewport bottom); selectedBackground -182, -28, 364 x 314; hand caps 60 / 64 / 60 / 2 (rows uniform within ±3 from row 62)" },
+          "icon": { "box": [32, 17, 288, 288], "lockBox": [32, 21, 288, 288], "core": "selected.icon 0, 51, 288 (shop / home; the lock's sits 4 lower but a locked slot never selects)" },
+          "label": { "box": [34, 305, 284, 70], "font": "Fira Sans Black 54", "fill": "#ffffff", "stroke": "#261a30 w3 OUTSIDE", "effects": ["DROP_SHADOW 0,4 r0 #261a30"], "core": "selected.label -142, 195, 284 x 70 @54" }
+        },
+        "inactive": {
+          "icon": { "box": [66, 98, 220, 220], "homeBox": [66, 95, 220, 220], "core": "normal.icon / locked.icon 0, 98, 220 (shop / lock; home's sits 3 higher)" },
+          "label": { "box": [0, 299, 352, 74], "font": "Fira Sans Black 40", "fill": "#ffffff", "stroke": "#261a30 w3 OUTSIDE", "effects": ["DROP_SHADOW 0,4 r0 #261a30"], "core": "normal.label / locked.label -176, 189, 352 x 74 @40" }
+        }
+      },
+      "pitch": "364: the theme_light_5 bottom strip 24:36128 lays the three 352-wide slots 12 apart on the 1080 panel (centres 176 / 540 / 904); the dark screen's HOME column sits at 362 (centre 538)",
+      "text": "bottomNav.text = { strokeOutside 3, shadowY 4, strokeColor #261a30 }, textFill #ffffff, the theme font (Fira Sans Black)"
+    }
+  },
+  "style2": {
+    "screen": { "id": "24:38532", "name": "screen_gameplay_pc", "size": [4168, 2344] },
+    "play": { "id": "24:38581", "name": "btn_green_var_1", "box": [1809, 1622, 550, 280], "background": "24:38582 INSTANCE of 24:35976 btn_green",
+      "check": "Figma's contentsOnly render of 24:38582 is pixel-identical to the committed style2/play.webp (mean / max |delta| 0 / 0)",
+      "text": { "PLAY": "24:38602 [1863, 1657, 446, 146] Calibri Bold 120", "Level 38": "24:38603 [1859, 1782, 450, 85] Calibri Bold 70" },
+      "core": "levelMapScreen unchanged (aboveNav 296, the same boxes)" },
+    "nav": {
+      "panel": { "id": "24:38607", "name": "bottom_panel", "main": "24:36087", "rect": [0, 2058, 4168, 286], "check": "the 80 x 306 component render is pixel-identical to docs/figma/style2-level-map-screen/png/nav-panel.png: navPanel unchanged" },
+      "slots": "navigation_shop 24:38610 at 1244, navigation_home 24:38609 at 1908, navigation_lock 24:38608 at 2572 (352 x 396 each, top 1948): centres 1420 / 2084 / 2748 = pitch 664, centred on the frame (the theme_light_3 row was 37.5 units right)",
+      "home (selected)": {
+        "column": "blue_active [0, 88.776, 352, 307.224] render [-6, 82.776, 364, 313.224] #0099eb r50,50,0,0 — the same art as the committed style2/nav_selected.webp (mean |delta| 0.52 at the same origin): navSelected unchanged",
+        "icon": "icon_home 24:36012 [33, 9, 288, 288] -> selected.icon 0, 43, 288 (shop / lock actives: x 0, y 44 / 43)",
+        "label": "HOME [35, 283, 284, 70] Calibri Bold 60 -> selected.label -142, 173, 284 x 70 @60"
+      },
+      "shop (inactive)": { "icon": "icon_shop 24:36014 [42.482, 70, 267.035, 267.035] -> normal.icon 0, 93.517, 267.034", "label": "SHOP [0, 290, 352, 74] Calibri Bold 40 -> normal.label -176, 180, 352 x 74 @40" },
+      "lock (inactive)": { "icon": "icon_lock 24:36028 [42.482, 74, 267.034, 267.034] -> locked.icon 0, 97.517, 267.034", "label": "LOCK [0, 291.059, 352, 74] Calibri Bold 40 -> locked.label -176, 181.059, 352 x 74 @40 (theme_light_3 had no label)" },
+      "icons": "24:36014 icon_shop and 24:36012 icon_home exports are pixel-identical to the committed style2/icon_shop.webp / icon_home.webp; 24:36028 icon_lock is the same lock drawn smaller and lower in its 288 box (mean |delta| 26.8 against style2/icon_lock.webp, which the map's node lock keeps) -> style2/nav_lock.webp"
+    },
+    "shared": { "id": "24:36128", "name": "bottom", "note": "the light component strip: bg 1080 x 286 and the three component sets (shop_active / shop_inactive, home_active / home_inactive, lock_active / lock_inactive); its 364 pitch is the mobile row both styles reach on a phone" }
+  },
+  "assets": [
+    { "key": "style1-play", "file": "button/style1_play.webp", "scale": 1, "size": [522, 228], "layers": [{ "image": "png/style1-play.png", "at": [0, 0], "size": [522, 228] }] },
+    { "key": "style1-nav-panel", "file": "nav/style1_panel.webp", "scale": 1, "size": [8, 292],
+      "note": "the centre columns 536..543 of the 1080 x 292 render of 24:37551",
+      "layers": [{ "image": "png/style1-nav-panel.png", "at": [-536, 0], "size": [1080, 292] }] },
+    { "key": "style1-nav-selected", "file": "nav/style1_selected.webp", "scale": 1, "size": [364, 314],
+      "note": "the 364 x 320 render of 24:38870 without its bottom 6 rows (the stroke under the column)",
+      "layers": [{ "image": "png/style1-nav-selected.png", "at": [0, 0], "size": [364, 320] }] },
+    { "key": "style1-icon-shop", "file": "nav/style1_icon_shop.webp", "scale": 1, "size": [288, 288], "layers": [{ "image": "png/style1-icon-shop.png", "at": [0, 0], "size": [288, 288] }] },
+    { "key": "style1-icon-home", "file": "nav/style1_icon_home.webp", "scale": 1, "size": [288, 288], "layers": [{ "image": "png/style1-icon-home.png", "at": [0, 0], "size": [288, 288] }] },
+    { "key": "style1-icon-lock", "file": "nav/style1_icon_lock.webp", "scale": 1, "size": [288, 288], "layers": [{ "image": "png/style1-icon-lock.png", "at": [0, 0], "size": [288, 288] }] },
+    { "key": "style2-nav-lock", "file": "style2/nav_lock.webp", "scale": 1, "size": [288, 288], "layers": [{ "image": "png/style2-icon-lock.png", "at": [0, 0], "size": [288, 288] }] }
+  ]
+}

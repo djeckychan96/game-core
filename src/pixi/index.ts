@@ -32,7 +32,15 @@ export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
 export { BottomNavView } from './BottomNavView';
 export type { BottomNavItem, BottomNavViewOptions, BottomNavInsets, BottomNavResizeOptions } from './BottomNavView';
 export { LevelMapScreen } from './LevelMapScreen';
-export type { LevelMapScreenOptions, LevelMapScreenInsets, LevelMapScreenResizeOptions } from './LevelMapScreen';
+export type {
+  LevelMapScreenOptions,
+  LevelMapScreenInsets,
+  LevelMapScreenResizeOptions,
+  LevelMapScreenNav,
+  LevelMapNavSlot,
+  LevelMapNavSlotId,
+  LevelMapNavSlots
+} from './LevelMapScreen';
 export { UiButton } from './UiButton';
 export type { UiButtonOptions } from './UiButton';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
@@ -86,6 +94,7 @@ export type {
   ReadyUiSkinLevelMapLayout,
   ReadyUiSkinBottomNavLayout,
   ReadyUiSkinBottomNavItemLayout,
+  ReadyUiSkinTextOutline,
   ReadyUiSkinLevelMapScreenLayout,
   ReadyUiSkinIconBox,
   ReadyUiSkinFont,
