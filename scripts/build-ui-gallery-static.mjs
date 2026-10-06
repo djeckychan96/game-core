@@ -6,6 +6,10 @@
 //
 //   node scripts/build-ui-gallery-static.mjs
 //     → dist-ui-gallery/ (the site) + release/game-core-UI-GALLERY-ONLY-<sha>.zip (its contents at the zip root)
+//   node scripts/build-ui-gallery-static.mjs --yandex
+//     → dist-ui-gallery-yandex/ + release/game-core-UI-GALLERY-YANDEX-QA-<sha>.zip: the same gallery bundle, started by
+//       the Yandex QA bootstrap (scripts/ui-gallery-yandex-qa.js → ./yandex-qa.js): <script src="/sdk.js"> in <head>,
+//       YaGames.init(), the platform language, the gallery, LoadingAPI.ready(). Locally (no /sdk.js) it runs as is.
 //
 // Ready UI files: exactly what the gallery's loadReadyUiAssets({ skin }) requests for Style 1 and Style 2 (the required
 // pack, the kit font, each style's role files and font + that font's licence), read from the kit source — not all of assets/.
@@ -20,7 +24,8 @@ import { build, createServer } from 'vite';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SHOWCASE = path.join(ROOT, 'examples/pixi-showcase');
-const OUT = path.join(ROOT, 'dist-ui-gallery');
+const YANDEX = process.argv.includes('--yandex');
+const OUT = path.join(ROOT, YANDEX ? 'dist-ui-gallery-yandex' : 'dist-ui-gallery');
 const RELEASE = path.join(ROOT, 'release');
 const CONTENT = ['src', 'examples/pixi-showcase', 'assets', 'vite.showcase.config.ts'];
 // runtime-only files of the gallery that no bundle references (Assets.load URLs): the OFFER's sample booster icons
@@ -30,9 +35,11 @@ const git = (...args) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8'
 const sha = git('log', '-1', '--format=%h', '--', ...CONTENT);
 const dirty = git('status', '--porcelain', '--', ...CONTENT) !== '';
 const version = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
-const name = `game-core-UI-GALLERY-ONLY-${sha}${dirty ? '-dirty' : ''}`;
+const name = `game-core-UI-GALLERY-${YANDEX ? 'YANDEX-QA' : 'ONLY'}-${sha}${dirty ? '-dirty' : ''}`;
 // top-level entries of the site; anything else (another page, a game) fails the build
-const SITE_ENTRIES = ['index.html', 'assets', 'gallery', 'pixi-ui'];
+const SITE_ENTRIES = ['index.html', 'assets', 'gallery', 'pixi-ui', ...(YANDEX ? ['yandex-qa.js'] : [])];
+// the Yandex SDK as an archive-hosted game loads it (the one root-absolute URL the Yandex package may have)
+const SDK = '/sdk.js';
 // no game may end up in the package (the gallery is Core-only; these are the games Core is integrated into). Not
 // "trail_arrow": Core's own AdsPolicy preset carries that name (root runtime data the bundle keeps), it is no game code.
 const GAME_MARKERS = /solipix|pixsol|solitaire|puzzle|jigsaw|gorodki|word.?tide|GameScene/i;
@@ -72,6 +79,23 @@ await build({
   }
 });
 fs.renameSync(path.join(OUT, 'ui-gallery.html'), path.join(OUT, 'index.html'));
+if (YANDEX) {
+  // the gallery entry becomes a preload the bootstrap imports; the SDK loader goes before it (a classic script: it runs
+  // during parsing, before any module) — exactly one gallery entry to replace, or the build fails
+  const indexFile = path.join(OUT, 'index.html');
+  const page = fs.readFileSync(indexFile, 'utf8');
+  const tags = [...page.matchAll(/<script type="module" crossorigin src="(\.\/assets\/ui-gallery-[\w-]+\.js)"><\/script>/g)];
+  if (tags.length !== 1) fail(`expected one gallery module script in the built page, found ${tags.length}`);
+  const [tag, entry] = tags[0];
+  fs.writeFileSync(indexFile, page.replace(tag, [
+    `<script src="${SDK}"></script>`,
+    '<script type="module" src="./yandex-qa.js"></script>',
+    `<link rel="modulepreload" crossorigin href="${entry}">`
+  ].join('\n    ')));
+  const bootstrap = fs.readFileSync(path.join(ROOT, 'scripts/ui-gallery-yandex-qa.js'), 'utf8');
+  if (bootstrap.split("'__GALLERY_ENTRY__'").length !== 2) fail('scripts/ui-gallery-yandex-qa.js has no single GALLERY placeholder');
+  fs.writeFileSync(path.join(OUT, 'yandex-qa.js'), bootstrap.replace("'__GALLERY_ENTRY__'", `'${entry}'`));
+}
 for (const rel of RUNTIME_FILES) fs.cpSync(path.join(SHOWCASE, rel), path.join(OUT, rel));
 for (const rel of readyUiFiles) fs.cpSync(path.join(ROOT, 'assets/pixi-ui', rel), path.join(OUT, 'pixi-ui', rel));
 
@@ -89,13 +113,22 @@ for (const f of all) {
 for (const entry of fs.readdirSync(OUT)) if (!SITE_ENTRIES.includes(entry) && entry !== '.DS_Store') problems.push(`unexpected top-level entry ${entry}`);
 for (const f of all) if (GAME_MARKERS.test(f)) problems.push(`game file ${f}`);
 const html = fs.readFileSync(path.join(OUT, 'index.html'), 'utf8');
-// index.html IS the gallery page: its one module entry is the gallery bundle, its controls are in the markup
+// index.html IS the gallery page: its one module entry is the gallery bundle (Yandex: the bootstrap that imports it),
+// its controls are in the markup
 const entries = [...html.matchAll(/<script[^>]*type="module"[^>]*src="([^"]+)"/g)].map((m) => m[1]);
-if (entries.length !== 1 || !/^\.\/assets\/ui-gallery-[\w-]+\.js$/.test(entries[0])) problems.push(`index.html entry is not the gallery: ${entries.join(', ')}`);
+if (!YANDEX && (entries.length !== 1 || !/^\.\/assets\/ui-gallery-[\w-]+\.js$/.test(entries[0]))) problems.push(`index.html entry is not the gallery: ${entries.join(', ')}`);
+if (YANDEX) {
+  if (entries.length !== 1 || entries[0] !== './yandex-qa.js') problems.push(`index.html entry is not the Yandex QA bootstrap: ${entries.join(', ')}`);
+  const scripts = [...html.matchAll(/<script\b[^>]*>/g)].map((m) => m[0]);
+  if (scripts[0] !== `<script src="${SDK}">` || scripts.filter((s) => s.includes(SDK)).length !== 1) problems.push(`index.html: ${SDK} is not the one first script: ${scripts.join(' ')}`);
+  const preload = html.match(/<link rel="modulepreload" crossorigin href="(\.\/assets\/ui-gallery-[\w-]+\.js)">/)?.[1];
+  const imported = fs.readFileSync(path.join(OUT, 'yandex-qa.js'), 'utf8').match(/^const GALLERY = '([^']+)';$/m)?.[1];
+  if (!preload || imported !== preload || !all.includes(preload.slice(2))) problems.push(`the bootstrap does not import the preloaded gallery entry (${imported} / ${preload})`);
+}
 if (!/<div id="gallery"/.test(html) || !/data-style="2"/.test(html)) problems.push('index.html has no gallery controls');
 if (/http-equiv="refresh"|location\.(href|replace|assign)/i.test(html)) problems.push('index.html redirects');
 for (const [, ref] of html.matchAll(/(?:src|href)="([^"]+)"/g)) {
-  if (ref.startsWith('data:')) continue;
+  if (ref.startsWith('data:') || (YANDEX && ref === SDK)) continue;
   if (!ref.startsWith('./')) problems.push(`index.html: non-relative ${ref}`);
   else if (!all.includes(ref.slice(2))) problems.push(`index.html: missing ${ref}`);
 }
