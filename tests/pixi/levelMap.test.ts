@@ -210,6 +210,23 @@ describe('LevelMapView', () => {
     expect(map.getNodeContainer(40)).toBeNull();
   });
 
+  it('completion comes from currentLevel, never from stars: a 0-star level below it is completed and draws no star', () => {
+    const kit = createKit();
+    const map = new LevelMapView({
+      ui: kit.ui, motion: kit.motion, textures: kit.textures,
+      levels: [{ index: 1, stars: 0 }, { index: 2, stars: 3 }, { index: 3, stars: 0 }, { index: 4 }],
+      currentLevel: 4,
+      onSelectLevel: () => {}
+    });
+    expect([1, 2, 3, 4, 5].map((level) => map.getNodeState(level))).toEqual(['completed', 'completed', 'completed', 'current', null]);
+    const children = (level: number) => (node(map, level).children[0] as Container).children.length;
+    expect(children(2) - children(1)).toBe(3); // the same completed node, three star sprites more
+    map.setLevelStars(2, 0); // stars set to 0 do not un-complete it either
+    expect(map.getNodeState(2)).toBe('completed');
+    expect(children(2)).toBe(children(1));
+    map.destroy();
+  });
+
   it('accepts a plain level count', () => {
     const kit = createKit();
     const map = new LevelMapView({ ui: kit.ui, motion: kit.motion, textures: kit.textures, levels: 12, currentLevel: 30, onSelectLevel: () => {} });

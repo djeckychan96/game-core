@@ -219,6 +219,25 @@ describe('ResultWindowView outcome: fail', () => {
     view.destroy();
   });
 
+  it('3a. a 0-star win (or one without stars) is a WIN — COMPLETED!, reward, CONTINUE, no star; the outcome decides, never the stars', () => {
+    const kit = createKit();
+    const view = create(kit, []);
+    for (const params of [{ ...RESULT, stars: 0 }, { level: 19, rewardCoins: 100 }] satisfies ResultWindowParams[]) {
+      view.show(params);
+      advance(kit.core, 2000);
+      const s = snapshot(view);
+      expect(s.subtitle).toBe('COMPLETED!');
+      expect(s.reward).toEqual([true, true, true]);
+      expect(s.next).toMatchObject({ visible: true, enabled: true, label: 'CONTINUE' });
+      expect(s.failRetry).toMatchObject({ visible: false, enabled: false });
+      expect(s.exit).toMatchObject({ visible: false, enabled: false });
+      expect(s.stars).toEqual([false, false, false]);
+      view.close('programmatic');
+      advance(kit.core, 200);
+    }
+    view.destroy();
+  });
+
   it('4. fail hides the reward caption, icon and value and leaves no empty reward space', () => {
     const kit = createKit();
     const view = create(kit, []);

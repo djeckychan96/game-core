@@ -2,7 +2,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from 'vitest';
 import * as root from '../../src/index';
-import type { GameplayContract, GameplayEvents, GameplayInputQueries, GameplayLevelResult } from '../../src/index';
+import { SaveGate, SoftCurrencyWallet } from '../../src/index';
+import type { GameProductionProfile, GameplayContract, GameplayEvents, GameplayInputQueries, GameplayLevelResult, GameplayProgress, PlatformStorage } from '../../src/index';
 import type { LevelMapProgress } from '../../src/pixi/LevelMapView';
 
 // The two clean hosts' seams written against Contract V1 (shapes only — neither game is changed):
@@ -84,6 +85,45 @@ test('events: levelEnd carries level, win, firstCompletion, optional stars and g
   const queries: GameplayInputQueries = { isBlocking: () => true, isUiAt: (x, y) => x > 100 && y < 50 };
   const gorodkiHost = { blocked: () => queries.isBlocking(), isUiAt: (x: number, y: number) => queries.isUiAt(x, y) };
   expect([gorodkiHost.blocked(), gorodkiHost.isUiAt(120, 10), gorodkiHost.isUiAt(10, 10)]).toEqual([true, true, false]);
+});
+
+test('stars are the quality of a result, never its completion: a 0-star win is completed, a fail is win: false', async () => {
+  // Contract V1 results of a moves game (compile-time: all valid)
+  const zeroStarWin: GameplayLevelResult = { level: 3, win: true, firstCompletion: true, stars: 0, metrics: { movesLeft: 4 } };
+  const starlessWin: GameplayLevelResult = { level: 4, win: true, firstCompletion: true, metrics: {} };
+  const failWithStars: GameplayLevelResult = { level: 5, win: false, firstCompletion: false, stars: 3, metrics: { movesLeft: 0 } };
+  // progress after the 0-star win: level 3 is completed (below currentLevel) with 0 stars; level 4 is the current one
+  const progress: GameplayProgress = { levels: [{ index: 1, stars: 2 }, { index: 2, stars: 3 }, { index: 3, stars: 0 }, { index: 4 }], currentLevel: 4 };
+  const map: LevelMapProgress = progress; // the map takes it as is (its node states: tests/pixi/levelMap.test.ts)
+  expect([map.currentLevel, progress.levels[2]]).toEqual([4, { index: 3, stars: 0 }]);
+
+  // the Core consumer of levelEnd decides by win / firstCompletion only (a fixed test reward that reads no stars)
+  const data: Record<string, unknown> = {};
+  const storage: PlatformStorage = {
+    isCloud: () => true,
+    ready: async () => {},
+    get: async (keys) => Object.fromEntries(keys.filter((key) => key in data).map((key) => [key, data[key]])),
+    set: async (patch) => {
+      Object.assign(data, JSON.parse(JSON.stringify(patch)));
+      return true;
+    },
+    clear: async () => {}
+  };
+  const profile: Pick<GameProductionProfile, 'id' | 'save' | 'economy'> = {
+    id: 'moves',
+    save: { keys: ['moves_state'] },
+    economy: { softCurrency: { id: 'coins', owner: 'core', startBalance: 0, levelReward: () => 10 } }
+  };
+  const gate = new SaveGate({ storage, profile });
+  const wallet = new SoftCurrencyWallet({ gate, profile });
+  await Promise.all([gate.load(), wallet.load()]);
+  gate.open();
+  expect(wallet.applyLevelResult(zeroStarWin)).toMatchObject({ ok: true, kind: 'first', amount: 10 });
+  expect(wallet.snapshot().rewardedLevels).toEqual(['3']); // the 0-star level counts as completed (paid once)
+  expect(wallet.applyLevelResult(zeroStarWin)).toMatchObject({ kind: 'replay', amount: 0 });
+  expect(wallet.applyLevelResult(starlessWin)).toMatchObject({ ok: true, kind: 'first', amount: 10 }); // no stars ≠ a fail
+  expect(wallet.applyLevelResult(failWithStars)).toMatchObject({ kind: 'fail', amount: 0 }); // stars on a fail change nothing
+  expect(wallet.snapshot()).toMatchObject({ balance: 20, rewardedLevels: ['3', '4'] });
 });
 
 test('src/production is types + one validator: no runtime globals, no renderer, imports only the ads / platform validators', () => {

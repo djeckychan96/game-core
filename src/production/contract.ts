@@ -19,10 +19,18 @@ export type GameplayLevelStart = GameplayLevelRef;
 
 /** The end of one run: SoliPix onWin / onLose, Gorodki finish(win). */
 export interface GameplayLevelResult extends GameplayLevelRef {
+  /** The outcome: true = this run completed the level, whatever its stars; false = a fail. Never derived from `stars`. */
   win: boolean;
-  /** The FIRST win of this level, decided by the gameplay BEFORE it updates its own progress (SoliPix `isLevelCompleted`, Gorodki: no stars stored for the figure yet). Always false for a fail. */
+  /**
+   * The FIRST win of this level, decided by the gameplay BEFORE it updates its own progress, from its own completion
+   * record (SoliPix `isLevelCompleted`; Gorodki: no stars stored for the figure yet — sound there only because every
+   * Gorodki win stores 1–3 stars, never where a win may earn 0). Always false for a fail.
+   */
   firstCompletion: boolean;
-  /** Stars of THIS run (0..3), for a game with stars. */
+  /**
+   * Stars of THIS run (0..3), for a game with stars — the quality of a win, not the outcome: a win may earn 0 (a moves
+   * game, `starsForMovesLeft`); absent = no stars reported, still a win when `win` says so. Meaningless for a fail.
+   */
   stars?: number;
   metrics: GameplayMetrics;
 }
@@ -40,11 +48,15 @@ export interface GameplayEvents {
   levelExit(event: GameplayLevelExit): void;
 }
 
-/** One level on the map — structurally the Ready UI `LevelMapLevel` without Trail Arrow's `hard`. */
+/**
+ * One level on the map — structurally the Ready UI `LevelMapLevel` without Trail Arrow's `hard`. It holds no completion:
+ * under a 'linear' progression every level below `GameplayProgress.currentLevel` is completed (what LevelMapView
+ * draws), whatever its stars; an 'open' game that shows completion keeps it in its own progress.
+ */
 export interface GameplayLevelProgress {
   /** 1-based level number. */
   index: number;
-  /** Best stars so far; 0 / absent = not completed. */
+  /** Best stars so far (0..3) — the quality of the best win, never its completion: a completed level may have 0; absent = none recorded. */
   stars?: number;
 }
 
