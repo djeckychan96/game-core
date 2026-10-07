@@ -3,7 +3,9 @@ import { MoveRuntime, starsForMovesLeft } from '../../src/index';
 import type { LevelBalance, LimitedLevelBalance, MoveSnapshot, UnlimitedLevelBalance } from '../../src/index';
 
 /** TEST values only — never Core defaults. */
-const LIMITED: LimitedLevelBalance = { progressionKey: '12', sourceLevelId: 12, moveLimit: 10, star3MinMovesLeft: 6, star2MinMovesLeft: 3 };
+const LIMITED: LimitedLevelBalance = { progressionKey: '12', sourceLevelId: 12, moveLimit: 10, star3MinMovesLeft: 6, star2MinMovesLeft: 3, star1MinMovesLeft: 1 };
+/** The game designer's example: 40 moves, thresholds 30 / 20 / 10 moves left. */
+const DESIGNER: LimitedLevelBalance = { progressionKey: '40', moveLimit: 40, star3MinMovesLeft: 30, star2MinMovesLeft: 20, star1MinMovesLeft: 10 };
 const UNLIMITED: UnlimitedLevelBalance = { progressionKey: '1', moveLimit: null };
 
 /** The counters a host reads. */
@@ -102,7 +104,7 @@ describe('MoveRuntime — a limited attempt', () => {
     const moves = started();
     moves.consume(10);
     moves.add(3);
-    const next: LimitedLevelBalance = { progressionKey: '13', moveLimit: 15, star3MinMovesLeft: 5, star2MinMovesLeft: 2 };
+    const next: LimitedLevelBalance = { progressionKey: '13', moveLimit: 15, star3MinMovesLeft: 5, star2MinMovesLeft: 2, star1MinMovesLeft: 1 };
     moves.start(next);
     expect(counters(moves)).toEqual({ active: true, unlimited: false, limit: 15, used: 0, added: 0, remaining: 15, exhausted: false });
     expect(moves.balance?.progressionKey).toBe('13');
@@ -172,8 +174,8 @@ describe('MoveRuntime — 0 is a state, not an outcome: the host decides WIN / F
     const won = true; // the gameplay's answer after it settled
     expect(won && moves.exhausted).toBe(true);
     const balance = moves.balance as LimitedLevelBalance;
-    expect(starsForMovesLeft(moves.remaining as number, balance)).toBe(1);
-    expect(starsForMovesLeft(0, { ...balance, star2MinMovesLeft: 0 })).toBe(2);
+    expect(starsForMovesLeft(moves.remaining as number, balance)).toBe(0); // a win below star1 earns 0 stars
+    expect(starsForMovesLeft(0, { ...balance, star1MinMovesLeft: 0 })).toBe(1);
     moves.end();
     expect(moves.active).toBe(false);
   });
@@ -201,6 +203,43 @@ describe('MoveRuntime — 0 is a state, not an outcome: the host decides WIN / F
     expect(restored.restore(JSON.parse(JSON.stringify(moves.snapshot())) as MoveSnapshot)).toEqual({ ok: true, reason: null });
     expect(counters(restored)).toMatchObject({ remaining: 0, exhausted: true });
     expect(restored.add(3).remaining).toBe(3);
+  });
+});
+
+describe('MoveRuntime — extra moves count for stars; the thresholds stay the balance\'s own', () => {
+  test('40 moves, thresholds 30 / 20 / 10: down to 0 → add(20) → won with 20 left → 2 stars', () => {
+    const moves = started(DESIGNER);
+    moves.consume(40);
+    expect(moves.exhausted).toBe(true);
+    expect(moves.add(20)).toMatchObject({ ok: true, remaining: 20, exhausted: false });
+    expect(counters(moves)).toMatchObject({ limit: 60, used: 40, added: 20, remaining: 20 });
+    expect(starsForMovesLeft(moves.remaining as number, moves.balance as LimitedLevelBalance)).toBe(2);
+    // add() never moved a threshold nor the balance's moveLimit
+    expect(moves.balance).toEqual(DESIGNER);
+  });
+
+  test.each([
+    [35, 20, 25, 2], // 5 left + 20 → 25: still below 30
+    [40, 30, 30, 3], // 0 left + 30 → 30: star3 exactly
+    [40, 29, 29, 2], // star3 − 1
+    [40, 10, 10, 1], // star1 exactly
+    [40, 9, 9, 0] // star1 − 1: extra moves alone may earn 0 stars
+  ])('consume %i, add %i → %i left → %i stars (absolute thresholds)', (consumed, extra, left, stars) => {
+    const moves = started(DESIGNER);
+    moves.consume(consumed);
+    moves.add(extra);
+    expect(moves.remaining).toBe(left);
+    expect(starsForMovesLeft(left, moves.balance as LimitedLevelBalance)).toBe(stars);
+  });
+
+  test('a restored attempt with extra moves keeps the original thresholds', () => {
+    const moves = started(DESIGNER);
+    moves.consume(40);
+    moves.add(20);
+    const restored = new MoveRuntime();
+    restored.restore(JSON.parse(JSON.stringify(moves.snapshot())) as MoveSnapshot);
+    expect(restored.balance).toEqual(DESIGNER);
+    expect(starsForMovesLeft(restored.remaining as number, restored.balance as LimitedLevelBalance)).toBe(2);
   });
 });
 

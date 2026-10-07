@@ -7,8 +7,8 @@ const TABLE: LevelBalanceTable = {
   version: 'local-1',
   levels: [
     { progressionKey: '1', sourceLevelId: 1, moveLimit: null },
-    { progressionKey: '2', sourceLevelId: 2, moveLimit: 20, star3MinMovesLeft: 8, star2MinMovesLeft: 4 },
-    { progressionKey: 'bonus-a', moveLimit: 12, star3MinMovesLeft: 6, star2MinMovesLeft: 3 }
+    { progressionKey: '2', sourceLevelId: 2, moveLimit: 20, star3MinMovesLeft: 8, star2MinMovesLeft: 4, star1MinMovesLeft: 2, baseCoinReward: 40 },
+    { progressionKey: 'bonus-a', moveLimit: 12, star3MinMovesLeft: 6, star2MinMovesLeft: 3, star1MinMovesLeft: 1 }
   ]
 };
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -25,7 +25,7 @@ describe('createStaticLevelBalanceSource — over data the host already loaded',
     const source = createStaticLevelBalanceSource(clone(TABLE));
     await expect(source.load()).resolves.toBeUndefined();
     expect(source.version).toBe('local-1');
-    expect(source.get('2')).toEqual({ progressionKey: '2', sourceLevelId: 2, moveLimit: 20, star3MinMovesLeft: 8, star2MinMovesLeft: 4 });
+    expect(source.get('2')).toEqual({ progressionKey: '2', sourceLevelId: 2, moveLimit: 20, star3MinMovesLeft: 8, star2MinMovesLeft: 4, star1MinMovesLeft: 2, baseCoinReward: 40 });
     expect(source.get('1')).toEqual({ progressionKey: '1', sourceLevelId: 1, moveLimit: null });
     expect(source.get('bonus-a')?.moveLimit).toBe(12);
     expect(source.get('99')).toBeNull();
@@ -33,11 +33,11 @@ describe('createStaticLevelBalanceSource — over data the host already loaded',
 
   test('answers are frozen copies of the known fields; unknown fields are dropped', async () => {
     const source = createStaticLevelBalanceSource(
-      asTable({ version: 'v', generatedBy: 'sheet-export', levels: [{ progressionKey: 'a', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1, designerNote: 'x' }] })
+      asTable({ version: 'v', generatedBy: 'sheet-export', levels: [{ progressionKey: 'a', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1, star1MinMovesLeft: 0, designerNote: 'x' }] })
     );
     await source.load();
     const balance = source.get('a');
-    expect(balance).toEqual({ progressionKey: 'a', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1 });
+    expect(balance).toEqual({ progressionKey: 'a', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1, star1MinMovesLeft: 0 });
     expect(Object.isFrozen(balance)).toBe(true);
     expect(() => {
       (balance as { moveLimit: number }).moveLimit = 99;
@@ -50,7 +50,7 @@ describe('createStaticLevelBalanceSource — over data the host already loaded',
     await source.load();
     data.version = 'mutated';
     data.levels[1]!.moveLimit = 3;
-    data.levels.push({ progressionKey: 'late', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1 });
+    data.levels.push({ progressionKey: 'late', moveLimit: 5, star3MinMovesLeft: 2, star2MinMovesLeft: 1, star1MinMovesLeft: 0 });
     expect(source.version).toBe('local-1');
     expect(source.get('2')?.moveLimit).toBe(20);
     expect(source.get('late')).toBeNull();
@@ -84,7 +84,7 @@ describe('createStaticLevelBalanceSource — over data the host already loaded',
     ['a record that is not an object', { version: 'v', levels: [null] }, 'levels[0] must be an object'],
     [
       'an invalid record (named by index and key)',
-      { version: 'v', levels: [TABLE.levels[0], { progressionKey: '2', moveLimit: 20, star3MinMovesLeft: 21, star2MinMovesLeft: 4 }] },
+      { version: 'v', levels: [TABLE.levels[0], { progressionKey: '2', moveLimit: 20, star3MinMovesLeft: 21, star2MinMovesLeft: 4, star1MinMovesLeft: 2 }] },
       'levels[1] ("2") star3MinMovesLeft must be ≤ moveLimit'
     ],
     ['a repeated progressionKey', { version: 'v', levels: [...TABLE.levels, { progressionKey: '2', moveLimit: null }] }, 'levels[3] ("2") repeats a progressionKey — one balance per level']
@@ -147,7 +147,7 @@ describe('LevelBalanceSource — the seam a server source plugs into', () => {
   test('a new revision replaces the data; a failed reload keeps the last good one (the interface contract)', async () => {
     const answers: Array<() => Promise<unknown>> = [
       async () => clone(TABLE),
-      async () => ({ version: 'server-2', levels: [{ progressionKey: '2', moveLimit: 25, star3MinMovesLeft: 10, star2MinMovesLeft: 5 }] }),
+      async () => ({ version: 'server-2', levels: [{ progressionKey: '2', moveLimit: 25, star3MinMovesLeft: 10, star2MinMovesLeft: 5, star1MinMovesLeft: 2 }] }),
       async () => {
         throw new Error('offline');
       },

@@ -328,7 +328,7 @@ export type {
   SaveGateSnapshot,
   SaveGateOptions
 } from './save';
-export { SoftCurrencyWallet } from './economy';
+export { SoftCurrencyWallet, coinRewardForStars } from './economy';
 export type {
   SoftCurrencyWalletStatus,
   SoftCurrencyWalletProblem,

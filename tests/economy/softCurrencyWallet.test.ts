@@ -401,7 +401,7 @@ describe('SoftCurrencyWallet — ownership and seams', () => {
 
     const dir = fileURLToPath(new URL('../../src/economy/', import.meta.url));
     const files = readdirSync(dir).filter((name) => name.endsWith('.ts')).sort();
-    expect(files).toEqual(['SoftCurrencyWallet.ts', 'index.ts']);
+    expect(files).toEqual(['SoftCurrencyWallet.ts', 'index.ts', 'levelReward.ts']);
     const strip = (source: string) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
     const forbidden = /\b(Date|performance|setTimeout|setInterval|requestAnimationFrame|queueMicrotask|window|globalThis|self|document|navigator|localStorage|sessionStorage|indexedDB|fetch|XMLHttpRequest|YaGames|process|structuredClone|Math\.random)\b/;
     const wallet_ = strip(readFileSync(resolve(dir, 'SoftCurrencyWallet.ts'), 'utf-8'));
