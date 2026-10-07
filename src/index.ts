@@ -372,6 +372,20 @@ export type {
   ContinueOfferSaveGate,
   ContinueOfferRuntimeOptions
 } from './continue';
+export { MoveRuntime, createStaticLevelBalanceSource, validateLevelBalance, validateLevelBalanceTable, starsForMovesLeft } from './moves';
+export type {
+  LevelBalance,
+  LimitedLevelBalance,
+  UnlimitedLevelBalance,
+  LevelStars,
+  StarPolicy,
+  LevelBalanceTable,
+  LevelBalanceSource,
+  MoveRefusal,
+  MoveResult,
+  MoveSnapshot,
+  MoveRestoreResult
+} from './moves';
 export { createContentLoader, ContentLoadError } from './content';
 export type {
   ContentLoader,
