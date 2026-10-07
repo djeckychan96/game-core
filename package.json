@@ -61,6 +61,7 @@
     "showcase:style2-windows": "node scripts/style2-windows-check.mjs",
     "showcase:style1-result": "node scripts/style1-result-check.mjs",
     "showcase:gallery": "node scripts/ui-gallery-check.mjs",
+    "showcase:motion": "node scripts/ui-motion-check.mjs",
     "qa:isolation": "node scripts/qa-isolation-check.mjs",
     "smoke:platform": "node scripts/platform-dev-smoke.mjs",
     "smoke:platform-yandex": "node scripts/platform-yandex-smoke.mjs",

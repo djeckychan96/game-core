@@ -1,8 +1,20 @@
 import { Container, type FederatedPointerEvent, type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
-import type { ButtonCancelReason, ButtonController, EaseFn, EaseName, UiRuntime } from '../index';
+import type { ButtonCancelReason, ButtonController, EaseFn, EaseName, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import { createNineSlice, type NineSliceSpec } from './nineSlice';
 import { createLabel, fitLabelWidth } from './text';
 import type { ReadyUiTheme } from './theme';
+import { sineInOut } from './uiMotion';
+
+/** Idle "breathing" of a primary call to action (e.g. PLAY): the button swells to `scale` and back, endlessly. */
+export interface UiButtonBreathing {
+  /** Peak size over the idle size (1.04 = 4 % larger). */
+  scale: number;
+  /** One whole in-and-out cycle, in ms. */
+  periodMs: number;
+}
+
+/** The default breathing (`breathing: true`): 4 % over a 1.3 s cycle, a soft sine with no spring. */
+export const UI_BUTTON_BREATHING: Readonly<UiButtonBreathing> = Object.freeze({ scale: 1.04, periodMs: 1300 });
 
 export interface UiButtonOptions {
   ui: UiRuntime;
@@ -35,12 +47,42 @@ export interface UiButtonOptions {
   /** Minimum tappable square in local units (hit area is expanded to it). */
   minHitSize?: number;
   enabled?: boolean;
+  /** The host's MotionRuntime. Needed only by `breathing`. */
+  motion?: MotionRuntime;
+  /**
+   * Opt-in idle breathing for a primary call to action: `true` = UI_BUTTON_BREATHING, an object overrides its numbers.
+   * Default off. Needs `motion`. It composes with the press (idle × breathing × press), stops while the button is
+   * disabled, and leaves the hit area at its idle size.
+   */
+  breathing?: boolean | Partial<UiButtonBreathing>;
+}
+
+/**
+ * The button's own hit rectangle, held at its idle size on screen while the button breathes: the local point is
+ * scaled by the breathing factor before the test, which cancels the breathing part of the button's transform.
+ */
+class BreathingHitArea extends Rectangle {
+  factor = 1;
+
+  override contains(x: number, y: number): boolean {
+    return super.contains(x * this.factor, y * this.factor);
+  }
+}
+
+function resolveBreathing(breathing: boolean | Partial<UiButtonBreathing> | undefined): UiButtonBreathing | null {
+  if (!breathing) return null;
+  const config = breathing === true ? UI_BUTTON_BREATHING : { ...UI_BUTTON_BREATHING, ...breathing };
+  if (!(config.scale > 0) || !(config.periodMs > 0)) {
+    throw new RangeError(`UiButton breathing: scale and periodMs must be > 0, got ${config.scale} / ${config.periodMs}`);
+  }
+  return { scale: config.scale, periodMs: config.periodMs };
 }
 
 /**
  * A Pixi button driven by the foundation's ButtonController: Pixi pointer events are forwarded
  * to the controller, its 0..1 press progress is mapped onto `scale` from an explicit idle scale.
  * The tap action is the controller's settled `onTap`, never a raw pointerup.
+ * `scale` has one writer, the button itself: idle scale × breathing (opt-in, one owned tween) × press.
  */
 export class UiButton extends Container {
   readonly controller: ButtonController;
@@ -50,10 +92,19 @@ export class UiButton extends Container {
   private readonly idleScale = { x: 1, y: 1 };
   private readonly pressScale: number;
   private readonly maxLabelWidth: number;
+  private readonly motion: MotionRuntime | null;
+  /** Current factors of the composed scale: press from the controller's progress, breath from the breathing tween. */
+  private pressFactor = 1;
+  private breathFactor = 1;
+  private breathingConfig: UiButtonBreathing | null = null;
+  /** The one breathing tween, owned by the button (never two). */
+  private breathHandle: MotionHandle | null = null;
+  private breathArea: BreathingHitArea | null = null;
 
   constructor(options: UiButtonOptions) {
     super();
     this.pressScale = options.pressScale ?? 0.92;
+    this.motion = options.motion ?? null;
     const width = options.width ?? options.texture.width;
     const height = options.height ?? options.texture.height;
     if (options.nineSlice) {
@@ -115,6 +166,7 @@ export class UiButton extends Container {
     this.on('pointerupoutside', this.onPointerUpOutside, this);
     this.on('pointercancel', this.onPointerCancel, this);
     this.on('pointerleave', this.onPointerLeave, this);
+    if (options.breathing) this.setBreathing(options.breathing);
   }
 
   get enabled(): boolean {
@@ -125,6 +177,20 @@ export class UiButton extends Container {
     this.controller.setEnabled(enabled);
     this.alpha = enabled ? 1 : 0.55;
     this.cursor = enabled ? 'pointer' : 'default';
+    this.syncBreathing();
+  }
+
+  /**
+   * Turns the idle breathing on (`true` = UI_BUTTON_BREATHING, or its numbers overridden) or off (`false`). It runs
+   * while the button is enabled; a breathing cancelled from outside (`core.cancelAll()`) comes back on the next
+   * `setIdleScale` (every layout) / `setEnabled(true)` / `setBreathing`.
+   */
+  setBreathing(breathing: boolean | Partial<UiButtonBreathing>): void {
+    const config = resolveBreathing(breathing);
+    if (config && !this.motion) throw new Error(`UiButton '${this.controller.id}': breathing needs options.motion`);
+    this.stopBreathing();
+    this.breathingConfig = config;
+    this.syncBreathing();
   }
 
   setLabel(text: string): void {
@@ -138,7 +204,8 @@ export class UiButton extends Container {
     this.controller.cancel();
     this.idleScale.x = x;
     this.idleScale.y = y;
-    this.scale.set(x, y);
+    this.applyScale();
+    this.syncBreathing();
   }
 
   /** Threshold in the host's pointer units (screen px): swipes longer than it are not taps. */
@@ -148,6 +215,8 @@ export class UiButton extends Container {
 
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
     if (this.destroyed) return;
+    this.breathingConfig = null;
+    this.stopBreathing(); // before Pixi nulls `scale`: the tween's cancel writes it once more
     this.controller.dispose();
     this.off('pointerdown', this.onPointerDown, this);
     this.off('pointermove', this.onPointerMove, this);
@@ -159,8 +228,54 @@ export class UiButton extends Container {
   }
 
   private applyProgress(progress: number): void {
-    const k = 1 + (this.pressScale - 1) * progress;
+    this.pressFactor = 1 + (this.pressScale - 1) * progress;
+    this.applyScale();
+  }
+
+  private applyScale(): void {
+    const k = this.breathFactor * this.pressFactor;
     this.scale.set(this.idleScale.x * k, this.idleScale.y * k);
+  }
+
+  private setBreath(value: number): void {
+    this.breathFactor = value;
+    if (this.breathArea && this.hitArea === this.breathArea) this.breathArea.factor = value;
+    this.applyScale();
+  }
+
+  /** Breathing runs while it is configured and the button is enabled and alive; idempotent (one tween at most). */
+  private syncBreathing(): void {
+    const config = this.breathingConfig;
+    if (this.destroyed || !config || !this.motion || !this.controller.enabled) {
+      this.stopBreathing();
+      return;
+    }
+    if (this.breathHandle?.active) return;
+    if (this.hitArea instanceof Rectangle && !(this.hitArea instanceof BreathingHitArea)) {
+      const own = this.hitArea;
+      this.breathArea = new BreathingHitArea(own.x, own.y, own.width, own.height);
+      this.hitArea = this.breathArea;
+    }
+    const handle: MotionHandle = this.motion.tween({
+      scope: `${this.controller.scope}:breathing`,
+      bindings: [{ get: () => this.breathFactor, set: (value: number) => this.setBreath(value), from: 1, to: config.scale }],
+      durationMs: config.periodMs / 2,
+      ease: sineInOut,
+      repeat: Infinity,
+      yoyo: true,
+      onCancel: () => {
+        if (this.breathHandle === handle) this.breathHandle = null;
+        this.setBreath(1);
+      }
+    });
+    this.breathHandle = handle;
+  }
+
+  private stopBreathing(): void {
+    const handle = this.breathHandle;
+    this.breathHandle = null;
+    if (handle) handle.cancel(); // its onCancel settles the factor back to 1
+    else if (this.breathFactor !== 1) this.setBreath(1);
   }
 
   private onPointerDown(event: FederatedPointerEvent): void {

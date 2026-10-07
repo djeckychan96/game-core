@@ -9,7 +9,7 @@ import { READY_UI_EN } from './locales/en';
 import { resolveSkinView, selectSkinView, skinTextLook, type ReadyUiSkinLevelMapScreenLayout, type ReadyUiSkinRole, type ReadyUiSkinTextBox } from './skin';
 import { applyTextResolution, createFigmaLabel, placeFigmaLabel } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
-import { UiButton } from './UiButton';
+import { UiButton, type UiButtonBreathing } from './UiButton';
 
 type Shared = 'ui' | 'motion' | 'textures' | 'theme' | 'i18n' | 'id' | 'width' | 'height';
 
@@ -18,9 +18,9 @@ export type LevelMapNavSlotId = 'shop' | 'home' | 'lock';
 
 /** One level-map navigation slot. What it opens (a shop, a teaser) stays the host's; Core only reports the tap. */
 export interface LevelMapNavSlot {
-  /** Settled tap. Absent = the slot is disabled: drawn as the style draws it, inert. */
+  /** Settled tap. Absent on SHOP / HOME = the slot is disabled: drawn as the style draws it, inert. LOCK still shakes. */
   onTap?: () => void;
-  /** Start disabled even with `onTap` (enable it later with `screen.nav.setDisabled(id, false)`). Default false. */
+  /** Start disabled even with `onTap` (enable it later with `screen.nav.setDisabled(id, false)`); a disabled LOCK does not shake. Default false. */
   disabled?: boolean;
   /** Caption, already localized; default the localized `core.nav.<slot>` (SHOP / HOME / LOCK). */
   label?: string;
@@ -29,7 +29,8 @@ export interface LevelMapNavSlot {
 /**
  * The level-map navigation contract, the same for every style: SHOP | HOME | LOCK, always all three. SHOP = the
  * shop slot (active with `onTap`, else disabled), HOME = this screen (selected), LOCK = a future feature, drawn in
- * the style's locked state (its callback optional). A slot left out is drawn and inert.
+ * the style's locked state: a tap shakes it and reports to its `onTap` when there is one (callback optional);
+ * `lock: { disabled: true }` makes it inert. A SHOP / HOME slot left out is drawn and inert.
  */
 export interface LevelMapNavSlots {
   shop?: LevelMapNavSlot;
@@ -75,12 +76,17 @@ export interface LevelMapScreenOptions {
   map: Omit<LevelMapViewOptions, Shared | 'onSelectLevel'> & { onSelectLevel?: LevelMapViewOptions['onSelectLevel'] };
   /** The HudView part (values and taps). */
   hud?: Omit<HudViewOptions, Shared>;
-  /** The bottom navigation: the SHOP | HOME | LOCK slots (default: all three drawn and inert), or a generic item list. */
+  /** The bottom navigation: the SHOP | HOME | LOCK slots (default: all three drawn; SHOP / HOME inert, LOCK shakes), or a generic item list. */
   nav?: LevelMapScreenNav;
   /** Settled tap on PLAY with the selected level: the map's playable level under the focus (`map.selectedLevel`). */
   onPlay: (level: number) => void;
   /** PLAY caption; default the localized `core.level_map.play`. */
   playLabel?: string;
+  /**
+   * Opt-in idle breathing of PLAY (the screen's primary call to action): `true` = UI_BUTTON_BREATHING (4 % over 1.3 s),
+   * an object overrides its numbers. Default off. Stop / restart it with `screen.play.setBreathing(…)`.
+   */
+  playBreathing?: boolean | Partial<UiButtonBreathing>;
   /** The level caption under it (when the style draws one), `{level}` replaced; default the localized `core.level_map.level`. */
   levelLabel?: string;
   width?: number;
@@ -171,6 +177,8 @@ export class LevelMapScreen extends Container {
       texture: look.art.playButton!,
       width: play.width,
       height: play.height,
+      motion: options.motion,
+      breathing: options.playBreathing ?? false,
       onTap: () => options.onPlay(this.playLevel)
     });
     const textLook = { ...skinTextLook(skin), fill: play.textFill };
@@ -266,8 +274,8 @@ function slot(box: ReadyUiSkinTextBox) {
 
 /**
  * The BottomNavView options of `nav`: a generic item list as it is; the level-map slots as SHOP | HOME | LOCK items —
- * HOME selected, LOCK in the style's locked state, a slot without `onTap` (or `disabled`) disabled, each tap routed to
- * its slot's `onTap`.
+ * HOME selected, LOCK in the style's locked state (tappable: it shakes, its `onTap` optional; inert only with
+ * `disabled`), a SHOP / HOME slot without `onTap` (or `disabled`) disabled, each tap routed to its slot's `onTap`.
  */
 function navOptions(nav: LevelMapScreenNav, i18n: LocalizationTextProvider | undefined): Omit<BottomNavViewOptions, Shared> {
   if ('items' in nav) return nav;
@@ -280,7 +288,7 @@ function navOptions(nav: LevelMapScreenNav, i18n: LocalizationTextProvider | und
       ...(icon ? { icon } : {}),
       ...(locked ? { locked } : {}),
       label: localizedText(slotOptions?.label, i18n, key, READY_UI_EN[key]),
-      disabled: !slotOptions?.onTap || slotOptions.disabled === true
+      disabled: locked ? slotOptions?.disabled === true : !slotOptions?.onTap || slotOptions.disabled === true
     };
   });
   return { items, selectedId: 'home', onSelect: tap, onLockedTap: tap };

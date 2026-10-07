@@ -110,9 +110,9 @@ describe.each(STYLES)('LevelMapScreen — one functional contract ($name)', (sty
     expect(SLOTS.map((slot) => screen.nav.isDisabled(slot))).toEqual([false, false, false]);
     screen.destroy();
 
-    // nothing given: every slot is drawn and inert
+    // nothing given: every slot is drawn; SHOP / HOME inert, LOCK a locked slot that still answers a tap with a shake
     const { screen: inert } = createScreen(createKit(), style, { nav: {} });
-    expect(SLOTS.map((slot) => inert.nav.isDisabled(slot))).toEqual([true, true, true]);
+    expect(SLOTS.map((slot) => inert.nav.isDisabled(slot))).toEqual([true, true, false]);
     expect(inert.nav.getItemContainer('shop')!.cursor).toBe('default');
     inert.destroy();
 

@@ -14,6 +14,7 @@ import { READY_UI_LEGACY_TEXT } from './locales/legacy';
 import { resolveSkinView, selectSkinView, skinTextLook, type SkinViewLook } from './skin';
 import { applyTextResolution, createFigmaLabel, createLabel, fitLabelWidth } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
+import { shakeX } from './uiMotion';
 
 export type LevelNodeState = 'completed' | 'current' | 'locked';
 
@@ -735,15 +736,8 @@ export class LevelMapView extends Container {
   private shakeNode(level: number): void {
     const node = this.nodes.get(level);
     if (!node) return;
-    const inner = node.inner;
-    const binding = { get: () => inner.x, set: (v: number) => { inner.x = v; }, to: 0 };
-    const step = (to: number, durationMs: number) => ({ type: 'tween' as const, bindings: [{ ...binding, to }], durationMs, ease: 'easeInOut' as const });
     node.shakeMotion?.cancel(); // a second tap restarts the shake instead of stacking a second writer on inner.x
-    node.shakeMotion = this.motion.sequence({
-      scope: this.fxScope,
-      steps: [step(-16, 50), step(16, 70), step(-9, 60), step(0, 60)],
-      onCancel: () => { inner.x = 0; }
-    });
+    node.shakeMotion = shakeX(this.motion, node.inner, this.fxScope);
   }
 
   // --- internals: focus highlight ---

@@ -7,6 +7,8 @@
 //                    in the status line ("last: …")
 //   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
 //   ?ui=0            hide the gallery controls (screenshots)
+// Motion proof on the map screens: PLAY breathes (`playBreathing`), the HUD counters roll (`hud.resourceFeedback`), a tap
+// on LOCK shakes it; the bar's +/− buttons change coins and lives with no game logic behind them.
 // Demo data only; nothing is bought, no level is played. The booster icons of the OFFER (gallery/*.webp, the Figma
 // sample's lamp and wand) are game content a host passes as textures — not part of Core.
 import { Application, Assets, type Texture } from 'pixi.js';
@@ -121,13 +123,14 @@ let refillSeconds = 24 * 60 + 15;
 const navDisabled = screenId === 'map-disabled';
 const mapScreen = new LevelMapScreen({
   ...base, id: 'map-screen',
+  playBreathing: true,
   map: { levels, currentLevel: CURRENT, onLockedTap: (level) => log(`locked:${level}`), onFocusChange: ({ selectedLevel }) => log(`selected:${selectedLevel}`) },
   hud: {
-    coins: styleNo === 2 ? 9990 : 12450, lives: 3, maxLives: 5, ...(styleNo === 2 ? { stars: 9990 } : {}),
+    coins: styleNo === 2 ? 9990 : 12450, lives: 3, maxLives: 5, ...(styleNo === 2 ? { stars: 9990 } : {}), resourceFeedback: true,
     onLivesTap: () => go({ screen: 'lives-full' }), onCoinsTap: () => log('hud:coins'), onSettingsTap: () => go({ screen: 'settings-map' })
   },
   nav: navDisabled
-    ? { home: { onTap: () => log('nav:home') } }
+    ? { home: { onTap: () => log('nav:home') }, lock: { disabled: true } }
     : { shop: { onTap: () => log('nav:shop') }, home: { onTap: () => log('nav:home') }, lock: { onTap: () => log('nav:lock') } },
   onPlay: (level) => log(`play:${level}`)
 });
@@ -241,8 +244,30 @@ const layout = (): void => {
 };
 app.renderer.on('resize', layout);
 layout();
+// the motion proof's controls: coins / lives changes with nothing behind them (the HUD only draws what it is given)
+const changeCoins = (delta: number): void => {
+  hud.setCoins(Math.max(0, hud.coinsAmount + delta));
+  log(`coins:${delta > 0 ? '+' : ''}${delta}`);
+};
+const changeLives = (delta: number): void => {
+  hud.setLives(Math.max(0, Math.min(5, hud.livesAmount + delta)), formatTimer(refillSeconds));
+  log(`lives:${delta > 0 ? '+' : ''}${delta}`);
+};
+const motionBar = document.getElementById('motion') as HTMLSpanElement | null;
+if (motionBar) {
+  motionBar.hidden = !screenId.startsWith('map');
+  for (const control of motionBar.querySelectorAll<HTMLButtonElement>('button[data-coins], button[data-lives]')) {
+    control.addEventListener('click', () => {
+      if (control.dataset.coins) changeCoins(Number(control.dataset.coins));
+      else changeLives(Number(control.dataset.lives));
+    });
+  }
+}
+// a held clock (proof scripts): frames keep rendering, the Core runtimes only move through step()
+let held = false;
 let acc = 0;
 app.ticker.add((ticker) => {
+  if (held) return;
   core.update(ticker.deltaMS);
   acc += ticker.deltaMS;
   while (acc >= 1000) {
@@ -256,4 +281,10 @@ open();
   if (view && view.state === 'hidden') open();
 });
 
-(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, styleNo, screenId, events, open, layout, ready: true };
+const hold = (on = true): void => {
+  held = on;
+};
+const step = (ms: number, frameMs = 16): void => {
+  for (let left = ms; left > 0; left -= frameMs) core.update(Math.min(frameMs, left));
+};
+(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, styleNo, screenId, events, open, layout, changeCoins, changeLives, hold, step, ready: true };

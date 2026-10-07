@@ -16,12 +16,15 @@ describe('game-core/pixi public entry', () => {
       'READY_UI_OPTIONAL_ASSET_FILES', 'READY_UI_NINE_SLICES', 'createNineSlice', 'CONFIRM_EXIT_FIGMA_TEXTURES', 'WIN_CONFETTI_TEXTURES', 'LIVES_FIGMA_TEXTURES',
       'READY_UI_CATALOGS',
       'DEFAULT_READY_UI_THEME', 'resolveTheme', 'createLabel', 'fitLabelWidth', 'applyTextResolution', 'formatAmount', 'formatTimer', 'backOut',
-      'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE'
+      'ClickRippleEffect', 'DEFAULT_CLICK_RIPPLE', 'UI_BUTTON_BREATHING'
     ]) {
       expect(pixiEntry, name).toHaveProperty(name);
     }
     // the WIN confetti effect is internal to ResultWindowView (opt-in `confetti`), not a public class yet
     expect(Object.keys(pixiEntry)).not.toContain('WinConfettiEffect');
+    // the shared motion helpers (locked shake, breathing ease) stay internal to the kit
+    expect(Object.keys(pixiEntry)).not.toContain('shakeX');
+    expect(Object.keys(pixiEntry)).not.toContain('sineInOut');
   });
 
   it('keeps the root entry renderer-agnostic (no kit classes, no pixi.js)', () => {
@@ -36,7 +39,7 @@ describe('game-core/pixi public entry', () => {
   });
 
   it('the kit imports the foundation as types only (no core runtime duplicated in the pixi bundle)', () => {
-    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts', 'fx/WinConfettiEffect.ts'];
+    const kitFiles = ['LevelMapView.ts', 'HudView.ts', 'UiButton.ts', 'BottomNavView.ts', 'uiMotion.ts', 'ModalWindow.ts', 'ResultWindowView.ts', 'LivesWindowView.ts', 'ShopWindowView.ts', 'fx/ClickRippleEffect.ts', 'fx/easing.ts', 'fx/WinConfettiEffect.ts'];
     for (const file of kitFiles) {
       const source = readFileSync(resolve(rootDir, 'src/pixi', file), 'utf-8');
       const foundationImports = source.match(/^import\s+(type\s+)?[^;]*from ['"](\.\.\/)+index['"];/gm) ?? [];

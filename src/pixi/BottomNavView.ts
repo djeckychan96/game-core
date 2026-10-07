@@ -1,9 +1,10 @@
 import { Container, type FederatedPointerEvent, NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
-import type { ButtonController, LocalizationTextProvider, UiRuntime } from '../index';
+import type { ButtonController, LocalizationTextProvider, MotionHandle, MotionRuntime, UiRuntime } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { resolveSkinView, selectSkinView, skinNineSlice, skinTextLook, type ReadyUiSkinBottomNavItemLayout, type ReadyUiSkinBottomNavLayout, type ReadyUiSkinRole, type SkinViewLook } from './skin';
 import { applyTextResolution, createFigmaLabel, placeFigmaLabel } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
+import { shakeX } from './uiMotion';
 
 /** One destination of the bottom navigation. Core knows nothing about what it opens: routing stays with the host. */
 export interface BottomNavItem {
@@ -15,7 +16,10 @@ export interface BottomNavItem {
   readonly label?: string;
   /** A localization key resolved through the view's `i18n` provider when there is no `label`. Neither = no label. */
   readonly labelKey?: string;
-  /** A locked item shows the style's lock instead of its icon (with its label where the style's locked state has one) and never selects. Default false. */
+  /**
+   * A locked item shows the style's lock instead of its icon (with its label where the style's locked state has one) and
+   * never selects; a tap on it (unless it is also disabled) shakes it, like a locked level on the map. Default false.
+   */
   readonly locked?: boolean;
   /**
    * A disabled item keeps its look (no style has disabled art) but is inert: no press feedback, no callback, no
@@ -38,6 +42,8 @@ export interface BottomNavResizeOptions {
 
 export interface BottomNavViewOptions {
   ui: UiRuntime;
+  /** The host's MotionRuntime: a tap on a locked item shakes it. Without it the tap only reports (`onLockedTap`). */
+  motion?: MotionRuntime;
   textures: ReadyUiTextures;
   /** Must carry a style that covers `bottomNav` (Core has no donor bottom navigation art). */
   theme?: ReadyUiThemeOverrides;
@@ -49,7 +55,7 @@ export interface BottomNavViewOptions {
   selectedId?: string | null;
   /** Settled tap on an item that is neither locked nor disabled — selected or not. The view does not change its own selection: the host routes, then calls `setSelected`. */
   onSelect: (id: string) => void;
-  /** Settled tap on a locked item that is not disabled (`onSelect` is never called for it). */
+  /** Settled tap on a locked item that is not disabled (`onSelect` is never called for it); the item shakes either way. */
   onLockedTap?: (id: string) => void;
   width?: number;
   height?: number;
@@ -68,6 +74,8 @@ interface NavItemNode {
   readonly lock: Sprite;
   readonly label: Text | null;
   readonly controller: ButtonController;
+  /** The locked-tap shake on `inner.x`, owned by the item (a new tap restarts it; destroy cancels it first). */
+  shake: MotionHandle | null;
 }
 
 const PRESS_SCALE = 0.94;
@@ -89,6 +97,8 @@ export class BottomNavView extends Container {
   private readonly layout: ReadyUiSkinBottomNavLayout;
   private readonly onSelect: (id: string) => void;
   private readonly onLockedTap: ((id: string) => void) | null;
+  private readonly motion: MotionRuntime | null;
+  private readonly fxScope: string;
   private readonly content: Container;
   private readonly panel: NineSliceSprite;
   private readonly nodes: NavItemNode[] = [];
@@ -109,6 +119,8 @@ export class BottomNavView extends Container {
     this.layout = this.look.layout;
     this.onSelect = options.onSelect;
     this.onLockedTap = options.onLockedTap ?? null;
+    this.motion = options.motion ?? null;
+    this.fxScope = `${this.id}:fx`;
 
     if (options.items.length === 0) throw new Error('BottomNavView: no items');
     const ids = new Set<string>();
@@ -165,7 +177,7 @@ export class BottomNavView extends Container {
         onProgress: (progress) => inner.scale.set(1 - (1 - PRESS_SCALE) * progress),
         onTap: () => this.onItemTap(item.id)
       });
-      const node: NavItemNode = { item, locked: item.locked === true, disabled: item.disabled === true, root, inner, background, icon, lock, label, controller };
+      const node: NavItemNode = { item, locked: item.locked === true, disabled: item.disabled === true, root, inner, background, icon, lock, label, controller, shake: null };
       root.on('pointerdown', (event: FederatedPointerEvent) => controller.pointerDown(event.pointerId, event.global.x, event.global.y));
       root.on('pointermove', (event: FederatedPointerEvent) => controller.pointerMove(event.pointerId, event.global.x, event.global.y));
       root.on('pointerup', (event: FederatedPointerEvent) => controller.pointerUp(event.pointerId, event.global.x, event.global.y, true));
@@ -270,6 +282,7 @@ export class BottomNavView extends Container {
     if (this.disposed) return;
     this.disposed = true;
     for (const node of this.nodes) {
+      this.stopShake(node); // before Pixi nulls inner's position: the shake's cancel writes inner.x once more
       node.controller.dispose();
       node.root.removeAllListeners();
     }
@@ -331,9 +344,23 @@ export class BottomNavView extends Container {
     const node = this.node(id);
     if (node.disabled) return;
     if (node.locked) {
+      this.shakeItem(node);
       this.onLockedTap?.(id);
       return;
     }
     this.onSelect(id);
+  }
+
+  /** locked.tap: the LevelMap locked-node shake on the item's inner container (the press scales it, the shake moves it). */
+  private shakeItem(node: NavItemNode): void {
+    if (!this.motion) return;
+    this.stopShake(node); // a second tap restarts the shake from rest instead of stacking a second writer on inner.x
+    node.shake = shakeX(this.motion, node.inner, this.fxScope);
+  }
+
+  private stopShake(node: NavItemNode): void {
+    const handle = node.shake;
+    node.shake = null;
+    handle?.cancel();
   }
 }

@@ -22,6 +22,8 @@
       #gallery button, #gallery select { font: inherit; color: #fff; background: #2b3160; border: 1px solid #4a5299; border-radius: 6px; padding: 5px 9px; }
       #gallery button[aria-pressed="true"] { background: #f0b429; color: #111; border-color: #f0b429; font-weight: 700; }
       #gallery select { max-width: 100%; }
+      #motion { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+      #motion[hidden] { display: none; }
       #note { flex: 1 1 100%; opacity: 0.85; font-size: 12px; min-height: 1.3em; }
     </style>
   </head>
@@ -36,6 +38,12 @@
       <select id="screen" aria-label="Screen"></select>
       <select id="locale" aria-label="Locale"><option value="en">EN</option><option value="ru">RU</option></select>
       <button id="reopen" type="button">Reopen</button>
+      <span id="motion" hidden>
+        <button type="button" data-coins="250">+250 ¢</button>
+        <button type="button" data-coins="-120">−120 ¢</button>
+        <button type="button" data-lives="-1">−1 ♥</button>
+        <button type="button" data-lives="1">+1 ♥</button>
+      </span>
       <div id="note"></div>
     </div>
     <script type="module" src="./uiGalleryDemo.ts"></script>

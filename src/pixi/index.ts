@@ -41,8 +41,8 @@ export type {
   LevelMapNavSlotId,
   LevelMapNavSlots
 } from './LevelMapScreen';
-export { UiButton } from './UiButton';
-export type { UiButtonOptions } from './UiButton';
+export { UiButton, UI_BUTTON_BREATHING } from './UiButton';
+export type { UiButtonOptions, UiButtonBreathing } from './UiButton';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
 export { ResultWindowView, WIN_CONFETTI_TEXTURES } from './ResultWindowView';

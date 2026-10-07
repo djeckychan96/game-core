@@ -184,6 +184,14 @@ over the badge's own layout scale and a badge runs one pulse at a time: a burst 
 (reward coins flying in one by one) restarts the pop instead of stacking tweens whose captured
 bases would compound and leave the icon enlarged.
 
+`resourceFeedback: true` (opt-in; default off = the pop above, the number set at once) gives coins and lives a counter
+feedback: a gain pops the icon and rolls the drawn number up to the new value (at most 12 redraws — a canvas `Text`
+re-rasterizes on every change — 420–600 ms), a spend rolls it down in 260 ms while the icon dips to 0.9 and comes back,
+and the heart (with its own number) gives a light shake (0.3 of the locked-level shake). `coinsAmount` / `livesAmount`
+are the new value at once; only the drawn number trails it, a newer change goes on from the number on screen, a roll
+cancelled from outside (`core.cancelAll()`, destroy) snaps it to its value, and `setCoins(n, false)` draws at once. The
+lives caption (`MAX` / timer) and "+" follow the value at once. Stars keep the plain pop.
+
 ### BottomNavView
 
 A generic bottom navigation bar (no donor art: it needs a style that covers `bottomNav` — Style 1 and Style 2). Items
@@ -193,7 +201,7 @@ are host data — `{ id, icon?: Texture | role, label? | labelKey?, locked?, dis
 | --- | --- |
 | `items`, `selectedId` | stable ids; the icon a texture or a style role (`'iconShop'`); `label` wins over `labelKey` (through `i18n`), neither = no label |
 | `onSelect(id)` | settled tap on an item that is neither locked nor disabled, selected or not — the view never changes its own selection |
-| `onLockedTap(id)` | settled tap on a locked item (it shows the style's lock instead of its icon, with its caption where the style's locked state has one) |
+| `onLockedTap(id)` | settled tap on a locked item (it shows the style's lock instead of its icon, with its caption where the style's locked state has one); the item answers every such tap with the locked-level shake (left, right, back, 240 ms) when the view has `motion` |
 | `disabled` | the item keeps its look (no style has disabled art) and is inert: no press feedback, no callback |
 | `setSelected(id \| null)`, `setLocked(id, locked)`, `setDisabled(id, disabled)`, `selectedId`, `isLocked(id)`, `isDisabled(id)` | the host's routing result / unlocks |
 | `resize(w, h, { insets, pixelRatio })`, `top`, `barHeight` | the panel `panelHeight` units above the bottom inset, reaching through it; slots `pitch` apart, shrinking on a narrow screen |
@@ -213,8 +221,9 @@ const screen = new LevelMapScreen({
   nav: {
     shop: { onTap: openShop },                       // or no onTap / disabled: true = drawn, inert
     home: { onTap: () => screen.map.scrollToLevel(currentLevel) },
-    lock: {}                                         // the future feature: the style's locked state, callback optional
+    lock: {}                                         // the future feature: the style's locked state; a tap shakes it, callback optional
   },
+  playBreathing: true,                               // opt-in: PLAY breathes (UI_BUTTON_BREATHING)
   onPlay: (level) => startLevel(level)               // PLAY launches the selected level
 });
 ```
@@ -223,7 +232,8 @@ const screen = new LevelMapScreen({
 | --- | --- |
 | select level | `map.selectedLevel` / `screen.playLevel` = the playable level under the focus (scroll, fling, or a tap on an open node, which scrolls it there); PLAY shows `core.level_map.play` (+ `core.level_map.level` when the style draws a level line) |
 | `onPlay(level)` | settled tap on PLAY with the selected level |
-| `nav.shop` / `nav.home` / `nav.lock` | `{ onTap?, disabled?, label? }`: SHOP \| HOME \| LOCK, always all three, HOME selected, LOCK locked; a slot without `onTap` is disabled for good (inert); `disabled: true` with an `onTap` starts it disabled and `screen.nav.setDisabled(id, false)` enables it later; captions `core.nav.shop` / `home` / `lock` or `label` |
+| `nav.shop` / `nav.home` / `nav.lock` | `{ onTap?, disabled?, label? }`: SHOP \| HOME \| LOCK, always all three, HOME selected, LOCK locked; a SHOP / HOME slot without `onTap` is disabled for good (inert); LOCK stays tappable without `onTap` — a tap shakes it and reaches its `onTap` when there is one — and only `disabled: true` makes it inert; `disabled: true` with an `onTap` starts a slot disabled and `screen.nav.setDisabled(id, false)` enables it later; captions `core.nav.shop` / `home` / `lock` or `label` |
+| `playBreathing` (optional) | opt-in idle breathing of PLAY: `true` = `UI_BUTTON_BREATHING` (×1.04 over 1.3 s, a soft sine), or `{ scale?, periodMs? }`; default off; `screen.play.setBreathing(false)` stops it |
 | `map.onSelectLevel` (optional) | still told about every node tap, as before — a host that launched from the node keeps working |
 | `nav: { items, selectedId, onSelect, onLockedTap }` | the earlier generic item list, kept |
 
@@ -236,6 +246,14 @@ slot exists. A host that launches straight from a node uses `LevelMapView` alone
 Sprite background + optional label/icon; Pixi pointer events → `ButtonController`, press progress
 → scale from an explicit idle scale (`setIdleScale`). `setLabel`, `setEnabled`, `setTapThreshold`,
 `controller`.
+
+Opt-in idle **breathing** for a primary call to action (`breathing: true | { scale?, periodMs? }` with `motion`, or
+`setBreathing(…)` later; default `UI_BUTTON_BREATHING` = ×1.04 over 1.3 s, a half-sine yoyo with no spring). The scale
+has one writer, the button: idle scale × breathing × press, so a press during a breath scales from the breathing size
+and releases back to it. One owned tween (scope `ui:button:<id>:breathing`): it stops while the button is disabled and
+on destroy, a breath cancelled from outside (`core.cancelAll()`) comes back on the next `setIdleScale` (every layout),
+`setEnabled(true)` or `setBreathing`, and the hit area stays at its idle size on screen (the local point is scaled
+back by the breathing factor).
 
 ### ModalWindow → the windows
 
@@ -582,6 +600,15 @@ donor look (Style 2 Result). Query: `?style=1|2&screen=<id>&locale=ru&ui=0` (`ui
 booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
 `SCREENS`, `VIEWPORTS`, `LOCALE`) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png` and fails on a
 console error or a window that never opens. Dev page only: `showcase:build` ships `index.html` alone.
+
+Motion proof on the map screens: PLAY breathes (`playBreathing`), the HUD counters use `resourceFeedback`, a tap on LOCK
+shakes it, and the bar's `+250 ¢` / `−120 ¢` / `−1 ♥` / `+1 ♥` buttons change coins and lives with no game logic behind
+them. `SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:motion` (`scripts/ui-motion-check.mjs`, env `STYLES`,
+`VIEWPORTS`) holds the page's clock (`__gallery.hold()` / `step(ms)`) and checks, per style × viewport: the breath
+(×1.04, never below the layout scale), a real press on PLAY mid-breath (idle × breath × 0.92, one tap, back to
+idle × breath), rapid taps, a coins gain (≤ 12 redraws, pop) and spend (dip), a life spend (heart shake back to rest),
+a real LOCK tap (shake ±16, `nav:lock`), repeated hide / show, a `core.cancelAll()` and destroy (nothing left running);
+shots in `showcase-shots/ui-motion/`.
 
 ## Tests
 

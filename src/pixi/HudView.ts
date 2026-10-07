@@ -7,6 +7,7 @@ import { resolveSkinView, selectSkinView, type ReadyUiSkinHudLayout } from './sk
 import { UiButton } from './UiButton';
 import { applyTextResolution, createLabel, fitLabelWidth, formatAmount } from './text';
 import { resolveTheme, type ReadyUiTheme, type ReadyUiThemeOverrides } from './theme';
+import { shakeX } from './uiMotion';
 
 export interface HudInsets {
   top?: number;
@@ -40,6 +41,13 @@ export interface HudViewOptions {
   settings?: boolean;
   /** Draw the donor's soft top shadow under the bar so it reads over any map art. Default true. */
   shadow?: boolean;
+  /**
+   * Opt-in counter feedback for coins and lives. Default false: the icon pops on any change and the number is set at
+   * once (as before). `true`: a gain pops the icon and rolls the number up to the new value (at most 12 drawn steps,
+   * 420–600 ms); a spend rolls it down faster (260 ms) while the icon dips to 0.9 and comes back, and the heart gives a
+   * light shake. Only the drawn number follows: `coinsAmount` / `livesAmount` are the new value at once.
+   */
+  resourceFeedback?: boolean;
   onCoinsTap?: () => void;
   onLivesTap?: () => void;
   onStarsTap?: () => void;
@@ -96,6 +104,17 @@ interface HudArt {
   star: Texture;
 }
 
+/** Counter feedback numbers (`resourceFeedback`): the roll, the gain pop (the classic pulse) and the spend dip. */
+const ROLL_MAX_STEPS = 12;
+const ROLL_GAIN_MIN_MS = 400;
+const ROLL_GAIN_MAX_MS = 600;
+const ROLL_GAIN_STEP_MS = 20;
+const ROLL_SPEND_MS = 260;
+const GAIN_POP = { from: 1.22, durationMs: 260, ease: 'backOut' } as const;
+const SPEND_DIP = { from: 0.9, durationMs: 200, ease: 'easeOut' } as const;
+/** The heart's spend shake: the locked-tap shake at 0.3 of its size (about ±5 units on a 128-unit heart). */
+const HEART_SHAKE_AMPLITUDE = 0.3;
+
 /** The style's text for the counters: its font and the HUD text colour (none = the theme's). */
 interface HudText {
   fontFamily?: string;
@@ -119,6 +138,7 @@ function badgeBounds(layout: ReadyUiSkinHudLayout): Rectangle {
  * into the row's base geometry (a HUD that stays enlarged after a coin flight was exactly that).
  */
 class ResourceBadge extends Container {
+  readonly kind: 'coin' | 'heart' | 'star';
   readonly button: UiButton | null;
   readonly icon: Sprite;
   /** The icon's layout scale; a pulse is always `iconScale × factor` and settles back to it. */
@@ -129,6 +149,12 @@ class ResourceBadge extends Container {
   private readonly capsuleWidth: number;
   /** The one running pulse on this badge (a new pulse cancels it, so pulses never stack). */
   pulse: MotionHandle | null = null;
+  /** The number drawn now; it trails the value only while a counter roll runs (`resourceFeedback`). */
+  shown = 0;
+  /** The one running counter roll on this badge. */
+  roll: MotionHandle | null = null;
+  /** The one running spend shake of the icon (and the heart's own number). */
+  shake: MotionHandle | null = null;
 
   constructor(options: {
     ui: UiRuntime;
@@ -142,6 +168,7 @@ class ResourceBadge extends Container {
   }) {
     super();
     const { theme, art, layout } = options;
+    this.kind = options.icon;
     this.capsuleWidth = layout.capsule.width;
     this.boundsArea = badgeBounds(layout);
 
@@ -245,6 +272,7 @@ export class HudView extends Container {
   private readonly gear: UiButton | null;
   private readonly fullLivesLabel: string;
   private readonly fxScope: string;
+  private readonly resourceFeedback: boolean;
 
   private coinsValue: number;
   private starsValue: number;
@@ -287,6 +315,7 @@ export class HudView extends Container {
     if (this.hudLayout.textFill !== undefined) text.fill = this.hudLayout.textFill;
     this.fullLivesLabel = localizedText(options.fullLivesLabel, options.i18n, 'core.common.max', READY_UI_LEGACY_TEXT.max);
     this.fxScope = `${this.id}:fx`;
+    this.resourceFeedback = options.resourceFeedback === true;
     this.coinsValue = Math.max(0, options.coins ?? 0);
     this.starsValue = Math.max(0, options.stars ?? 0);
     this.maxLivesValue = Math.max(1, options.maxLives ?? 5);
@@ -369,6 +398,8 @@ export class HudView extends Container {
       this.gear = gear;
     }
 
+    this.coins.shown = this.coinsValue;
+    this.lives.shown = this.livesValue;
     this.refreshCoins();
     this.refreshStars();
     this.refreshLives();
@@ -415,19 +446,17 @@ export class HudView extends Container {
 
   setCoins(value: number, animate = true): void {
     const next = Math.max(0, Math.round(value));
-    const changed = next !== this.coinsValue;
+    const previous = this.coinsValue;
     this.coinsValue = next;
-    this.refreshCoins();
-    if (changed && animate) this.pulse(this.coins);
+    this.showChange(this.coins, previous, next, animate);
   }
 
   setLives(value: number, timerText = ''): void {
     const next = Math.max(0, Math.min(this.maxLivesValue, Math.round(value)));
-    const changed = next !== this.livesValue;
+    const previous = this.livesValue;
     this.livesValue = next;
     this.timerText = timerText;
-    this.refreshLives();
-    if (changed) this.pulse(this.lives);
+    this.showChange(this.lives, previous, next, true);
   }
 
   setMaxLives(max: number): void {
@@ -500,7 +529,7 @@ export class HudView extends Container {
   }
 
   private refreshCoins(): void {
-    this.coins.setCount(formatAmount(this.coinsValue), this.hudLayout.capsule.width * 0.72);
+    this.drawCount(this.coins, this.coins.shown);
   }
 
   private refreshStars(): void {
@@ -508,27 +537,120 @@ export class HudView extends Container {
   }
 
   private refreshLives(): void {
-    this.lives.setCount(String(this.livesValue), this.hudLayout.iconSize * 0.7);
+    this.drawCount(this.lives, this.lives.shown);
+    // the MAX / timer caption and the "+" follow the value at once; only the number may trail it
     const full = this.livesValue >= this.maxLivesValue;
     this.lives.setCapsuleText(full ? this.fullLivesLabel : this.timerText);
     if (this.lives.plus) this.lives.plus.visible = !full;
   }
 
+  /** The badge's number for `value`: the coin / star amount on the capsule, the life count inside the heart. */
+  private drawCount(badge: ResourceBadge, value: number): void {
+    if (badge.kind === 'heart') badge.setCount(String(value), this.hudLayout.iconSize * 0.7);
+    else badge.setCount(formatAmount(value), this.hudLayout.capsule.width * 0.72);
+  }
+
   /**
-   * Counter feedback: the icon pops to 1.22× and settles. The base is the badge's OWN layout scale, never the sprite's
-   * current (possibly animated) scale, and a badge runs one pulse at a time — a burst of updates (coins flying in one by
-   * one) restarts the pop instead of stacking tweens whose captured bases would compound.
+   * A coin / life value changed from `previous` to `next` (already stored). Without `resourceFeedback` (or with
+   * `animate` false) the number is drawn at once and a change pops the icon, as before. With it, a change rolls the
+   * drawn number from what is on screen now to `next`: a gain with the classic pop, a spend faster with a dip (and the
+   * heart's shake).
    */
-  private pulse(badge: ResourceBadge): void {
+  private showChange(badge: ResourceBadge, previous: number, next: number, animate: boolean): void {
+    const changed = next !== previous;
+    if (!this.resourceFeedback || !animate) {
+      this.stopRoll(badge);
+      badge.shown = next;
+      if (badge === this.coins) this.refreshCoins();
+      else this.refreshLives();
+      if (changed && animate) this.pulse(badge);
+      return;
+    }
+    if (badge === this.lives) this.refreshLives(); // caption and "+" now; the number rolls
+    if (!changed) return;
+    const gain = next > previous;
+    this.rollCount(badge, next, gain);
+    if (gain) {
+      this.pulse(badge);
+      return;
+    }
+    this.pulse(badge, SPEND_DIP);
+    if (badge.kind === 'heart') {
+      badge.shake?.cancel(); // its cancel puts the heart back first, so the new shake starts from rest
+      badge.shake = shakeX(this.motion, [badge.icon, badge.countText], this.fxScope, HEART_SHAKE_AMPLITUDE);
+    }
+  }
+
+  /**
+   * Rolls the drawn number from what the badge shows now to `to`: at most ROLL_MAX_STEPS redraws (Text re-rasterizes
+   * on every change), the first one on the first frame, the last one exactly `to`. A newer change takes over from the
+   * number on screen; a roll cancelled from outside (`core.cancelAll()`, destroy) snaps the number to its target.
+   */
+  private rollCount(badge: ResourceBadge, to: number, gain: boolean): void {
+    this.stopRoll(badge);
+    const from = badge.shown;
+    const delta = to - from;
+    if (delta === 0) return;
+    const steps = Math.min(ROLL_MAX_STEPS, Math.abs(delta));
+    const durationMs = gain ? Math.min(ROLL_GAIN_MAX_MS, ROLL_GAIN_MIN_MS + ROLL_GAIN_STEP_MS * steps) : ROLL_SPEND_MS;
+    const progress = { value: 0 };
+    const settle = (): void => {
+      if (badge.shown === to) return;
+      badge.shown = to;
+      this.drawCount(badge, to);
+    };
+    const handle: MotionHandle = this.motion.tween({
+      scope: this.fxScope,
+      bindings: [{
+        get: () => progress.value,
+        set: (p: number) => {
+          progress.value = p;
+          const step = Math.min(steps, Math.ceil(p * steps));
+          const value = step >= steps ? to : from + Math.round((delta * step) / steps);
+          if (value === badge.shown) return;
+          badge.shown = value;
+          this.drawCount(badge, value);
+        },
+        from: 0,
+        to: 1
+      }],
+      durationMs,
+      ease: 'easeOut',
+      onComplete: () => {
+        if (badge.roll === handle) badge.roll = null;
+        settle();
+      },
+      onCancel: () => {
+        if (badge.roll !== handle) return; // taken over by a newer change: it goes on from the number on screen
+        badge.roll = null;
+        settle();
+      }
+    });
+    badge.roll = handle;
+  }
+
+  /** Stops a running roll where it is (the number on screen stays; the caller draws what comes next). */
+  private stopRoll(badge: ResourceBadge): void {
+    const handle = badge.roll;
+    badge.roll = null;
+    handle?.cancel();
+  }
+
+  /**
+   * Counter feedback: the icon pops to 1.22× and settles (a spend: dips to 0.9×). The base is the badge's OWN layout
+   * scale, never the sprite's current (possibly animated) scale, and a badge runs one pulse at a time — a burst of
+   * updates (coins flying in one by one) restarts the pop instead of stacking tweens whose captured bases would compound.
+   */
+  private pulse(badge: ResourceBadge, look: { readonly from: number; readonly durationMs: number; readonly ease: 'backOut' | 'easeOut' } = GAIN_POP): void {
     badge.pulse?.cancel();
     const icon = badge.icon;
     const base = badge.iconScale;
     const k = { v: 1 };
     const handle = this.motion.tween({
       scope: this.fxScope,
-      bindings: [{ get: () => k.v, set: (v: number) => { k.v = v; icon.scale.set(base * v); }, from: 1.22, to: 1 }],
-      durationMs: 260,
-      ease: 'backOut',
+      bindings: [{ get: () => k.v, set: (v: number) => { k.v = v; icon.scale.set(base * v); }, from: look.from, to: 1 }],
+      durationMs: look.durationMs,
+      ease: look.ease,
       onComplete: () => { if (badge.pulse === handle) badge.pulse = null; icon.scale.set(base); },
       onCancel: () => { if (badge.pulse === handle) badge.pulse = null; icon.scale.set(base); }
     });
