@@ -125,7 +125,7 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect(pixiEntry.READY_UI_SKIN_WINDOW_ROLES).toBe(READY_UI_SKIN_WINDOW_ROLES);
     expect(pixiEntry.READY_UI_SKIN_VIEW_ROLES).toBe(READY_UI_SKIN_VIEW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
-    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds']);
+    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen']);
     expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'noAds', 'offer', 'result', 'settings']);
     expect('hud' in READY_UI_STYLE_1).toBe(true);
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);

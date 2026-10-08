@@ -58,6 +58,8 @@ export type { ConfirmWindowParams, ConfirmWindowViewOptions, ConfirmWindowVarian
 export type { ReadyUiOffer, ReadyUiOfferArt, ReadyUiOfferItem } from './OfferPanel';
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
+export { ShopScreen } from './ShopScreen';
+export type { ShopScreenItem, ShopScreenOptions, ShopPackRole } from './ShopScreen';
 export { SettingsWindowView } from './SettingsWindowView';
 export type { SettingsLanguage, SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
 export { NoAdsWindowView } from './NoAdsWindowView';
@@ -101,6 +103,7 @@ export type {
   ReadyUiSkinTextOutline,
   ReadyUiSkinLevelMapScreenLayout,
   ReadyUiSkinMovesLayout,
+  ReadyUiSkinShopScreenLayout,
   ReadyUiSkinIconBox,
   ReadyUiSkinFont,
   ReadyUiSkinLayouts,

@@ -192,7 +192,7 @@ export class LevelMapScreen extends Container {
     }
     placeFigmaLabel(this.playText, slot(play.label));
 
-    this.nav = new BottomNavView({ ...shared, ...navOptions(options.nav ?? {}, i18n), id: `${this.id}:nav` });
+    this.nav = new BottomNavView({ ...shared, ...levelMapNavOptions(options.nav ?? {}, i18n, 'home'), id: `${this.id}:nav` });
     this.hud = new HudView({ ...shared, ...(options.hud ?? {}), id: `${this.id}:hud` });
 
     // bottom → top: map (with its background), PLAY, navigation, HUD
@@ -274,10 +274,11 @@ function slot(box: ReadyUiSkinTextBox) {
 
 /**
  * The BottomNavView options of `nav`: a generic item list as it is; the level-map slots as SHOP | HOME | LOCK items —
- * HOME selected, LOCK in the style's locked state (tappable: it shakes, its `onTap` optional; inert only with
- * `disabled`), a SHOP / HOME slot without `onTap` (or `disabled`) disabled, each tap routed to its slot's `onTap`.
+ * `selected` drawn selected (HOME on the map screen, SHOP on the shop screen), LOCK in the style's locked state
+ * (tappable: it shakes, its `onTap` optional; inert only with `disabled`), a SHOP / HOME slot without `onTap` (or
+ * `disabled`) disabled, each tap routed to its slot's `onTap`. Shared by LevelMapScreen and ShopScreen (internal).
  */
-function navOptions(nav: LevelMapScreenNav, i18n: LocalizationTextProvider | undefined): Omit<BottomNavViewOptions, Shared> {
+export function levelMapNavOptions(nav: LevelMapScreenNav, i18n: LocalizationTextProvider | undefined, selected: 'shop' | 'home'): Omit<BottomNavViewOptions, Shared> {
   if ('items' in nav) return nav;
   const tap = (id: string): void => nav[id as LevelMapNavSlotId]?.onTap?.();
   const items: BottomNavItem[] = NAV_SLOTS.map(({ id, icon, locked }) => {
@@ -291,5 +292,5 @@ function navOptions(nav: LevelMapScreenNav, i18n: LocalizationTextProvider | und
       disabled: locked ? slotOptions?.disabled === true : !slotOptions?.onTap || slotOptions.disabled === true
     };
   });
-  return { items, selectedId: 'home', onSelect: tap, onLockedTap: tap };
+  return { items, selectedId: selected, onSelect: tap, onLockedTap: tap };
 }

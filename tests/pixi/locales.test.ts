@@ -39,6 +39,7 @@ const CORE_KEYS = [
   'core.settings.sound',
   'core.settings.title',
   'core.shop.special_offer',
+  'core.shop.title',
   'core.starter_pack.title'
 ] as const;
 

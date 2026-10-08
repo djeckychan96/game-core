@@ -4,7 +4,8 @@
 //   ?style=1 | 2     the style (default 1)
 //   ?screen=<id>     the window over the map screen (default map = no window); ids in SCREENS below. Both styles draw
 //                    the same LevelMapScreen contract (select a level → PLAY, SHOP | HOME | LOCK); every callback lands
-//                    in the status line ("last: …")
+//                    in the status line ("last: …"). SHOP (and the HUD coin "+") switches to the ShopScreen tab, its
+//                    HOME / × back to the same map screen (`shop-screen` opens the page on that tab)
 //   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
 //   ?moves=<n>       the gameplay screen's moves left (default 38)
 //   ?ui=0            hide the gallery controls (screenshots)
@@ -26,6 +27,7 @@ import {
   ResultWindowView,
   SettingsButtonView,
   SettingsWindowView,
+  ShopScreen,
   ShopWindowView,
   formatTimer,
   loadReadyUiAssets,
@@ -60,7 +62,8 @@ const SCREENS = [
   { id: 'fail', label: 'Result FAIL' },
   { id: 'gameplay', label: 'Gameplay — Moves + Settings button' },
   { id: 'noads', label: 'No Ads' },
-  { id: 'shop', label: 'Shop / bank (coin packs)' }
+  { id: 'shop-screen', label: 'Shop — SHOP tab (ShopScreen; SHOP / HOME switch)' },
+  { id: 'shop', label: 'Shop — legacy modal (ShopWindowView, donor look)' }
 ] as const;
 type ScreenId = (typeof SCREENS)[number]['id'];
 
@@ -181,17 +184,44 @@ const mapScreen = screenId === 'gameplay' ? null : new LevelMapScreen({
   map: { levels, currentLevel: CURRENT, onLockedTap: (level) => log(`locked:${level}`), onFocusChange: ({ selectedLevel }) => log(`selected:${selectedLevel}`) },
   hud: {
     coins: styleNo === 2 ? 9990 : 12450, lives: 3, maxLives: 5, ...(styleNo === 2 ? { stars: 9990 } : {}), resourceFeedback: true,
-    onLivesTap: () => go({ screen: 'lives-full' }), onCoinsTap: () => log('hud:coins'), onSettingsTap: () => go({ screen: 'settings-map' })
+    onLivesTap: () => go({ screen: 'lives-full' }), onCoinsTap: () => showTab('shop', 'hud:coins'), onSettingsTap: () => go({ screen: 'settings-map' })
   },
   nav: navDisabled
     ? { home: { onTap: () => log('nav:home') }, lock: { disabled: true } }
-    : { shop: { onTap: () => log('nav:shop') }, home: { onTap: () => log('nav:home') }, lock: { onTap: () => log('nav:lock') } },
+    : { shop: { onTap: () => showTab('shop', 'nav:shop') }, home: { onTap: () => log('nav:home') }, lock: { onTap: () => log('nav:lock') } },
   onPlay: (level) => log(`play:${level}`)
 });
+
+/**
+ * The SHOP tab next to the map screen: two live screens, the host routes between them by visibility — the map is never
+ * rebuilt, so its scroll, selection and progress survive every round trip. The packs are the demo catalog (a game passes
+ * its PurchaseRuntime / platform products); a tap holds the cards for a moment like a payment sheet would, buys nothing.
+ */
+const shopTab = mapScreen ? new ShopScreen({
+  ...base, id: 'shop-tab',
+  items: DEMO_SHOP_ITEMS,
+  hidden: screenId !== 'shop-screen',
+  onBuy: (item) => {
+    log(`buy:${item.id}`);
+    shopTab?.setBuyEnabled(false);
+    motion.delay({ durationMs: 700, onComplete: () => shopTab?.setBuyEnabled(true), onCancel: () => shopTab?.setBuyEnabled(true) });
+  },
+  onClose: () => showTab('home', 'shop:close'),
+  nav: { home: { onTap: () => showTab('home', 'nav:home') }, lock: { onTap: () => log('nav:lock') } }
+}) : null;
+if (mapScreen && screenId === 'shop-screen') mapScreen.visible = false;
+function showTab(tab: 'shop' | 'home', event: string): void {
+  if (!mapScreen || !shopTab) return;
+  mapScreen.visible = tab === 'home';
+  if (tab === 'shop') shopTab.show();
+  else shopTab.hide();
+  log(`${event} → tab:${tab}`);
+}
 const gameplay = mapScreen ? null : new GameplayDemo();
 const hud: HudView = mapScreen ? mapScreen.hud : gameplay!.hud;
 const screen = mapScreen ?? gameplay!;
 app.stage.addChild(screen);
+if (shopTab) app.stage.addChild(shopTab);
 hud.setLives(3, formatTimer(refillSeconds));
 
 // --- the window of this screen ---
@@ -222,7 +252,8 @@ switch (screenId) {
     break;
   }
   case 'shop': {
-    // Core's coin shop (the bank): ShopWindowView — no style covers it yet, so both styles show its donor look
+    // the legacy modal coin shop: ShopWindowView keeps its donor look under every style (the styled shop is the
+    // ShopScreen tab: `shop-screen`, or SHOP in the map's navigation)
     const shop = new ShopWindowView({ ...base, id: 'shop', onDismiss, onBuy: (item) => log(`buy:${item.id}`) });
     open = () => shop.show({ items: DEMO_SHOP_ITEMS });
     view = shop as unknown as ModalWindow<never>;
@@ -287,7 +318,8 @@ if (view) app.stage.addChild(view);
 /** What this style draws for the screen: its own art, or the donor look where the style has no design. */
 function coverage(): string {
   const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId.startsWith('win') || screenId === 'fail' ? 'result'
-    : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'gameplay' ? 'moves' : screenId === 'noads' ? 'noAds' : screenId === 'shop' ? 'shop' : 'confirm';
+    : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'gameplay' ? 'moves' : screenId === 'noads' ? 'noAds' : screenId === 'shop' ? 'shop'
+    : screenId === 'shop-screen' ? 'shopScreen' : 'confirm';
   const covered = skin.covers.includes(window as never);
   return `Style ${styleNo} · ${SCREENS.find((s) => s.id === screenId)?.label}: ${covered ? 'style art' : 'NOT in this style — donor look'}`;
 }
@@ -305,6 +337,7 @@ const readSafe = () => {
 const layout = (): void => {
   const options = { insets: readSafe(), pixelRatio: resolution };
   screen.resize(app.screen.width, app.screen.height, options);
+  shopTab?.resize(app.screen.width, app.screen.height, options);
   view?.resize(app.screen.width, app.screen.height, options);
 };
 app.renderer.on('resize', layout);
@@ -320,7 +353,7 @@ const changeLives = (delta: number): void => {
 };
 const motionBar = document.getElementById('motion') as HTMLSpanElement | null;
 if (motionBar) {
-  motionBar.hidden = !screenId.startsWith('map');
+  motionBar.hidden = !screenId.startsWith('map') && screenId !== 'shop-screen';
   for (const control of motionBar.querySelectorAll<HTMLButtonElement>('button[data-coins], button[data-lives]')) {
     control.addEventListener('click', () => {
       if (control.dataset.coins) changeCoins(Number(control.dataset.coins));
@@ -352,4 +385,4 @@ const hold = (on = true): void => {
 const step = (ms: number, frameMs = 16): void => {
   for (let left = ms; left > 0; left -= frameMs) core.update(Math.min(frameMs, left));
 };
-(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, gameplay, styleNo, screenId, events, open, layout, changeCoins, changeLives, hold, step, ready: true };
+(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, shopTab, showTab, gameplay, styleNo, screenId, events, open, layout, changeCoins, changeLives, hold, step, ready: true };

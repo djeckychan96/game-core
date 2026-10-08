@@ -18,8 +18,9 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  *
  * theme_light_6 (section 28:45250, the DARK row; docs/figma/theme-light-6) is the current snapshot for the Result WIN
  * (28:48286: re-laid and centred, no glow, the black 45 % ×), `moves` (the MOVES box 28:48247), `settingsButton`
- * (the gameplay `btn_settings` 28:48211) and `noAds` (`screen_ads_off` 28:48065). NOT COVERED — donor look: Shop
- * (theme_light_6's is a nav tab, not the modal), StarterPack.
+ * (the gameplay `btn_settings` 28:48211), `noAds` (`screen_ads_off` 28:48065) and `shopScreen` — the SHOP tab
+ * `market_screen_dark` 28:46015 (docs/figma/theme-light-6-shop). NOT COVERED — donor look: the modal ShopWindowView,
+ * StarterPack.
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -29,7 +30,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -145,7 +146,25 @@ export const READY_UI_STYLE_1 = {
     noAdsPanel: { file: 'offer/promo_panel.webp', nineSlice: { left: 52, top: 52, right: 52, bottom: 58, pad: { left: 6, top: 6, right: 6, bottom: 6 } } },
     noAdsDecor: { file: 'offer/noads_rays@0.5x.webp' },
     noAdsClose: { file: 'offer/style1_noads_close.webp' },
-    noAdsArt: { file: 'offer/style1_noads_hero.webp' }
+    noAdsArt: { file: 'offer/style1_noads_hero.webp' },
+    /**
+     * theme_light_6 Shop tab `market_screen_dark` 28:46015 (docs/figma/theme-light-6-shop): the purple gradient + bear
+     * pattern background, the awning tile (shadow_up + the #0a2259 fade + `pattern_markiza_dark` × 2), the
+     * `title_tape_blue_dark` tape without its text (a horizontal 9-slice: the screen stretches it to 978), the
+     * `market_card_blue_1_dark` base, the six `icon_coin_dark_2..7` pack renders, and the round × `icon_close_dark`
+     * 28:48843 (the No Ads × file).
+     */
+    shopBackground: { file: 'shop/style1_background@0.5x.webp' },
+    shopAwning: { file: 'shop/style1_awning.webp' },
+    shopTitle: { file: 'shop/style1_title.webp', nineSlice: { left: 25, top: 58, right: 24, bottom: 58 } },
+    shopCard: { file: 'shop/style1_card.webp' },
+    shopPack1: { file: 'shop/style1_pack_1.webp' },
+    shopPack2: { file: 'shop/style1_pack_2.webp' },
+    shopPack3: { file: 'shop/style1_pack_3.webp' },
+    shopPack4: { file: 'shop/style1_pack_4.webp' },
+    shopPack5: { file: 'shop/style1_pack_5.webp' },
+    shopPack6: { file: 'shop/style1_pack_6.webp' },
+    shopClose: { file: 'offer/style1_noads_close.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -243,6 +262,32 @@ export const READY_UI_STYLE_1 = {
     icon: { x: 28, y: 18, width: 158, height: 158 },
     margins: { top: 90, right: 90 },
     minHitSize: 214
+  },
+  /**
+   * theme_light_6 `market_screen_dark` 28:46015: the SHOP tab of the main-screen navigation (frame units from its top).
+   * The #5e2bd4 → #451262 gradient with the bears (the picture; #451262 under it); the × `icon_close_dark` 120 at 921, 301
+   * (39 from the right edge); the tape 978 × 116 at 51, 493 with "SPECIAL OFFER" — runtime copy — Fira Sans Black 60 and
+   * the kit's 4 / 4 outline at 111, 503, 858 × 78; the cards 310 × 406 at 51 / 385 / 719 × 633 / 1063 (render −4, −4,
+   * 318 × 418); the amount 60 at 9.76, 31, 290 × 72, the pack box 25, 86, 260 × 220, the price 56 centred on the card's
+   * inner face; the scroll frame ends 64 above the navigation panel (the light screen's `Frame 615`).
+   */
+  shopScreen: {
+    background: { color: 0x451262, art: true },
+    awning: { width: 1080, height: 539 },
+    close: { y: 301, right: 39, width: 120, height: 120, minHitSize: 160 },
+    title: {
+      ribbon: { x: 51, y: 493, width: 978, height: 116 },
+      label: { x: 111, y: 503, width: 858, height: 78, fontSize: 60 }
+    },
+    grid: { top: 633, columns: 3, pitchX: 334, pitchY: 430 },
+    card: {
+      box: { width: 310, height: 406 },
+      art: { x: -4, y: -4, width: 318, height: 418 },
+      pack: { x: 25, y: 86, width: 260, height: 220 },
+      amount: { x: 9.76, y: 31, width: 290, height: 72, fontSize: 60 },
+      price: { x: 20.76, y: 313.5, width: 268, height: 67, fontSize: 56 }
+    },
+    scroll: { top: 485, bottomGap: 64 }
   },
   windows: {
     /** Figma `screen/confirm-exit`: window-local boxes (the `ui/window/base` box sits at 60, 675 of the frame). */

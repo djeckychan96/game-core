@@ -16,7 +16,7 @@ import { READY_UI_STYLE_2 } from './skins/style2';
 export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds';
 
 /** Non-modal Core views whose visuals may come from the same selected skin. */
-export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton';
+export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton' | 'shopScreen';
 
 /** The roles each covered window draws with, in the view's order. A covering style must give every one an asset. */
 export const READY_UI_SKIN_WINDOW_ROLES = {
@@ -43,6 +43,8 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * `requiredSkinRoles(skin, view)`. `iconShop` / `iconHome` are item icons a style may ship for a BottomNavView item
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
  * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons.
+ * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
+ * its layout has a background picture (`background.art`).
  */
 export const READY_UI_SKIN_VIEW_ROLES = {
   ...READY_UI_SKIN_WINDOW_ROLES,
@@ -51,7 +53,8 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
   levelMapScreen: ['playButton', 'iconShop', 'iconHome'],
   moves: ['movesPanel'],
-  settingsButton: ['settingsButtonBack', 'settingsButtonIcon']
+  settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
+  shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
 } as const satisfies Record<ReadyUiSkinView, readonly string[]>;
 
 export type ReadyUiSkinRole = (typeof READY_UI_SKIN_VIEW_ROLES)[ReadyUiSkinView][number];
@@ -67,7 +70,7 @@ export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typ
 export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel', 'shopTitle'];
 
 /** The roles of the OFFER panel (`windows.offer`) that Lives and Confirm draw under themselves; required only with that layout. */
 const OFFER_ROLES: readonly ReadyUiSkinRole[] = ['offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'buttonPrimary', 'priceIcon'];
@@ -423,6 +426,43 @@ export interface ReadyUiSkinMovesLayout {
 }
 
 /**
+ * ShopScreen (the SHOP tab of the main-screen navigation, not a modal): FRAME coordinates (x / y in the style's `frame`;
+ * the frame's top edge is the viewport's top edge, its centre the safe area's horizontal centre, contain-fit scale),
+ * card parts CARD-LOCAL (from the card box's top-left). The screen fill is `background.color` (the whole viewport) under
+ * the optional `shopBackground` picture (cover-fit); `shopAwning` is one tile of the awning, repeated across the viewport
+ * width from the frame centre at the top edge; the title tape (`shopTitle`, a horizontal 9-slice at `title.ribbon`) and
+ * the card grid scroll together between `scroll.top` and `scroll.bottomGap` units above the navigation panel.
+ */
+export interface ReadyUiSkinShopScreenLayout {
+  /** The screen fill under everything; `art` = the `shopBackground` picture cover-fits the viewport over it. */
+  readonly background: { readonly color: number; readonly art: boolean };
+  /** `shopAwning`: one tile's render box (its top on the viewport's top edge, tiles `width` apart, one centred on the frame). */
+  readonly awning: { readonly width: number; readonly height: number };
+  /**
+   * `shopClose` render box (shown only when the host gives `onClose`): `right` units from the safe area's right edge, its
+   * top `y` units under the viewport's top edge (never above the safe top); `minHitSize` = its tap square.
+   */
+  readonly close: { readonly y: number; readonly right: number; readonly width: number; readonly height: number; readonly minHitSize: number };
+  /** `shopTitle` (9-slice) at `ribbon` with the runtime title in `label` (its own fill / OUTSIDE stroke over the style's look). */
+  readonly title: { readonly ribbon: ReadyUiSkinBox; readonly label: ReadyUiSkinLivesTextBox };
+  /**
+   * The card grid: `columns` per row, the first row's card box top at `top`, card boxes `pitchX` / `pitchY` apart and
+   * the columns centred on the frame; a last row with fewer cards is centred too.
+   */
+  readonly grid: { readonly top: number; readonly columns: number; readonly pitchX: number; readonly pitchY: number };
+  /** One pack card: its logical box, the `shopCard` render box, the pack art box (`shopPack<n>` or the item's own), the amount and the price. */
+  readonly card: {
+    readonly box: { readonly width: number; readonly height: number };
+    readonly art: ReadyUiSkinBox;
+    readonly pack: ReadyUiSkinBox;
+    readonly amount: ReadyUiSkinLivesTextBox;
+    readonly price: ReadyUiSkinLivesTextBox;
+  };
+  /** The scrolled area: from frame y `top` down to `bottomGap` units above the navigation panel's top edge. */
+  readonly scroll: { readonly top: number; readonly bottomGap: number };
+}
+
+/**
  * No Ads. Boxes are WINDOW-LOCAL (x / y from the window box's top-left; the panel origin is the window centre); the
  * price row is button-local. `noAdsPanel` is the window shell, a 9-slice over the window box (its bleed in the caps' `pad`);
  * the art boxes are render boxes: `noAdsClose` (the ×),
@@ -546,6 +586,7 @@ export interface ReadyUiSkin {
   readonly levelMapScreen?: ReadyUiSkinLevelMapScreenLayout;
   readonly moves?: ReadyUiSkinMovesLayout;
   readonly settingsButton?: ReadyUiSkinSettingsButtonLayout;
+  readonly shopScreen?: ReadyUiSkinShopScreenLayout;
 }
 
 /** A skin's role textures, as `loadReadyUiAssets({ skin })` puts them under `textures.skins[skin.id]` (by asset key). */
@@ -557,7 +598,7 @@ export const READY_UI_SKINS = {
   [READY_UI_STYLE_2.id]: READY_UI_STYLE_2
 } as const satisfies Record<string, ReadyUiSkin>;
 
-const STANDALONE_VIEWS: readonly ReadyUiSkinView[] = ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton'];
+const STANDALONE_VIEWS: readonly ReadyUiSkinView[] = ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'shopScreen'];
 
 function viewLayout(skin: ReadyUiSkin, view: ReadyUiSkinView): unknown {
   return STANDALONE_VIEWS.includes(view) ? skin[view as ReadyUiSkinStandaloneView] : skin.windows[view as ReadyUiSkinWindow];
@@ -581,7 +622,8 @@ function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly 
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
  * art, `background` → the map background). BottomNav item icons are never required by the nav alone; LevelMapScreen
  * requires PLAY and the icons of its SHOP / HOME slots. Result needs every role but `buttonHighlight` when its WIN
- * secondary has no highlight layer and an outcome's glow when that outcome draws none.
+ * secondary has no highlight layer and an outcome's glow when that outcome draws none. ShopScreen needs every role but
+ * `shopBackground` when its layout has no background picture.
  */
 export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): readonly ReadyUiSkinRole[] {
   if (view === 'hud') {
@@ -603,6 +645,10 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
+  if (view === 'shopScreen') {
+    const roles = READY_UI_SKIN_VIEW_ROLES.shopScreen;
+    return skin.shopScreen?.background.art ? roles : roles.filter((role) => role !== 'shopBackground');
+  }
   if (view === 'lives' || view === 'confirm') {
     // the window's own roles, then the OFFER panel's when the style has one
     const own = windowOwnRoles(skin, view);
@@ -669,7 +715,7 @@ export function validateReadyUiSkin(skin: ReadyUiSkin): void {
   }
 }
 
-export type ReadyUiSkinStandaloneView = 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton';
+export type ReadyUiSkinStandaloneView = 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton' | 'shopScreen';
 
 export interface ReadyUiSkinViewLayouts {
   readonly hud: ReadyUiSkinHudLayout;
@@ -678,6 +724,7 @@ export interface ReadyUiSkinViewLayouts {
   readonly levelMapScreen: ReadyUiSkinLevelMapScreenLayout;
   readonly moves: ReadyUiSkinMovesLayout;
   readonly settingsButton: ReadyUiSkinSettingsButtonLayout;
+  readonly shopScreen: ReadyUiSkinShopScreenLayout;
 }
 
 /**

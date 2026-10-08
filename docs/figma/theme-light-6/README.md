@@ -107,7 +107,7 @@ light sparkles (`pic_spark_1`) are not drawn; Style 2's buy button uses window c
 (`'noAds:buttonPrimary'`, the same file) so the 200-high button keeps Figma's corners. Copy stays Core's catalog
 (EN NO / ADS, RU БЕЗ / РЕКЛАМЫ; Figma's ОТКЛЮЧЕНИЕ / РЕКЛАМЫ is host copy via `wordNo` / `wordAds` / `description`).
 
-## Shop — not synced (gap)
+## Shop — not synced in this pass (closed by docs/figma/theme-light-6-shop: the non-modal ShopScreen)
 
 theme_light_6's Shop: the phone screens 28:46095 / 28:46120 (light) and 28:46015 (dark) are the SHOP **tab** of the
 main-screen navigation — the nav visible and tappable with SHOP selected, an opaque background, no dim; the modal

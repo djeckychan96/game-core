@@ -32,6 +32,7 @@ export const READY_UI_EN = Object.freeze({
   'core.result.retry': 'RETRY',
   'core.result.exit': 'EXIT',
   'core.shop.special_offer': 'SPECIAL OFFER',
+  'core.shop.title': 'SHOP',
   'core.no_ads.word_no': 'NO',
   'core.no_ads.word_ads': 'ADS',
   'core.no_ads.description': 'Removes pop-up ads.\nRewarded ads still available',

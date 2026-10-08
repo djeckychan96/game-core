@@ -36,8 +36,8 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  * `confirm`, from the approved `попап рестарт` 8:22049 / `попап выйти` 8:22069 (docs/figma/style2-confirm); `lives`,
  * from the approved `screen_refill_hearts` 8:22838 (docs/figma/style2-refill-hearts); `result` (WIN 28:48352; FAIL
  * derived), `moves` (28:48175), `settingsButton` (28:48119) and `noAds` (28:48041) from theme_light_6 (section 28:45250,
- * the LIGHT row; docs/figma/theme-light-6). NOT COVERED — donor look: Shop (theme_light_6's is a nav tab, not the modal),
- * StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
+ * the LIGHT row; docs/figma/theme-light-6); `shopScreen` — the SHOP tab — from theme_light_6 `market_screen_light`
+ * 28:46095 (docs/figma/theme-light-6-shop). NOT COVERED — donor look: the modal ShopWindowView, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
  * not a source for this package; every covered screen is a provisional approved snapshot (the artist may still
  * change Style 2 — see each docs/figma folder).
  *
@@ -51,7 +51,7 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds'],
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds', 'shopScreen'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
@@ -173,7 +173,23 @@ export const READY_UI_STYLE_2 = {
     noAdsClose: CLOSE,
     noAdsArt: { file: 'style2/noads_hero.webp' },
     'noAds:buttonPrimary': { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 96, right: 48, bottom: 96 } },
-    'noAds:priceIcon': { file: 'style2/icon_coin.webp' }
+    'noAds:priceIcon': { file: 'style2/icon_coin.webp' },
+    /**
+     * theme_light_6 Shop tab `market_screen_light` 28:46095 (docs/figma/theme-light-6-shop): the awning tile (shadow_up +
+     * the #0a2259 fade + `pattern_markiza_smooth` × 2), the `title_tape_blue` tape without its text (a horizontal 9-slice:
+     * shaped ends, no uniform row), `market_card_blue_1` without texts / coin, the six `icon_coin_2..7` pack renders; the ×
+     * `icon_close` 28:45327 is the popups' red × (the same art: `style2/settings_close.webp`).
+     */
+    shopAwning: { file: 'style2/shop_awning.webp' },
+    shopTitle: { file: 'style2/shop_title.webp', nineSlice: { left: 27, top: 59, right: 27, bottom: 59 } },
+    shopCard: { file: 'style2/shop_card.webp' },
+    shopPack1: { file: 'style2/shop_pack_1.webp' },
+    shopPack2: { file: 'style2/shop_pack_2.webp' },
+    shopPack3: { file: 'style2/shop_pack_3.webp' },
+    shopPack4: { file: 'style2/shop_pack_4.webp' },
+    shopPack5: { file: 'style2/shop_pack_5.webp' },
+    shopPack6: { file: 'style2/shop_pack_6.webp' },
+    shopClose: CLOSE
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
@@ -547,5 +563,31 @@ export const READY_UI_STYLE_2 = {
     icon: { x: 28, y: 28, width: 158, height: 158 },
     margins: { top: 90, right: 90 },
     minHitSize: 214
+  },
+  /**
+   * theme_light_6 `market_screen_light` 28:46095: the SHOP tab of the main-screen navigation (frame units from its top).
+   * #0f172c fill, no picture; the × `icon_close` at 890, 222 (the popups' 153 × 158 render: 37 from the right edge); the
+   * tape at 40, 493 (render −4, −1: 36, 492, 1008 × 118) with "SHOP" Calibri Bold 80 white at 65, 512, 950 × 78; the cards
+   * 310 × 406 at 51 / 385 / 719 × 629 / 1061 (render −6, −6, 322 × 418); the amount #3f598c 60 at 9.76, 31, 290 × 73, the
+   * pack box 25, 86, 260 × 220, the price white 60 centred on the card's white face (Figma's soft 30 % shadow is not
+   * drawn); the scroll frame `Frame 615` ends 64 above the navigation panel.
+   */
+  shopScreen: {
+    background: { color: 0x0f172c, art: false },
+    awning: { width: 1080, height: 539 },
+    close: { y: 222, right: 37, width: 153, height: 158, minHitSize: 160 },
+    title: {
+      ribbon: { x: 36, y: 492, width: 1008, height: 118 },
+      label: { x: 65, y: 512, width: 950, height: 78, fontSize: 80 }
+    },
+    grid: { top: 629, columns: 3, pitchX: 334, pitchY: 432 },
+    card: {
+      box: { width: 310, height: 406 },
+      art: { x: -6, y: -6, width: 322, height: 418 },
+      pack: { x: 25, y: 86, width: 260, height: 220 },
+      amount: { x: 9.76, y: 31, width: 290, height: 73, fontSize: 60, fill: 0x3f598c },
+      price: { x: 20.76, y: 310.5, width: 268, height: 73, fontSize: 60 }
+    },
+    scroll: { top: 486, bottomGap: 64 }
   }
 } as const satisfies ReadyUiSkin;

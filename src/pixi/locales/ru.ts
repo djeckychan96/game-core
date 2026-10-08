@@ -32,6 +32,7 @@ export const READY_UI_RU = Object.freeze({
   'core.result.retry': 'ЗАНОВО',
   'core.result.exit': 'К УРОВНЯМ',
   'core.shop.special_offer': 'ЗОЛОТО',
+  'core.shop.title': 'МАГАЗИН',
   'core.no_ads.word_no': 'БЕЗ',
   'core.no_ads.word_ads': 'РЕКЛАМЫ',
   'core.no_ads.description': 'Убирает всплывающую рекламу.\nРеклама за награду остается',

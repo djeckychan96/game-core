@@ -1,0 +1,865 @@
+{
+ "about": "theme_light_6 (section 28:45250) Shop: the SHOP tab of the main-screen navigation, market_screen_light 28:46095 (Style 2) and market_screen_dark 28:46015 (Style 1). Figma own transparent renders (get_screenshot contentsOnly; no text inside) composed at their Figma offsets; the Style 1 background gradient is an SVG written from the frame fill. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "28:45250",
+  "style2": "28:46095",
+  "style1": "28:46015"
+ },
+ "assets": [
+  {
+   "key": "style2-awning",
+   "file": "style2/shop_awning.webp",
+   "scale": 1,
+   "size": [
+    1080,
+    539
+   ],
+   "note": "Group 1237 under its shadow: shadow_up 28:46110 (image tile 1080 x 506, the same image in both rows), Rectangle 65656 28:46112 / 28:46063 (#0a2259 0 -> 100 % from 539 up to 335), Group 886 28:46113 (pattern_markiza_smooth 28:45357) (two pattern_markiza tiles of 540: red / white stripes 270 x 450 with rounded bottoms 130, effects). One tile = the 1080-unit period of the screen awning",
+   "layers": [
+    {
+     "image": "png/awning-shadow-up-28-46110.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1080,
+      506
+     ]
+    },
+    {
+     "image": "png/awning-fade-28-46112.png",
+     "at": [
+      0,
+      335
+     ],
+     "size": [
+      1080,
+      204
+     ]
+    },
+    {
+     "image": "png/style2-awning-stripes-28-46113.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1080,
+      500
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-awning",
+   "file": "shop/style1_awning.webp",
+   "scale": 1,
+   "size": [
+    1080,
+    539
+   ],
+   "note": "Group 1237 under its shadow: shadow_up 28:46110 (image tile 1080 x 506, the same image in both rows), Rectangle 65656 28:46112 / 28:46063 (#0a2259 0 -> 100 % from 539 up to 335), top_roof 28:46064 (pattern_markiza_dark 28:49166) (two pattern_markiza tiles of 540: red / white stripes 270 x 450 with rounded bottoms 130, effects). One tile = the 1080-unit period of the screen awning",
+   "layers": [
+    {
+     "image": "png/awning-shadow-up-28-46110.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1080,
+      506
+     ]
+    },
+    {
+     "image": "png/awning-fade-28-46112.png",
+     "at": [
+      0,
+      335
+     ],
+     "size": [
+      1080,
+      204
+     ]
+    },
+    {
+     "image": "png/style1-awning-stripes-28-46064.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1080,
+      500
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-title",
+   "file": "style2/shop_title.webp",
+   "scale": 1,
+   "size": [
+    1008,
+    118
+   ],
+   "note": "title_tape_blue 28:45523: Rectangle 65966 28:45524 (#0099eb, radius 20, inner shadows, a 6-unit 20 % ring) without the SHOP text; render 1008 x 118 = its 996 x 106 box + 6 on every side, at -4, -1 of the 1000 x 116 tape",
+   "nineSlice": {
+    "figma": {
+     "left": 20,
+     "top": 0,
+     "right": 20,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 3,
+    "axis": "x"
+   },
+   "pad": {
+    "left": 6,
+    "top": 6,
+    "right": 6,
+    "bottom": 6
+   },
+   "layers": [
+    {
+     "image": "png/style2-title-ribbon-28-45524.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1008,
+      118
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-title",
+   "file": "shop/style1_title.webp",
+   "scale": 1,
+   "size": [
+    1000,
+    116
+   ],
+   "note": "title_tape_blue_dark 28:48586 without the SPECIAL OFFER text: Rectangle 65966 28:48587 (#24a5fd, radius 12, 4-unit OUTSIDE #261a30 stroke; render 0.7, 1, 998.9 x 114) under Subtract 28:48588 (#0174f1 lower band; render 4.75, 5.15), on the 1000 x 116 component box. The screen instance is the same tape stretched to 978: a horizontal 9-slice",
+   "nineSlice": {
+    "figma": {
+     "left": 16,
+     "top": 0,
+     "right": 16,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 3,
+    "axis": "x"
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "image": "png/style1-title-ribbon-back-28-48587.png",
+     "at": [
+      1,
+      1
+     ],
+     "size": [
+      999,
+      114
+     ]
+    },
+    {
+     "image": "png/style1-title-ribbon-band-28-48588.png",
+     "at": [
+      5,
+      5
+     ],
+     "size": [
+      991,
+      106
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-card",
+   "file": "style2/shop_card.webp",
+   "scale": 1,
+   "size": [
+    322,
+    418
+   ],
+   "note": "market_card_blue_1 28:45349 without texts / coin: base_blue 28:45350 (#0099eb, radius 70, inner shadows, 6-unit 20 % ring; render -6, -6, 322 x 418) + base_white 28:45351 (#ffffff, radius 50, soft shadow; render 4.76, 4, 300 x 318)",
+   "layers": [
+    {
+     "image": "png/style2-card-base-28-45350.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      322,
+      418
+     ]
+    },
+    {
+     "image": "png/style2-card-white-28-45351.png",
+     "at": [
+      11,
+      10
+     ],
+     "size": [
+      300,
+      318
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-card",
+   "file": "shop/style1_card.webp",
+   "scale": 1,
+   "size": [
+    318,
+    418
+   ],
+   "note": "market_card_blue_1_dark 28:49389 without texts / coin: base 28:49390 (out #24a5fd radius 60 + 4-unit OUTSIDE #261a30 stroke + hard shadow 4, inner #0071cd radius 52); render -4, -4, 318 x 418",
+   "layers": [
+    {
+     "image": "png/style1-card-28-49390.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      318,
+      418
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-1",
+   "file": "style2/shop_pack_1.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_2 28:45464: the card slot 1 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack1-28-45464.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-2",
+   "file": "style2/shop_pack_2.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_3 28:45462: the card slot 2 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack2-28-45462.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-3",
+   "file": "style2/shop_pack_3.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_4 28:45460: the card slot 3 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack3-28-45460.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-4",
+   "file": "style2/shop_pack_4.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_5 28:45458: the card slot 4 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack4-28-45458.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-5",
+   "file": "style2/shop_pack_5.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_6 28:45456: the card slot 5 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack5-28-45456.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-pack-6",
+   "file": "style2/shop_pack_6.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_7 28:45466: the card slot 6 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style2-pack6-28-45466.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-1",
+   "file": "shop/style1_pack_1.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_2 28:49156: the card slot 1 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack1-28-49156.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-2",
+   "file": "shop/style1_pack_2.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_3 28:49146: the card slot 2 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack2-28-49146.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-3",
+   "file": "shop/style1_pack_3.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_4 28:49148: the card slot 3 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack3-28-49148.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-4",
+   "file": "shop/style1_pack_4.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_5 28:49150: the card slot 4 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack4-28-49150.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-5",
+   "file": "shop/style1_pack_5.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_6 28:49152: the card slot 5 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack5-28-49152.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-pack-6",
+   "file": "shop/style1_pack_6.webp",
+   "scale": 1,
+   "size": [
+    260,
+    220
+   ],
+   "note": "icon_coin_dark_7 28:49154: the card slot 6 coin pack art (Figma render = its 260 x 220 box)",
+   "layers": [
+    {
+     "image": "png/style1-pack6-28-49154.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      260,
+      220
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-background",
+   "file": "shop/style1_background@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1080,
+    2344
+   ],
+   "note": "market_screen_dark 28:46015 background: the frame fill (GRADIENT_LINEAR top -> bottom #5e2bd4 -> #451262, svg/style1-background-gradient.svg) under bg_pattern_bears 28:46016 (28 x Untitled-1, the bear 28:46018 129 x 128, in four 543-unit rows) and the extra bear Untitled-1 1 28:46068 at 14, 387",
+   "layers": [
+    {
+     "svg": "svg/style1-background-gradient.svg",
+     "at": [
+      0,
+      0
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      94,
+      99
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      503,
+      99
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      912,
+      99
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      276,
+      365
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      -143,
+      365
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      685,
+      365
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      1094,
+      365
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      94,
+      642
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      503,
+      642
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      912,
+      642
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      276,
+      908
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      -143,
+      908
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      685,
+      908
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      1094,
+      908
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      94,
+      1185
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      503,
+      1185
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      912,
+      1185
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      276,
+      1451
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      -143,
+      1451
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      685,
+      1451
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      1094,
+      1451
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      94,
+      1728
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      503,
+      1728
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      912,
+      1728
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      276,
+      1994
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      -143,
+      1994
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      685,
+      1994
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      1094,
+      1994
+     ],
+     "size": [
+      129,
+      128
+     ]
+    },
+    {
+     "image": "png/style1-bear-28-46018.png",
+     "at": [
+      14,
+      387
+     ],
+     "size": [
+      129,
+      128
+     ]
+    }
+   ]
+  }
+ ]
+}

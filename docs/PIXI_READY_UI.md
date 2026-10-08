@@ -10,7 +10,7 @@ geometry come from Trail Arrow 1:1 and now live physically inside this package
 ```
 game-core
 ├── "game-core"        renderer-agnostic: CoreRuntime, FxRuntime, MotionRuntime, UiRuntime
-└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, BottomNavView, LevelMapScreen, MovesView, SettingsButtonView, UiButton, ModalWindow,
+└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, BottomNavView, LevelMapScreen, ShopScreen, MovesView, SettingsButtonView, UiButton, ModalWindow,
                        ResultWindowView, LivesWindowView, ShopWindowView, SettingsWindowView,
                        NoAdsWindowView, StarterPackWindowView, assets loader, theme;
                        Pixi FX (src/pixi/fx): ClickRippleEffect
@@ -241,6 +241,47 @@ The style decides only the look (files, boxes, caption look, whether PLAY has a 
 slot exists. A host that launches straight from a node uses `LevelMapView` alone: its node tap still calls
 `onSelectLevel` and nothing else.
 
+### ShopScreen
+
+The shop **tab** of the main-screen navigation (theme_light_6 `market_screen_light` 28:46095 / `market_screen_dark`
+28:46015, docs/figma/theme-light-6-shop): a full-screen, opaque, **non-modal** screen — the style's background, the
+awning across the top, the title tape, a grid of pack cards (three per row, scrolling when they do not fit) and the same
+SHOP | HOME | LOCK navigation as LevelMapScreen with SHOP selected. Needs a style that covers `shopScreen` (Style 1,
+Style 2). It is not a window: no dim, no WindowController, `ui.isBlocking()` stays false, and it is never drawn over the
+map — the host shows it **instead of** the map screen. Both screens stay alive, so the map, its scroll, its selection and
+the progress are never rebuilt by a tab switch.
+
+```ts
+const shop = new ShopScreen({
+  ...readyUi, id: 'shop-tab', hidden: true,
+  items: catalog.map((p) => ({ id: p.id, amount: p.coins, price: p.priceText })),   // the host's products, never Core's
+  onBuy: (item) => { shop.setBuyEnabled(false); purchases.purchase(item.id, 'shop').finally(() => shop.setBuyEnabled(true)); }, // PurchaseRuntime
+  onClose: () => showTab('home'),                                                     // the × (drawn only with it)
+  nav: { home: { onTap: () => showTab('home') }, lock: {} }
+});
+const mapScreen = new LevelMapScreen({ ...readyUi, /* … */ nav: { shop: { onTap: () => showTab('shop') }, home: { onTap: … }, lock: {} },
+  hud: { /* … */ onCoinsTap: () => showTab('shop') } });
+function showTab(tab: 'shop' | 'home') {                                              // routing stays the host's
+  mapScreen.visible = tab === 'home';
+  if (tab === 'shop') shop.show(); else shop.hide();
+}
+```
+
+| Option / member | Meaning |
+| --- | --- |
+| `items: ShopScreenItem[]`, `setItems(items)`, `items` | the host's packs in card order: `ShopItem` (`id`, `amount`, already-localized `price`) + `icon?` (a host texture, or a style role `shopPack1`…`shopPack6`; default the style's art for the slot, the sixth for later slots) + `available?` (`false` = dimmed, inert). Ids unique; a bad entry throws |
+| `onBuy(item)` | settled tap on an available card while buying is enabled; the screen stays open — the purchase (PurchaseRuntime / the platform) is the host's |
+| `setBuyEnabled(enabled)`, `buyEnabled` | holds every card (inert, 85 %) while the host's purchase is in flight |
+| `onClose` | the style's ×, drawn only with it (e.g. back to the map) |
+| `nav` | the LevelMapScreen slots `{ shop, home, lock }` (SHOP drawn selected; a SHOP / HOME slot without `onTap` is inert, LOCK shakes) or a generic item list; `screen.nav` is the BottomNavView |
+| `title`, `setTitle(text)` | the tape's title; default `core.shop.title` (SHOP / МАГАЗИН) |
+| `show()`, `hide()`, `shown`, `hidden` (option) | visibility only; `hide()` cancels a press, a drag or a fling in progress (never a purchase, never a late scroll) |
+| `scrollY`, `scrollable`, `scrollToTop()` | the column scrolls (drag, fling through MotionRuntime scope `<id>:scroll`, wheel) only when the cards do not fit; a drag is never a purchase |
+| `resize(w, h, { insets, pixelRatio })` | the style's frame at the contain-fit scale, its top on the viewport's top (the awning under the status bar), centred on the safe area; the background and the awning tiles span the viewport, the × keeps its distance from the safe right edge (never above the safe top), the navigation at the bottom above the bottom inset |
+| `getCardContainer(itemId)`, `destroy()` | a card for host FX / checks; destroy disposes every ButtonController, cancels the scroll, removes listeners (repeat-safe) |
+
+The modal `ShopWindowView` below is a separate, unchanged view (donor look under every style).
+
 ### MovesView
 
 The moves counter of a gameplay screen (no donor art: it needs a style that covers `moves` — Style 1 and Style 2, the
@@ -459,7 +500,8 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | MovesView | covered — theme_light_6 28:48247: the white box, "MOVES" + the #ffc300 count with the kit outline | covered — theme_light_6 28:48175: the blue box, white Carlito "MOVES" + count |
 | SettingsButtonView | covered — theme_light_6 28:48211: blue `btn` 214 + the outlined gear 10 above the centre, 90 / 90 | covered — theme_light_6 28:48119: `btn_blue` 214 + `icon_settings`, 90 / 90 |
 | NoAdsWindowView | covered — theme_light_6 28:48065: purple promo window, round red ×, rays, dark hero, Fira titles (line 1 pink) | covered — theme_light_6 28:48041: the same window and rays, the red ×, the light hero, Carlito titles with the red outline |
-| Shop, StarterPack | not covered — donor look (theme_light_6's Shop is a nav tab, not this modal: docs/figma/theme-light-6) | not covered — donor look |
+| ShopScreen (the SHOP tab) | covered — theme_light_6 `market_screen_dark` 28:46015: the purple gradient + bears, the dark awning, the stretched dark tape, the dark cards and pack art, the round × (docs/figma/theme-light-6-shop) | covered — theme_light_6 `market_screen_light` 28:46095: #0f172c, the light awning, the blue tape, the blue / white cards and pack art, the popups' red × (docs/figma/theme-light-6-shop) |
+| Shop (modal ShopWindowView), StarterPack | not covered — donor look (the styled shop is the ShopScreen tab) | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
@@ -627,8 +669,10 @@ the same `LevelMapScreen` for both styles (PLAY + SHOP | HOME | LOCK; every call
 `last: play:12`, `nav:shop`, `selected:9`…): STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching
 reloads the page), a screen picker (LevelMap with every slot active, LevelMap with SHOP / LOCK disabled, Settings compact / with language / in level with and without language, Confirm Restart / Restart + OFFER /
 Exit, Lives minimal / REFILL + GET / full with the OFFER, Result WIN 3★ / 2★ / 1★ / 0★ / FAIL, Gameplay — Moves + the
-settings button, No Ads, the coin Shop), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
-donor look (the Shop). Query: `?style=1|2&screen=<id>&locale=ru&moves=<n>&ui=0` (`ui=0` hides the controls; `moves` = the
+settings button, No Ads, the SHOP tab, the legacy modal Shop), EN / RU and Reopen. The status line says whether the style draws the
+screen or it is the donor look (the modal Shop). On the map screens SHOP in the navigation (and the HUD coin "+") switches
+to the ShopScreen tab and its HOME / × back to the same map (`screen=shop-screen` opens the page on the tab); every
+switch lands in the status line (`nav:shop → tab:shop`, `buy:coins_2`, `nav:home → tab:home`). Query: `?style=1|2&screen=<id>&locale=ru&moves=<n>&ui=0` (`ui=0` hides the controls; `moves` = the
 gameplay screen's count, default 38). The OFFER's
 booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
 `SCREENS`, `VIEWPORTS`, `LOCALE`, `MOVES` — default 38,10,1,0) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png`
@@ -643,6 +687,11 @@ them. `SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:motion` (`scripts/ui
 idle × breath), rapid taps, a coins gain (≤ 12 redraws, pop) and spend (dip), a life spend (heart shake back to rest),
 a real LOCK tap (shake ±16, `nav:lock`), repeated hide / show, a `core.cancelAll()` and destroy (nothing left running);
 shots in `showcase-shots/ui-motion/`.
+
+ShopScreen proof: `SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:shop` (`scripts/shop-screen-check.mjs`, env
+`STYLES`, `VIEWPORTS` — default 390x844) drives real clicks on the gallery per style: map → SHOP → a pack (onBuy, the cards
+held for the demo payment) → HOME → the same map (focus / selected level unchanged, nothing blocking), map → coin "+" →
+× → the same map; shots in `showcase-shots/shop-screen/`.
 
 ## Tests
 

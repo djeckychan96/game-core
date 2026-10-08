@@ -18,6 +18,8 @@
 // rebuilding the full size from it and diffing against the full raster. `nineSlice.tolerance` (default 0) is the
 // per-channel noise allowed in "identical" rows / columns and in that rebuild: Figma's PNG renders dither gradients
 // and shadows by ±1..3, so a raster from Figma (not from an SVG) is measured with that tolerance.
+// `nineSlice.axis: 'x'` (or 'y') stretches along that axis only (a tape with shaped ends has no uniform row): the other
+// axis keeps every texel, split into two caps that meet in the middle (no centre strip on it).
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -101,16 +103,27 @@ async function renderAsset({ asset, layers, tolerance, committed }) {
     const gutter = asset.nineSlice.gutter ?? 0;
     const caps = {};
     for (const side of ['left', 'top', 'right', 'bottom']) caps[side] = Math.max(fromFigma[side], measured[side] + gutter);
+    const axis = asset.nineSlice.axis ?? 'xy';
+    if (axis === 'x') {
+      caps.top = Math.floor(H / 2);
+      caps.bottom = H - caps.top;
+    }
+    if (axis === 'y') {
+      caps.left = Math.floor(W / 2);
+      caps.right = W - caps.left;
+    }
     const strip = asset.nineSlice.strip;
-    const L = caps.left * S, T = caps.top * S, R = caps.right * S, B = caps.bottom * S, C = strip * S;
+    const L = caps.left * S, T = caps.top * S, R = caps.right * S, B = caps.bottom * S;
+    const CX = axis === 'y' ? 0 : strip * S;
+    const CY = axis === 'x' ? 0 : strip * S;
     out = document.createElement('canvas');
-    out.width = L + C + R;
-    out.height = T + C + B;
+    out.width = L + CX + R;
+    out.height = T + CY + B;
     const octx = out.getContext('2d', { willReadFrequently: true });
     octx.imageSmoothingEnabled = false;
-    const cols = [[0, 0, L], [L, L, C], [pw - R, L + C, R]];
-    const rows = [[0, 0, T], [T, T, C], [ph - B, T + C, B]];
-    for (const [sy, dy, h] of rows) for (const [sx, dx, w] of cols) octx.drawImage(full, sx, sy, w, h, dx, dy, w, h);
+    const cols = [[0, 0, L], [L, L, CX], [pw - R, L + CX, R]];
+    const rows = [[0, 0, T], [T, T, CY], [ph - B, T + CY, B]];
+    for (const [sy, dy, h] of rows) for (const [sx, dx, w] of cols) if (w > 0 && h > 0) octx.drawImage(full, sx, sy, w, h, dx, dy, w, h);
 
     // lossless proof: rebuild the full size from the cropped texture (centre strip stretched) and diff
     const rebuilt = document.createElement('canvas');
@@ -118,13 +131,13 @@ async function renderAsset({ asset, layers, tolerance, committed }) {
     rebuilt.height = ph;
     const rctx = rebuilt.getContext('2d', { willReadFrequently: true });
     rctx.imageSmoothingEnabled = false;
-    const dcols = [[0, 0, L, L], [L, L, C, pw - L - R], [L + C, pw - R, R, R]];
-    const drows = [[0, 0, T, T], [T, T, C, ph - T - B], [T + C, ph - B, B, B]];
-    for (const [sy, dy, sh, dh] of drows) for (const [sx, dx, sw, dw] of dcols) rctx.drawImage(out, sx, sy, sw, sh, dx, dy, dw, dh);
+    const dcols = [[0, 0, L, L], [L, L, CX, pw - L - R], [L + CX, pw - R, R, R]];
+    const drows = [[0, 0, T, T], [T, T, CY, ph - T - B], [T + CY, ph - B, B, B]];
+    for (const [sy, dy, sh, dh] of drows) for (const [sx, dx, sw, dw] of dcols) if (sw > 0 && sh > 0 && dw > 0 && dh > 0) rctx.drawImage(out, sx, sy, sw, sh, dx, dy, dw, dh);
     const back = rctx.getImageData(0, 0, pw, ph).data;
     let maxDelta = 0;
     for (let i = 0; i < back.length; i++) maxDelta = Math.max(maxDelta, Math.abs(back[i] - data[i]));
-    Object.assign(result, { figmaCaps: fromFigma, measuredCaps: measured, gutter, caps, grown: Object.keys(caps).filter((s) => caps[s] > fromFigma[s]), strip, rebuildMaxDelta: maxDelta });
+    Object.assign(result, { figmaCaps: fromFigma, measuredCaps: measured, gutter, axis, caps, grown: Object.keys(caps).filter((s) => caps[s] > fromFigma[s]), strip, rebuildMaxDelta: maxDelta });
   }
 
   result.texturePx = [out.width, out.height];

@@ -14,7 +14,7 @@ import { chromium } from 'playwright';
 
 const BASE = process.env.SHOWCASE_URL ?? 'http://127.0.0.1:5180/';
 const STYLES = (process.env.STYLES ?? '1,2').split(',');
-const SCREENS = (process.env.SCREENS ?? 'map,map-disabled,settings-map,settings-map-lang,settings-level,settings-level-lang,restart,restart-offer,exit,lives-minimal,lives,lives-full,win,win-2,win-1,win-0,fail,gameplay,noads,shop').split(',');
+const SCREENS = (process.env.SCREENS ?? 'map,map-disabled,settings-map,settings-map-lang,settings-level,settings-level-lang,restart,restart-offer,exit,lives-minimal,lives,lives-full,win,win-2,win-1,win-0,fail,gameplay,noads,shop-screen,shop').split(',');
 const MOVES = (process.env.MOVES ?? '38,10,1,0').split(',');
 const VIEWPORTS = (process.env.VIEWPORTS ?? '390x844,320x568,1280x800').split(',').map((v) => v.split('x').map(Number));
 const LOCALE = process.env.LOCALE ?? '';
