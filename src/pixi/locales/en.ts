@@ -23,6 +23,7 @@ export const READY_UI_EN = Object.freeze({
   'core.nav.shop': 'SHOP',
   'core.nav.home': 'HOME',
   'core.nav.lock': 'LOCK',
+  'core.moves.label': 'MOVES',
   'core.result.level': 'LEVEL {level}',
   'core.result.completed': 'COMPLETED!',
   'core.result.failed': 'FAILED',

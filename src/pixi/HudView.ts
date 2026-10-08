@@ -78,7 +78,8 @@ const ROW_GAP = 40;
 const PORTRAIT_AREA_RATIO = 20;
 const LANDSCAPE_AREA_RATIO = 50;
 
-const DONOR_HUD_LAYOUT: ReadyUiSkinHudLayout = {
+/** The donor HUD geometry (also the standalone SettingsButtonView's, without a style). Internal to the kit. */
+export const DONOR_HUD_LAYOUT: ReadyUiSkinHudLayout = {
   capsule: { x: CAPSULE_X, y: 0, width: CAPSULE_W, height: CAPSULE_H },
   iconSize: ICON_BOX,
   starIconSize: STAR_ICON,

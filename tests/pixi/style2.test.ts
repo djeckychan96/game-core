@@ -116,7 +116,7 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(pixiEntry.READY_UI_STYLE_2).toBe(READY_UI_STYLE_2);
     expect(READY_UI_SKINS).toEqual({ 'style-1': READY_UI_STYLE_1, 'style-2': READY_UI_STYLE_2 });
     expect(READY_UI_STYLE_2.id).toBe('style-2');
-    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives']);
+    expect(READY_UI_STYLE_2.covers).toEqual(['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds']);
     expect(() => validateReadyUiSkin(READY_UI_STYLE_2)).not.toThrow();
     const assetsDir = resolve(rootDir, 'assets/pixi-ui');
     for (const [role, asset] of Object.entries(READY_UI_STYLE_2.assets)) expect(existsSync(resolve(assetsDir, asset.file)), `${role} -> ${asset.file}`).toBe(true);
@@ -140,7 +140,7 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
     expect(() => validateReadyUiSkin(broken)).toThrow("ReadyUiSkin 'style-2' covers 'levelMap' but has no asset for role 'levelNodeLocked'");
     const noCaps = { ...READY_UI_STYLE_2, assets: { ...READY_UI_STYLE_2.assets, navSelected: { file: 'style2/nav_selected.webp' } } } as unknown as ReadyUiSkin;
     expect(() => validateReadyUiSkin(noCaps)).toThrow("ReadyUiSkin 'style-2': role 'navSelected' is drawn as a 9-slice but has no nineSlice caps");
-    expect(Object.keys(READY_UI_SKIN_VIEW_ROLES)).toEqual(['confirm', 'lives', 'settings', 'result', 'hud', 'levelMap', 'bottomNav', 'levelMapScreen']);
+    expect(Object.keys(READY_UI_SKIN_VIEW_ROLES)).toEqual(['confirm', 'lives', 'settings', 'result', 'noAds', 'hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton']);
   });
 
   it('loads only when chosen, strictly, with its font; the donor path requests no Style 2 file', async () => {
@@ -695,9 +695,10 @@ describe('Style 2 — Confirm (theme_light_4 Restart 22:28984 / Exit 22:29021) t
   it('is part of the Style 2 package: covered, theme_light_4 draws its own popup (the Lives / Settings files), Style 1 unchanged', () => {
     expect(READY_UI_STYLE_2.covers).toContain('confirm');
     expect(requiredSkinRoles(READY_UI_STYLE_2, 'confirm')).toEqual(['windowSurface', 'windowClose', 'heroGlow', 'lifeLostArt', 'buttonPrimary', 'offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'priceIcon']);
-    // theme_light_4 22:28984 / 22:29021: the Style 2 popup, close and green button (no window-scoped Style 1 files any more)
+    // theme_light_4 22:28984 / 22:29021: the Style 2 popup, close and green button (no window-scoped Style 1 files any more);
+    // the only window keys are No Ads' own (theme_light_6: its 200-high button caps, its 84 HUD-coin price)
     const A = READY_UI_STYLE_2.assets as ReadyUiSkin['assets'];
-    expect(Object.keys(A).some((key) => key.includes(':'))).toBe(false);
+    expect(Object.keys(A).filter((key) => key.includes(':'))).toEqual(['noAds:buttonPrimary', 'noAds:priceIcon']);
     for (const role of ['windowSurface', 'windowClose', 'buttonPrimary', 'heroGlow', 'lifeLostArt'] as const) expect(skinAssetKey(READY_UI_STYLE_2, 'confirm', role)).toBe(role);
     expect(A.windowSurface).toBe(A.settingsPanel);
     expect(A.heroGlow?.file).toBe(A.panelInset?.file);

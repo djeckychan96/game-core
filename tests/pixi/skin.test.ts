@@ -125,8 +125,8 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect(pixiEntry.READY_UI_SKIN_WINDOW_ROLES).toBe(READY_UI_SKIN_WINDOW_ROLES);
     expect(pixiEntry.READY_UI_SKIN_VIEW_ROLES).toBe(READY_UI_SKIN_VIEW_ROLES);
     expect(READY_UI_STYLE_1.id).toBe('style-1');
-    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen']);
-    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'offer', 'result', 'settings']);
+    expect(READY_UI_STYLE_1.covers).toEqual(['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds']);
+    expect(Object.keys(READY_UI_STYLE_1.windows).sort()).toEqual(['confirm', 'lives', 'noAds', 'offer', 'result', 'settings']);
     expect('hud' in READY_UI_STYLE_1).toBe(true);
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
     expect('bottomNav' in READY_UI_STYLE_1).toBe(true);
@@ -384,7 +384,8 @@ describe('UI Skin V1 — choosing a style once in the game config', () => {
         confirm: { ...READY_UI_STYLE_1.windows.confirm, button: { ...READY_UI_STYLE_1.windows.confirm.button, y: 725 + 40 } },
         lives: { ...READY_UI_STYLE_1.windows.lives, refill: { ...READY_UI_STYLE_1.windows.lives.refill, x: 90 + 30 } },
         settings: READY_UI_STYLE_1.windows.settings,
-        result: READY_UI_STYLE_1.windows.result
+        result: READY_UI_STYLE_1.windows.result,
+        noAds: READY_UI_STYLE_1.windows.noAds
       };
       s.assets = {
         ...s.assets,

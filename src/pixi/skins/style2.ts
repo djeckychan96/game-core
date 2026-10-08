@@ -1,4 +1,5 @@
 import type { ReadyUiSkin } from '../skin';
+import { READY_UI_STYLE_1 } from './style1';
 
 /** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
 const POPUP = {
@@ -8,6 +9,12 @@ const POPUP = {
 
 /** The blur of `frame_blur_bg` (800 × 520, blur 200): its render box drawn whole (caps 0: it never stretches). */
 const BLUE_GLOW = { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, top: 0, right: 0, bottom: 0 } } as const;
+
+/** theme_light_6 `pic_tape_red` 28:45448: the WIN ribbon (one image fill, no text), its 1020 × 226 render. */
+const RESULT_RIBBON = { file: 'style2/result_ribbon.webp' } as const;
+
+/** The red × of the Style 2 popups (`btn_close`: btn_red + icon_close), its 153 × 158 render box. */
+const CLOSE = { file: 'style2/settings_close.webp' } as const;
 
 /**
  * Style 2 — the artist's light-blue style (file 5FWFwdO4QGeDfeQtloLNOS): LevelMap screen V1, Settings, Confirm,
@@ -27,8 +34,10 @@ const BLUE_GLOW = { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, t
  * COVERS: `hud`, `levelMap`, `bottomNav` and `levelMapScreen`, from the approved `screen_gameplay_pc` 8:23174
  * (docs/figma/style2-level-map-screen); `settings`, from the approved `настройки` 8:17493 (docs/figma/style2-settings);
  * `confirm`, from the approved `попап рестарт` 8:22049 / `попап выйти` 8:22069 (docs/figma/style2-confirm); `lives`,
- * from the approved `screen_refill_hearts` 8:22838 (docs/figma/style2-refill-hearts). NOT COVERED — donor look:
- * Result, Shop, NoAds, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
+ * from the approved `screen_refill_hearts` 8:22838 (docs/figma/style2-refill-hearts); `result` (WIN 28:48352; FAIL
+ * derived), `moves` (28:48175), `settingsButton` (28:48119) and `noAds` (28:48041) from theme_light_6 (section 28:45250,
+ * the LIGHT row; docs/figma/theme-light-6). NOT COVERED — donor look: Shop (theme_light_6's is a nav tab, not the modal),
+ * StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
  * not a source for this package; every covered screen is a provisional approved snapshot (the artist may still
  * change Style 2 — see each docs/figma folder).
  *
@@ -42,7 +51,7 @@ const BLUE_GLOW = { file: 'style2/lives_glow@0.5x.webp', nineSlice: { left: 0, t
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives'],
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
@@ -134,7 +143,37 @@ export const READY_UI_STYLE_2 = {
     /** `icon_heart_1` at 320 with the ∞ vector "8" over it. */
     offerLivesArt: { file: 'style2/offer_lives.webp' },
     /** `icon_coin_1`: the HUD coin's 288 export (the same image fill), the hero and the price coin of the OFFER. */
-    offerCoinArt: { file: 'style2/icon_coin.webp' }
+    offerCoinArt: { file: 'style2/icon_coin.webp' },
+    /**
+     * Result theme_light_6 `screen_victory_pc` 28:48352: the red ribbon (FAIL draws it too: no FAIL design), the rays
+     * `rayes` 28:48361 at 0.5 (WIN) / the blue blur (FAIL), the HUD coin and star (`icon_coin_1` / `icon_star_1`, the same
+     * fills), the popups' red × (no × in the light WIN), EXIT on the yellow surface (a 9-slice).
+     */
+    resultRibbonWin: RESULT_RIBBON,
+    resultRibbonFail: RESULT_RIBBON,
+    resultGlowWin: { file: 'style2/result_rays@0.5x.webp' },
+    resultGlowFail: { file: BLUE_GLOW.file },
+    resultCloseWin: CLOSE,
+    resultCloseFail: CLOSE,
+    rewardCoin: { file: 'style2/icon_coin.webp' },
+    resultStar: { file: 'style2/icon_star.webp' },
+    buttonExit: { file: 'style2/button_rewarded.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
+    /** theme_light_6 MOVES `Group 1358` 28:48175: `btn_blue` 28:48177 at 280 (the 214 component resized: radius 41 kept), no text. */
+    movesPanel: { file: 'style2/moves_panel.webp' },
+    /** theme_light_6 gameplay `btn_settings` 28:48119: `btn_blue` 28:48120 at 214 and `icon_settings` 28:48121 (158, centred). */
+    settingsButtonBack: { file: 'style2/button_settings.webp' },
+    settingsButtonIcon: { file: 'style2/icon_settings.webp' },
+    /**
+     * No Ads theme_light_6 `screen_ads_off` 28:48041: the same purple promo window and rays as Style 1's (byte-identical
+     * renders, Style 1's files), the popups' red ×, the light hero `pic_no_ads_1` 28:45573; the buy button is `btn_green`
+     * at 530 × 200 (caps 96: the 103 caps would shrink its corners at 200) and its coin the 288 HUD coin at 84.
+     */
+    noAdsPanel: READY_UI_STYLE_1.assets.noAdsPanel,
+    noAdsDecor: READY_UI_STYLE_1.assets.noAdsDecor,
+    noAdsClose: CLOSE,
+    noAdsArt: { file: 'style2/noads_hero.webp' },
+    'noAds:buttonPrimary': { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 96, right: 48, bottom: 96 } },
+    'noAds:priceIcon': { file: 'style2/icon_coin.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
@@ -311,6 +350,89 @@ export const READY_UI_STYLE_2 = {
         },
         version: { x: 89, y: 1179, width: 822, height: 61, fontSize: 50, fill: 0x3f598c }
       }
+    },
+    /**
+     * Result WIN theme_light_6 `screen_victory_pc` 28:48352 (docs/figma/theme-light-6): frame boxes = PC − 1544 with the
+     * ribbon / reward column / buttons + 5 (the mobile 28:47932 x), so the composition centres on 540. Carlito Bold white
+     * text; the amount with its #943300 5-unit outline. The secondary (Map / Retry) is the bare `btn_yellow` (Figma's
+     * rewarded x2 sticker, tv and heart are not Core's); both buttons are their components' 214 high on one row (Figma:
+     * green 214, the yellow 200, 2 units apart). The upright stars at Figma's centres and sizes (Figma tilts the side
+     * ones 30°; the crown animation lands them upright). No × in Figma: the popups' red × above the ribbon's right end.
+     *
+     * FAIL has no theme_light_6 design (`defeat_screen` 28:47869 is a NO STARS offer): derived from Style 2's own parts —
+     * the WIN ribbon with one title line, the Confirm broken heart over the blue blur with the "-1", the outcome line,
+     * RETRY on the Confirm green button, EXIT on the yellow — until the artist draws one.
+     */
+    result: {
+      win: {
+        /** pic_tape_red 28:48385: render box = node box */
+        ribbon: { x: 30, y: 619, width: 1020, height: 226 },
+        /** "LEVEL 200" 28:48387 / "COMPLETED!" 28:48386: Calibri Bold 90 / 70, CENTER / CENTER */
+        title: { x: 170, y: 646, width: 740, height: 90, fontSize: 90 },
+        subtitle: { x: 170, y: 714, width: 740, height: 90, fontSize: 70 },
+        close: { x: 897, y: 441, width: 153, height: 158 },
+        /** rayes 28:48361: its render box (the 8-ray burst at 0.5 and the translucent stars), centred at 540.5 */
+        glow: { x: -376, y: 273, width: 1833, height: 1785 },
+        /** stars_full 28:48380: centres and sizes (the side stars' own 134.2 box) */
+        stars: [
+          { x: 369.44, y: 494.66, size: 134.2 },
+          { x: 539.94, y: 455.94, size: 157.89 },
+          { x: 710.56, y: 494.66, size: 134.2 }
+        ],
+        /** "REWARD" 28:48399: Calibri Bold 70, its hugging box widened to 500 around the same centre (runtime copy) */
+        rewardsLabel: { x: 290, y: 890, width: 500, height: 85, fontSize: 70 },
+        /** icon_coin_1 28:48389 */
+        coin: { x: 395, y: 1008, width: 288, height: 288 },
+        /** "500" 28:48390: Calibri Bold 100, #943300 5-unit OUTSIDE stroke, centred at 539.5, 1274 */
+        amount: { x: 339.5, y: 1213, width: 400, height: 122, fontSize: 100, stroke: { width: 5, color: 0x943300 } },
+        /** btn_green 28:48392; the label in REFILL NOW's box (28:48393: 305.88 wide, 60) centred on the face (y 107) */
+        next: { button: { x: 120, y: 1481, width: 354, height: 214 }, label: { x: 24, y: 54.5, width: 305.88, height: 105, fontSize: 60 } },
+        /** btn_yellow (I28:48398;28:45433, 458 wide) at its component's 214; the label on the face */
+        retry: { button: { x: 507, y: 1481, width: 458, height: 214 }, label: { x: 24, y: 54.5, width: 410, height: 105, fontSize: 60 }, highlight: null }
+      },
+      fail: {
+        ribbon: { x: 30, y: 619, width: 1020, height: 226 },
+        /** one line centred on the ribbon's front band (its centre y 714) */
+        title: { x: 170, y: 669, width: 740, height: 90, fontSize: 90 },
+        close: { x: 897, y: 441, width: 153, height: 158 },
+        /** frame_blur_bg's render box around the heart, as in Confirm (heart − 371, −182) */
+        glow: { x: 0, y: 718, width: 1080, height: 920 },
+        /** Confirm's icon_heart_2 at 338 and its "-1" (Calibri Bold 140, #9b170b 5-unit outline, centred) */
+        lifeLost: { x: 371, y: 900, width: 338, height: 338 },
+        lifeDelta: { x: 440, y: 999, width: 200, height: 160, fontSize: 140, stroke: { width: 5, color: 0x9b170b }, align: 'center' },
+        status: { x: 90, y: 1258, width: 900, height: 100, fontSize: 80 },
+        /** Confirm's btn_green (528.7 × 214) and its label box */
+        retry: { button: { x: 275.642, y: 1398, width: 528.716, height: 214 }, label: { x: 39.358, y: 40, width: 450, height: 134, fontSize: 80 } },
+        /** the yellow surface at the WIN secondary's 460 × 214 */
+        exit: { button: { x: 310, y: 1642, width: 460, height: 214 }, label: { x: 24, y: 54.5, width: 412, height: 105, fontSize: 60 } }
+      }
+    },
+    /**
+     * No Ads theme_light_6 `screen_ads_off` 28:48041: window-local boxes of the 1000 × 1860 purple promo window (40, 202
+     * of the frame). The title lines are `wordNo` / `wordAds` in white with the #ec3d40 20-unit outline (Figma's
+     * PoetsenOne Regular is not a Core font: Carlito Bold; the sparkles and the group's soft shadow are not drawn); the
+     * description's first line wraps in the 930 box (90), the rest is the note (55); the price row is "900" (70) + 1 + the
+     * 84 coin, centred on the button.
+     */
+    noAds: {
+      window: { width: 1000, height: 1860 },
+      /** btn_close 28:48044: the popups' red × (its 158 render minus 5 empty columns) */
+      close: { x: 827, y: 15, width: 153, height: 158 },
+      /** pic_decor_2 28:48058: render box */
+      decor: { x: -24.87, y: 289.13, width: 1045.75, height: 1045.75 },
+      /** pic_no_ads_1 28:48059 */
+      hero: { x: 150, y: 450, width: 700, height: 700 },
+      title: [
+        { x: 100, y: 130, width: 800, height: 240, fontSize: 120, stroke: { width: 20, color: 0xec3d40 } },
+        { x: 100, y: 232, width: 800, height: 240, fontSize: 90, stroke: { width: 20, color: 0xec3d40 } }
+      ],
+      description: { x: 35, y: 1164, width: 930, height: 250, fontSize: 90 },
+      note: { x: 35, y: 1434, width: 930, height: 90, fontSize: 55 },
+      /** btn_green 28:48053 */
+      button: { x: 235, y: 1590, width: 530, height: 200 },
+      /** txt_coins 28:48054 */
+      price: { y: 37.38, height: 124.3, gap: 1, fontSize: 70 },
+      coin: { width: 84, height: 84, y: 57.53 }
     }
   },
   hud: {
@@ -408,5 +530,22 @@ export const READY_UI_STYLE_2 = {
       level: { x: -225, y: 20, width: 450, height: 85, fontSize: 70 },
       textFill: 0xffffff
     }
+  },
+  /**
+   * theme_light_6 gameplay 28:48114, MOVES `Group 1358` 28:48175: the blue box, "MOVES" Calibri Bold 50 and the count
+   * 150, white, plain. Where the box goes is the host's composition.
+   */
+  moves: {
+    box: { width: 280, height: 280 },
+    panel: { x: 0, y: 0, width: 280, height: 280 },
+    label: { x: 40, y: 47, width: 200, height: 60, fontSize: 50, fill: 0xffffff },
+    count: { x: 40, y: 116.69, width: 200, height: 140, fontSize: 150, fill: 0xffffff }
+  },
+  /** theme_light_6 `btn_settings` 28:48119 (gameplay and victory): 214 at top 90 / right 90, the gear centred. */
+  settingsButton: {
+    back: { width: 214, height: 214 },
+    icon: { x: 28, y: 28, width: 158, height: 158 },
+    margins: { top: 90, right: 90 },
+    minHitSize: 214
   }
 } as const satisfies ReadyUiSkin;

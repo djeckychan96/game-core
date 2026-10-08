@@ -16,6 +16,7 @@ const CORE_KEYS = [
   'core.lives.next',
   'core.lives.refill',
   'core.lives.title',
+  'core.moves.label',
   'core.nav.home',
   'core.nav.lock',
   'core.nav.shop',

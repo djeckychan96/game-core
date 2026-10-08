@@ -10,7 +10,7 @@ geometry come from Trail Arrow 1:1 and now live physically inside this package
 ```
 game-core
 ├── "game-core"        renderer-agnostic: CoreRuntime, FxRuntime, MotionRuntime, UiRuntime
-└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, BottomNavView, LevelMapScreen, UiButton, ModalWindow,
+└── "game-core/pixi"   Pixi Ready UI: LevelMapView, HudView, BottomNavView, LevelMapScreen, MovesView, SettingsButtonView, UiButton, ModalWindow,
                        ResultWindowView, LivesWindowView, ShopWindowView, SettingsWindowView,
                        NoAdsWindowView, StarterPackWindowView, assets loader, theme;
                        Pixi FX (src/pixi/fx): ClickRippleEffect
@@ -241,6 +241,30 @@ The style decides only the look (files, boxes, caption look, whether PLAY has a 
 slot exists. A host that launches straight from a node uses `LevelMapView` alone: its node tap still calls
 `onSelectLevel` and nothing else.
 
+### MovesView
+
+The moves counter of a gameplay screen (no donor art: it needs a style that covers `moves` — Style 1 and Style 2, the
+theme_light_6 MOVES box). Visual only: it knows nothing about `MoveRuntime` or a game — the host passes the number.
+
+| Option / member | Meaning |
+| --- | --- |
+| `remaining`, `setRemaining(n)`, `remaining` (getter) | the number shown: a whole number ≥ 0 (a fraction floors, a negative / non-finite value shows 0); a long number shrinks into its box |
+| `label` / `i18n` | the caption: explicit text, else `core.moves.label` (EN MOVES, RU ХОДЫ) |
+| `hidden`, `show()`, `hide()`, `shown` | visibility only |
+| `boxWidth`, `boxHeight` | the box's design size; the view's origin is the box centre — the host positions and scales it in its own composition |
+| `setResolution(onScreenScale × devicePixelRatio)` | crisp text after the host scales it |
+
+### SettingsButtonView
+
+The settings button of a screen without a HudView gear — a gameplay screen (theme_light_6 draws it there only: a 214
+square at top 90 / right 90). The style's `settingsButton` (`settingsButtonBack` + `settingsButtonIcon`, Style 1 and
+Style 2) in the top-right corner of the safe area at the design contain-fit scale; no style = the donor HUD gear art at
+the donor HUD's corner. `resize(w, h, { insets, pixelRatio })`: the position is the style's corner inside the given
+insets — the gameplay composition stays the host's, so a host may offset it through `insets` (the UI gallery's demo
+moves it under its HUD row on a narrow phone; that is the demo's layout, not a theme_light_6 rule). `onTap` is the
+host's (open its Settings); no `onTap` = drawn, inert. It never opens a window itself. The map HUD's own gear
+(`hud.gear`, HudView) is a separate, unchanged contract.
+
 ### UiButton
 
 Sprite background + optional label/icon; Pixi pointer events → `ButtonController`, press progress
@@ -298,7 +322,11 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   Every row a show does not draw (HOME / RESTART without its continuation, no languages) closes up.
 - **NoAdsWindowView** — 975 × 1355 blue panel with the crossed clapperboard, `NO` / `ADS`
   rotated −32° over the corner, description band at y 248, green price button at y 517;
-  `onBuy(params)` continuation, no purchase logic inside.
+  `onBuy(params)` continuation, no purchase logic inside. Styled (a style covering `noAds`, theme_light_6
+  `screen_ads_off`): the purple promo window, its ×, the rays and the hero, `wordNo` / `wordAds` as two title lines, the
+  description's first line wrapping in its box and the rest as the note, the price on the style's green button — with the
+  style's coin only for `show({ price, coinPrice: true })` (a game-coin price; a store price string stays alone). Same
+  params, callbacks and copy keys.
 - **StarterPackWindowView** — 975 × 1355 warm panel, the chest hero, `STARTER PACK` rotated
   −14° (a longer tier title shrinks to the donor's 430-unit cap), rewards row (coins, ∞-lives
   duration), red booster bar with the bulb, price button at y 542; configurable `rewards` /
@@ -427,8 +455,11 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | covered — theme_light_5 24:37523 / 24:37548 + the dark nav components: PLAY without a level line, SHOP \| HOME \| LOCK with the raised blue column, #261a30-outlined captions (docs/figma/theme-light-5-level-map-nav) | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen); theme_light_5 24:38532 slot boxes, HOME selected, LOCK captioned (docs/figma/theme-light-5-level-map-nav) |
-| ResultWindowView | covered — Figma `screen/result-win` 1:3854 / `screen/result-fail` 1:4029: red / grey ribbon with its tinted ×, glow band, reward coin, CONTINUE + RETRY (orange with the highlight; Figma's rewarded x2 offer is not Core's), fail broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | not covered — donor look (theme_light_4 has a WIN 22:29110 but no Result FAIL: 22:29036 is a NO STARS continue offer) |
-| Shop, NoAds, StarterPack | not covered — donor look (no Style 1 screen) | not covered — donor look |
+| ResultWindowView | covered — WIN theme_light_6 28:48286: the red ribbon with its black 45 % ×, no glow, reward coin, CONTINUE 440 × 200 + RETRY 460 × 200 (orange with the highlight; Figma's rewarded x2 offer is not Core's), centred on 540 (docs/figma/theme-light-6); FAIL Figma `screen/result-fail` 1:4029: grey ribbon, glow band, broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | covered — WIN theme_light_6 28:48352: the red ribbon, the rays, `icon_star` stars, the coin + #943300-outlined amount, CONTINUE on `btn_green` + the secondary on the bare `btn_yellow`, the popups' red × (no × in Figma); FAIL derived from Style 2's parts (no Figma FAIL) (docs/figma/theme-light-6) |
+| MovesView | covered — theme_light_6 28:48247: the white box, "MOVES" + the #ffc300 count with the kit outline | covered — theme_light_6 28:48175: the blue box, white Carlito "MOVES" + count |
+| SettingsButtonView | covered — theme_light_6 28:48211: blue `btn` 214 + the outlined gear 10 above the centre, 90 / 90 | covered — theme_light_6 28:48119: `btn_blue` 214 + `icon_settings`, 90 / 90 |
+| NoAdsWindowView | covered — theme_light_6 28:48065: purple promo window, round red ×, rays, dark hero, Fira titles (line 1 pink) | covered — theme_light_6 28:48041: the same window and rays, the red ×, the light hero, Carlito titles with the red outline |
+| Shop, StarterPack | not covered — donor look (theme_light_6's Shop is a nav tab, not this modal: docs/figma/theme-light-6) | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new
   package under `src/pixi/skins/` with its own files. `READY_UI_SKIN_VIEW_ROLES` lists the roles each
@@ -595,10 +626,13 @@ SHOWCASE_URL=http://127.0.0.1:5180/ npm run showcase:gallery # screenshots of ev
 the same `LevelMapScreen` for both styles (PLAY + SHOP | HOME | LOCK; every callback lands in the status line as
 `last: play:12`, `nav:shop`, `selected:9`…): STYLE (Style 1 / Style 2 — a style is the game's one choice, so switching
 reloads the page), a screen picker (LevelMap with every slot active, LevelMap with SHOP / LOCK disabled, Settings compact / with language / in level with and without language, Confirm Restart / Restart + OFFER /
-Exit, Lives minimal / REFILL + GET / full with the OFFER, Result WIN / FAIL, the coin Shop), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
-donor look (Style 2 Result). Query: `?style=1|2&screen=<id>&locale=ru&ui=0` (`ui=0` hides the controls). The OFFER's
+Exit, Lives minimal / REFILL + GET / full with the OFFER, Result WIN 3★ / 2★ / 1★ / 0★ / FAIL, Gameplay — Moves + the
+settings button, No Ads, the coin Shop), EN / RU and Reopen. The status line says whether the style draws the screen or it is the
+donor look (the Shop). Query: `?style=1|2&screen=<id>&locale=ru&moves=<n>&ui=0` (`ui=0` hides the controls; `moves` = the
+gameplay screen's count, default 38). The OFFER's
 booster icons (`gallery/*.webp`) are demo game content, not Core. `scripts/ui-gallery-check.mjs` (env `STYLES`,
-`SCREENS`, `VIEWPORTS`, `LOCALE`) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png` and fails on a
+`SCREENS`, `VIEWPORTS`, `LOCALE`, `MOVES` — default 38,10,1,0) writes `showcase-shots/ui-gallery/<style>-<screen>-<w>x<h>.png`
+(the gameplay screen once per moves value, a WIN after its stars landed) and fails on a
 console error or a window that never opens. Dev page only: `showcase:build` ships `index.html` alone.
 
 Motion proof on the map screens: PLAY breathes (`playBreathing`), the HUD counters use `resourceFeedback`, a tap on LOCK

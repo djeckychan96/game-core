@@ -23,6 +23,7 @@ export const READY_UI_RU = Object.freeze({
   'core.nav.shop': 'МАГАЗИН',
   'core.nav.home': 'ДОМОЙ',
   'core.nav.lock': 'ЗАКРЫТО',
+  'core.moves.label': 'ХОДЫ',
   'core.result.level': 'УРОВЕНЬ {level}',
   'core.result.completed': 'ПРОЙДЕН!',
   'core.result.failed': 'НЕ ПРОЙДЕН',

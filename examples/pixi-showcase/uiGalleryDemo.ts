@@ -6,21 +6,25 @@
 //                    the same LevelMapScreen contract (select a level → PLAY, SHOP | HOME | LOCK); every callback lands
 //                    in the status line ("last: …")
 //   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
+//   ?moves=<n>       the gameplay screen's moves left (default 38)
 //   ?ui=0            hide the gallery controls (screenshots)
 // Motion proof on the map screens: PLAY breathes (`playBreathing`), the HUD counters roll (`hud.resourceFeedback`), a tap
 // on LOCK shakes it; the bar's +/− buttons change coins and lives with no game logic behind them.
 // Demo data only; nothing is bought, no level is played. The booster icons of the OFFER (gallery/*.webp, the Figma
 // sample's lamp and wand) are game content a host passes as textures — not part of Core.
-import { Application, Assets, type Texture } from 'pixi.js';
+import { Application, Assets, Container, type Texture } from 'pixi.js';
 import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
 import {
   ConfirmWindowView,
-  type HudView,
+  HudView,
   LevelMapScreen,
   LivesWindowView,
+  MovesView,
+  NoAdsWindowView,
   READY_UI_STYLE_1,
   READY_UI_STYLE_2,
   ResultWindowView,
+  SettingsButtonView,
   SettingsWindowView,
   ShopWindowView,
   formatTimer,
@@ -28,8 +32,10 @@ import {
   type LevelMapLevel,
   type ModalWindow,
   type ReadyUiOffer,
+  type ModalResizeOptions,
   type ReadyUiSkin,
-  type ReadyUiThemeOverrides
+  type ReadyUiThemeOverrides,
+  resolveTheme
 } from 'game-core/pixi';
 import { DEMO_SHOP_ITEMS } from './demoData';
 import { createShowcaseLocalization } from './localizationDemo';
@@ -47,8 +53,13 @@ const SCREENS = [
   { id: 'lives-minimal', label: 'Lives — minimal' },
   { id: 'lives', label: 'Lives — REFILL + GET' },
   { id: 'lives-full', label: 'Lives — full (REFILL + GET + OFFER)' },
-  { id: 'win', label: 'Result WIN' },
+  { id: 'win', label: 'Result WIN — 3★' },
+  { id: 'win-2', label: 'Result WIN — 2★' },
+  { id: 'win-1', label: 'Result WIN — 1★' },
+  { id: 'win-0', label: 'Result WIN — 0★' },
   { id: 'fail', label: 'Result FAIL' },
+  { id: 'gameplay', label: 'Gameplay — Moves + Settings button' },
+  { id: 'noads', label: 'No Ads' },
   { id: 'shop', label: 'Shop / bank (coin packs)' }
 ] as const;
 type ScreenId = (typeof SCREENS)[number]['id'];
@@ -121,7 +132,50 @@ let refillSeconds = 24 * 60 + 15;
 // the same LevelMapScreen contract for both styles: a node tap selects its level, PLAY launches the selected one, the
 // navigation is SHOP | HOME | LOCK (a slot without onTap is disabled); only the look is the style's
 const navDisabled = screenId === 'map-disabled';
-const mapScreen = new LevelMapScreen({
+const movesLeft = Math.max(0, Number.parseInt(params.get('moves') ?? '38', 10) || 0);
+
+/**
+ * A host's gameplay screen built from Core parts (the field itself is the game's — empty here), as theme_light_6
+ * 28:48114 / 28:48205 composes it: the HUD row (lives + coins) at the top-left, the settings gear in the top-right corner
+ * (the standalone SettingsButtonView: a gameplay screen of a game without a HUD row uses it alone; on a phone, where
+ * the two bars span the width, this demo moves it under the row — a demo layout, not a Core rule) and the moves counter
+ * under the field. Where the counter goes is the host's composition: here the box centre 300 units left of the screen
+ * centre and 270 above the bottom safe edge (Figma: 737 left of the field centre on the 4168-wide PC screen).
+ */
+class GameplayDemo extends Container {
+  readonly hud: HudView;
+  readonly gear: SettingsButtonView;
+  readonly moves: MovesView;
+
+  constructor() {
+    super();
+    this.hud = new HudView({ ...base, id: 'gameplay-hud', coins: 9990, lives: 3, maxLives: 5, settings: false, onLivesTap: () => log('hud:lives'), onCoinsTap: () => log('hud:coins') });
+    this.gear = new SettingsButtonView({ ...base, id: 'gameplay-settings', onTap: () => go({ screen: 'settings-level' }) });
+    this.moves = new MovesView({ ...base, remaining: movesLeft });
+    this.addChild(this.hud, this.moves, this.gear);
+  }
+
+  resize(width: number, height: number, options: ModalResizeOptions): void {
+    this.hud.resize(width, height, options);
+    const design = resolveTheme(theme);
+    const s = Math.min(width / design.designWidth, height / design.designHeight);
+    // the gear's corner is the style's (top / right margins). DEMO LAYOUT ONLY (not theme_light_6, not Core): where this
+    // demo's HUD row reaches that corner (a phone: two bars span the width), the demo moves the gear under the row by
+    // passing the row's height as the top inset — a real gameplay screen places it in its own composition
+    this.gear.resize(width, height, options);
+    const row = this.hud.getBounds();
+    const gear = this.gear.button.getBounds();
+    const clash = row.right > gear.left && row.top < gear.bottom;
+    if (clash) this.gear.resize(width, height, { ...options, insets: { ...options.insets, top: this.hud.barHeight } });
+    const left = options.insets?.left ?? 0;
+    const bottom = options.insets?.bottom ?? 0;
+    this.moves.scale.set(s);
+    this.moves.position.set(Math.max(left + (60 + this.moves.boxWidth / 2) * s, width / 2 - 300 * s), height - bottom - 270 * s);
+    this.moves.setResolution(s * (options.pixelRatio ?? 1));
+  }
+}
+
+const mapScreen = screenId === 'gameplay' ? null : new LevelMapScreen({
   ...base, id: 'map-screen',
   playBreathing: true,
   map: { levels, currentLevel: CURRENT, onLockedTap: (level) => log(`locked:${level}`), onFocusChange: ({ selectedLevel }) => log(`selected:${selectedLevel}`) },
@@ -134,9 +188,10 @@ const mapScreen = new LevelMapScreen({
     : { shop: { onTap: () => log('nav:shop') }, home: { onTap: () => log('nav:home') }, lock: { onTap: () => log('nav:lock') } },
   onPlay: (level) => log(`play:${level}`)
 });
-const hud: HudView = mapScreen.hud;
-const screen = mapScreen;
-app.stage.addChild(mapScreen);
+const gameplay = mapScreen ? null : new GameplayDemo();
+const hud: HudView = mapScreen ? mapScreen.hud : gameplay!.hud;
+const screen = mapScreen ?? gameplay!;
+app.stage.addChild(screen);
 hud.setLives(3, formatTimer(refillSeconds));
 
 // --- the window of this screen ---
@@ -205,13 +260,23 @@ switch (screenId) {
     break;
   }
   case 'win':
+  case 'win-2':
+  case 'win-1':
+  case 'win-0':
   case 'fail': {
     const result = new ResultWindowView({
       ...base, id: 'result', onDismiss,
       onNext: (p) => log(`next:${p.level}`), onRetry: (p) => log(`retry:${p.level}`), onExit: (p) => log(`exit:${p.level}`)
     });
-    open = () => result.show(screenId === 'win' ? { level: CURRENT, stars: 3, rewardCoins: 500 } : { level: CURRENT, outcome: 'fail', rewardCoins: 0 });
+    const stars = screenId === 'win' ? 3 : Number(screenId.slice(4));
+    open = () => result.show(screenId === 'fail' ? { level: CURRENT, outcome: 'fail', rewardCoins: 0 } : { level: CURRENT, stars, rewardCoins: 500 });
     view = result as unknown as ModalWindow<never>;
+    break;
+  }
+  case 'noads': {
+    const noAds = new NoAdsWindowView({ ...base, id: 'noads', onDismiss, onBuy: (p) => log(`buy:no-ads:${p.price}`) });
+    open = () => noAds.show({ price: '900', coinPrice: true });
+    view = noAds as unknown as ModalWindow<never>;
     break;
   }
   default:
@@ -221,8 +286,8 @@ if (view) app.stage.addChild(view);
 
 /** What this style draws for the screen: its own art, or the donor look where the style has no design. */
 function coverage(): string {
-  const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId === 'win' || screenId === 'fail' ? 'result'
-    : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'shop' ? 'shop' : 'confirm';
+  const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId.startsWith('win') || screenId === 'fail' ? 'result'
+    : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'gameplay' ? 'moves' : screenId === 'noads' ? 'noAds' : screenId === 'shop' ? 'shop' : 'confirm';
   const covered = skin.covers.includes(window as never);
   return `Style ${styleNo} · ${SCREENS.find((s) => s.id === screenId)?.label}: ${covered ? 'style art' : 'NOT in this style — donor look'}`;
 }
@@ -287,4 +352,4 @@ const hold = (on = true): void => {
 const step = (ms: number, frameMs = 16): void => {
   for (let left = ms; left > 0; left -= frameMs) core.update(Math.min(frameMs, left));
 };
-(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, styleNo, screenId, events, open, layout, changeCoins, changeLives, hold, step, ready: true };
+(window as unknown as { __gallery: unknown }).__gallery = { app, core, ui, motion, view, screen, gameplay, styleNo, screenId, events, open, layout, changeCoins, changeLives, hold, step, ready: true };

@@ -86,21 +86,27 @@ function texts(view: ResultWindowView): string[] {
 describe('Style 1 Result — the package (Figma screen/result-win 1:3854, screen/result-fail 1:4029)', () => {
   it('covers result with every role it draws; the files are the Figma exports (no text baked in), shared art reused', () => {
     expect(S1.covers).toContain('result');
-    expect(requiredSkinRoles(S1, 'result')).toEqual(READY_UI_SKIN_WINDOW_ROLES.result);
-    for (const role of READY_UI_SKIN_WINDOW_ROLES.result) expect(S1.assets[role]?.file, role).toBeTruthy();
+    // theme_light_6's dark WIN has no glow: every role but resultGlowWin (the FAIL keeps its glow)
+    expect(S1.windows.result.win.glow).toBeNull();
+    expect(requiredSkinRoles(S1, 'result')).toEqual(READY_UI_SKIN_WINDOW_ROLES.result.filter((role) => role !== 'resultGlowWin'));
+    for (const role of requiredSkinRoles(S1, 'result')) expect((S1.assets as Record<string, { file: string } | undefined>)[role]?.file, role).toBeTruthy();
+    expect('resultGlowWin' in S1.assets).toBe(false);
+    // the stars are the kit's gold star file; the WIN × is theme_light_6's black 45 % glyph
+    expect(S1.assets.resultStar.file).toBe('level/star_gold.webp');
+    expect(S1.assets.resultCloseWin.file).toBe('result/style1_close_dark@2x.webp');
     // the life-lost art, the button surfaces and the highlight are Confirm's / Lives' files; EXIT = the RETURN HOME art
     expect(S1.assets.lifeLostArt.file).toBe('icons/broken_heart@2x.webp');
     expect(S1.assets.buttonPrimary.nineSlice).toEqual({ left: 67, top: 69, right: 67, bottom: 89 });
     expect(S1.assets.buttonExit.file).toBe(S1.assets.settingsBtnHome.file);
     expect(S1.assets.resultRibbonWin.file).toBe('result/style1_ribbon_win@2x.webp');
     expect(S1.assets.resultRibbonFail.file).toBe('result/style1_ribbon_fail@2x.webp');
-    // Style 2 does not cover it (its Result keeps the donor look)
-    expect(READY_UI_STYLE_2.covers).not.toContain('result');
+    // Style 2 covers it too now (theme_light_6 28:48352): its own Result, never Style 1's
+    expect(READY_UI_STYLE_2.covers).toContain('result');
   });
 });
 
 describe('Style 1 Result — WIN', () => {
-  it('is selected by theme.skin: the red ribbon, glow, reward coin, 9-slice CTAs; no donor art', () => {
+  it('is selected by theme.skin: the red ribbon, reward coin, 9-slice CTAs (theme_light_6: no glow); no donor art', () => {
     const kit = createKit();
     const created = result(kit, styled(kit), { theme: { skin: S1 } });
     // the style's × from construction (never the kit's red btnClose, not even before the first show)
@@ -108,7 +114,10 @@ describe('Style 1 Result — WIN', () => {
     const view = shown(kit, created, { level: 7, stars: 3, rewardCoins: 1250 });
     expect(view.skin).toBe(S1);
     const art = drawn(view);
-    for (const role of ['resultGlowWin', 'rewardCoin', 'buttonPrimary', 'buttonRewarded', 'resultRibbonWin']) expect(art).toContain(`style-1:${role}`);
+    for (const role of ['rewardCoin', 'buttonPrimary', 'buttonRewarded', 'resultRibbonWin']) expect(art).toContain(`style-1:${role}`);
+    expect(art.some((label) => label.includes('Glow'))).toBe(false);
+    // the stars are the style's resultStar
+    expect(field<Sprite[]>(view, 'stars').map((star) => star.texture.source.label)).toEqual(['style-1:resultStar', 'style-1:resultStar', 'style-1:resultStar']);
     expect(art.some((label) => label.startsWith('donor:'))).toBe(false);
     expect(art).not.toContain('style-1:resultRibbonFail');
     expect(art).not.toContain('style-1:resultGlowFail');
@@ -116,13 +125,15 @@ describe('Style 1 Result — WIN', () => {
     const next = field<UiButton>(view, 'nextButton');
     const retry = field<UiButton>(view, 'retryButton');
     expect(next.background).toBeInstanceOf(NineSliceSprite);
-    expect([next.x, next.y]).toEqual([X(90 + 439 / 2), Y(1375.5 + 207 / 2)]);
-    expect([retry.x, retry.y]).toEqual([X(551 + 439 / 2), Y(1375.5 + 207 / 2)]);
+    // theme_light_6 28:48286 re-laid on x 540: 440 × 200 / 460 × 200 on one row
+    expect([next.x, next.y]).toEqual([X(71.5 + 440 / 2), Y(1292 + 200 / 2)]);
+    expect([retry.x, retry.y]).toEqual([X(548.5 + 460 / 2), Y(1292 + 200 / 2)]);
+    expect([next.background.width, next.background.height, retry.background.width, retry.background.height]).toEqual([440, 200, 460, 200]);
     expect(texture(retry.children[1] as Container)).toBe('style-1:buttonHighlight');
     // the × is the ribbon's tinted glyph at the Figma box
     const close = field<UiButton>(view, 'closeButton');
     expect(texture(close)).toBe('style-1:resultCloseWin');
-    expect([close.x, close.y]).toEqual([X(957 + 25.5), Y(775 + 25.5)]);
+    expect([close.x, close.y]).toEqual([X(957 + 25), Y(695 + 25)]);
     // runtime text: title / subtitle on the ribbon, the caption, the amount, the labels
     expect(texts(view)).toEqual(expect.arrayContaining(['LEVEL 7', 'COMPLETED!', 'REWARDS', formatAmount(1250), 'CONTINUE', 'RETRY']));
     view.destroy();
@@ -269,12 +280,19 @@ describe('Style 1 Result — isolation and strict assets', () => {
     view.destroy();
   });
 
-  it('Style 2 (does not cover result) and an uncovering style keep the donor Result', () => {
+  it('Style 2 draws its own Result (never Style 1\'s or the donor\'s); a style that does not cover result keeps the donor look', () => {
     const kit = createKit();
     const view = shown(kit, result(kit, styled(kit, READY_UI_STYLE_2), { theme: { skin: READY_UI_STYLE_2 } }), { level: 2, outcome: 'fail', rewardCoins: 0 });
-    expect(view.skin).toBeNull();
-    expect(drawn(view)).toContain('donor:victoryRibbon');
+    expect(view.skin).toBe(READY_UI_STYLE_2);
+    expect(drawn(view).every((label) => label.startsWith('style-2:'))).toBe(true);
     view.destroy();
+    const kit2 = createKit();
+    const { result: _r, ...windows } = S1.windows;
+    const uncovering = { ...S1, id: 'no-result', covers: S1.covers.filter((v) => v !== 'result'), windows } as unknown as ReadyUiSkin;
+    const donor = shown(kit2, result(kit2, styled(kit2, uncovering), { theme: { skin: uncovering } }), { level: 2, outcome: 'fail', rewardCoins: 0 });
+    expect(donor.skin).toBeNull();
+    expect(drawn(donor)).toContain('donor:victoryRibbon');
+    donor.destroy();
   });
 
   it('a selected style never falls back silently: missing role textures throw before anything registers', () => {
@@ -286,9 +304,9 @@ describe('Style 1 Result — isolation and strict assets', () => {
       .toThrow("ResultWindowView style 'style-1': no resultRibbonFail (result/style1_ribbon_fail@2x.webp) in textures — load them with loadReadyUiAssets({ skin })");
     // nothing registered: the id is still free for a correct window
     expect(() => result(kit, textures, { theme: { skin: S1 } }).destroy()).not.toThrow();
-    const { resultGlowWin: _g, ...brokenAssets } = S1.assets;
+    const { resultGlowFail: _g, ...brokenAssets } = S1.assets;
     const broken = { ...S1, id: 'broken', assets: brokenAssets } as unknown as ReadyUiSkin;
-    expect(() => result(kit, textures, { theme: { skin: broken } })).toThrow("ReadyUiSkin 'broken' covers 'result' but has no asset for role 'resultGlowWin'");
+    expect(() => result(kit, textures, { theme: { skin: broken } })).toThrow("ReadyUiSkin 'broken' covers 'result' but has no asset for role 'resultGlowFail'");
   });
 
   it('loadReadyUiAssets({ skin: Style 1 }) requests the Result files; no skin requests none of them', async () => {
@@ -304,7 +322,7 @@ describe('Style 1 Result — isolation and strict assets', () => {
       await loadReadyUiAssets({ baseUrl: '/pack/', skipFont: true });
       expect(requested.some((src) => src.includes('/result/'))).toBe(false);
       const textures = await loadReadyUiAssets({ baseUrl: '/pack/', skipFont: true, skin: S1 });
-      for (const role of ['resultRibbonWin', 'resultRibbonFail', 'resultGlowWin', 'resultGlowFail', 'resultCloseWin', 'resultCloseFail', 'rewardCoin'] as const) {
+      for (const role of ['resultRibbonWin', 'resultRibbonFail', 'resultGlowFail', 'resultCloseWin', 'resultCloseFail', 'rewardCoin', 'resultStar'] as const) {
         expect(requested).toContain(`/pack/${S1.assets[role].file}`);
         expect(textures.skins?.['style-1']?.[role]).toBeDefined();
       }

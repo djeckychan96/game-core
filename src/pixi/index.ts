@@ -29,6 +29,10 @@ export type {
 } from './LevelMapView';
 export { HudView } from './HudView';
 export type { HudViewOptions, HudInsets, HudResizeOptions } from './HudView';
+export { SettingsButtonView } from './SettingsButtonView';
+export type { SettingsButtonViewOptions } from './SettingsButtonView';
+export { MovesView } from './MovesView';
+export type { MovesViewOptions } from './MovesView';
 export { BottomNavView } from './BottomNavView';
 export type { BottomNavItem, BottomNavViewOptions, BottomNavInsets, BottomNavResizeOptions } from './BottomNavView';
 export { LevelMapScreen } from './LevelMapScreen';
@@ -96,6 +100,7 @@ export type {
   ReadyUiSkinBottomNavItemLayout,
   ReadyUiSkinTextOutline,
   ReadyUiSkinLevelMapScreenLayout,
+  ReadyUiSkinMovesLayout,
   ReadyUiSkinIconBox,
   ReadyUiSkinFont,
   ReadyUiSkinLayouts,

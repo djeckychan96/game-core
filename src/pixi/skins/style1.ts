@@ -14,8 +14,12 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  * screens (file sJ0BV1ARqMpcj5dZbjFppz, desktop 1:911 / mobile 1:1301), the level `result` WIN / FAIL
  * (screen/result-win 1:3854, screen/result-fail 1:4029, docs/figma/style1-result), and `bottomNav` + `levelMapScreen`
  * — PLAY and the SHOP | HOME | LOCK navigation — from theme_light_5 (section 24:35889, the purple main screen 24:37472
- * and the dark nav components 24:38867 / 24:38858 / 24:38849; docs/figma/theme-light-5-level-map-nav). NOT COVERED —
- * donor look: Shop, NoAds, StarterPack (no Style 1 screen exists for them).
+ * and the dark nav components 24:38867 / 24:38858 / 24:38849; docs/figma/theme-light-5-level-map-nav).
+ *
+ * theme_light_6 (section 28:45250, the DARK row; docs/figma/theme-light-6) is the current snapshot for the Result WIN
+ * (28:48286: re-laid and centred, no glow, the black 45 % ×), `moves` (the MOVES box 28:48247), `settingsButton`
+ * (the gameplay `btn_settings` 28:48211) and `noAds` (`screen_ads_off` 28:48065). NOT COVERED — donor look: Shop
+ * (theme_light_6's is a nav tab, not the modal), StarterPack.
  *
  * Every number is the Figma read (unchanged from the `variant: 'figma'` windows): boxes in design units of the
  * 1080 × 2344 frame, art boxes = the SVG export (render) boxes. The files are the ones Core already ships under
@@ -25,7 +29,7 @@ import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -93,14 +97,18 @@ export const READY_UI_STYLE_1 = {
     /** Result `ui/ribbon/title` red / grey (1:4024 / 1:4141): back band, both tails, front band — no text (runtime). */
     resultRibbonWin: { file: 'result/style1_ribbon_win@2x.webp' },
     resultRibbonFail: { file: 'result/style1_ribbon_fail@2x.webp' },
-    /** Result `action/close` (its 51 × 51 box), tinted for the ribbon it sits on. */
-    resultCloseWin: { file: 'result/style1_close_win@2x.webp' },
+    /**
+     * theme_light_6 WIN × `icon_close_dark_2` 28:49423 (inside the dark ribbon 28:49231): the same glyph, #000 at 0.45 over
+     * the tail (was solid #811d22). The FAIL × stays the grey ribbon's `action/close` (no FAIL in theme_light_6).
+     */
+    resultCloseWin: { file: 'result/style1_close_dark@2x.webp' },
     resultCloseFail: { file: 'result/style1_close_fail@2x.webp' },
-    /** Result `Rectangle 218`: the blurred band behind the reward / the broken heart (its full render box, not cut at the frame). */
-    resultGlowWin: { file: 'result/style1_glow_win@0.5x.webp' },
+    /** Result FAIL `Rectangle 218`: the blurred band behind the broken heart (its full render box). theme_light_6's WIN has no glow. */
     resultGlowFail: { file: 'result/style1_glow_fail@0.5x.webp' },
     /** Result `icon_coin_128` at 256: the reward coin (render box). */
     rewardCoin: { file: 'result/style1_reward_coin@2x.webp' },
+    /** The WIN crown's earned stars: no Figma star in either Style 1 WIN — the kit's upright gold star (the donor crown's file). */
+    resultStar: { file: 'level/star_gold.webp' },
     /** Result FAIL EXIT (no Figma node): Style 1's RETURN HOME surface — the gameplay Settings home button art. */
     buttonExit: { file: 'settings/btn_home.webp' },
     /** theme_light_4 OFFER panel (22:28069 / 22:28122): the same `Component 9` window shell at 960 × 640 — the window file and caps. */
@@ -123,7 +131,21 @@ export const READY_UI_STYLE_1 = {
     /** The dark nav icons (288 components, their PNG@1x exports): `icon_lock_dark` 24:38823 is the LOCK slot's art. */
     navLock: { file: 'nav/style1_icon_lock.webp' },
     iconShop: { file: 'nav/style1_icon_shop.webp' },
-    iconHome: { file: 'nav/style1_icon_home.webp' }
+    iconHome: { file: 'nav/style1_icon_home.webp' },
+    /** theme_light_6 dark MOVES 28:48247: `notification_back` 28:48249 at 280 (white, radius 41, a soft ring), no text. */
+    movesPanel: { file: 'hud/style1_moves_panel.webp' },
+    /** theme_light_6 dark gameplay `btn_settings` 28:48211: the blue `btn` 28:48212 at 214 and `icon_settings_dark` 28:48213. */
+    settingsButtonBack: { file: 'hud/style1_settings_button.webp' },
+    settingsButtonIcon: { file: 'hud/style1_icon_settings.webp' },
+    /**
+     * theme_light_6 `screen_ads_off` 28:48065: the purple promo window `Rectangle 66112` 28:48067 (#3b1576, radius 41, a
+     * 6-unit ring: the pad) — the same file as the light row's 28:48043 — the rays `pic_decor_2` (shared too), the round
+     * close `icon_close_dark` 28:48068 and the dark hero 28:48074.
+     */
+    noAdsPanel: { file: 'offer/promo_panel.webp', nineSlice: { left: 52, top: 52, right: 52, bottom: 58, pad: { left: 6, top: 6, right: 6, bottom: 6 } } },
+    noAdsDecor: { file: 'offer/noads_rays@0.5x.webp' },
+    noAdsClose: { file: 'offer/style1_noads_close.webp' },
+    noAdsArt: { file: 'offer/style1_noads_hero.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -204,6 +226,23 @@ export const READY_UI_STYLE_1 = {
       level: null,
       textFill: 0xffffff
     }
+  },
+  /**
+   * theme_light_6 dark gameplay 28:48205, MOVES `Group 1356` 28:48247: the white box, "MOVES" Fira Sans Black 60 white and
+   * the count 120 #ffc300, both with the kit's 4 / 4 black outline. Where the box goes is the host's composition.
+   */
+  moves: {
+    box: { width: 280, height: 280 },
+    panel: { x: 0, y: 0, width: 280, height: 280 },
+    label: { x: 40, y: 47, width: 200, height: 60, fontSize: 60, fill: 0xffffff, stroke: { width: 4, color: 0x000000 } },
+    count: { x: 40, y: 108, width: 200, height: 140, fontSize: 120, fill: 0xffc300, stroke: { width: 4, color: 0x000000 } }
+  },
+  /** theme_light_6 `btn_settings` 28:48211 (gameplay and victory): 214 at top 90 / right 90, the gear 10 above the centre. */
+  settingsButton: {
+    back: { width: 214, height: 214 },
+    icon: { x: 28, y: 18, width: 158, height: 158 },
+    margins: { top: 90, right: 90 },
+    minHitSize: 214
   },
   windows: {
     /** Figma `screen/confirm-exit`: window-local boxes (the `ui/window/base` box sits at 60, 675 of the frame). */
@@ -378,35 +417,44 @@ export const READY_UI_STYLE_1 = {
      * star crown keeps that place.
      */
     result: {
+      /**
+       * theme_light_6 `screen_victory_pc_dark` 28:48286 (docs/figma/theme-light-6): the same ribbon, coin, button
+       * surfaces and highlight as 1:3854, re-laid. Figma's PC composition is off-centre (the ribbon on x 612.5, the reward
+       * column on 508 — the new 1022-wide ribbon instance dropped at the old band x); Core centres every part on 540, at
+       * theme_light_6's y. No glow and no star in theme_light_6: the crown keeps its offsets from the ribbon top.
+       */
       win: {
-        /** ui/ribbon/title red 1:4024: the 815 × 203 band at 133, 735; render box with the tails and the shadow */
-        ribbon: { x: 31, y: 731, width: 1019, height: 239 },
-        /** the ribbon's text layers: Fira Sans Black 90 / 70, CENTER / CENTER */
-        title: { x: 133, y: 743, width: 816, height: 104, fontSize: 90 },
-        subtitle: { x: 133, y: 847, width: 816, height: 70, fontSize: 70 },
-        /** action/close 1:4025 */
-        close: { x: 957, y: 775, width: 51, height: 51 },
-        /** Rectangle 218 1:3955: 956 × 316 at 62, 1003, layer blur 225.7 */
-        glow: { x: -163.7, y: 777.3, width: 1408, height: 768 },
-        /**
-         * No Figma node (the hero's place): Core's WIN crown at the donor offsets from the ribbon's top edge — the Style 1
-         * ribbon's render box is the donor ribbon's 1019 × 239 — centred on the ribbon (540.5).
-         */
+        /** pic_tape_red_dark 28:49231 = the 1:4024 art (mean 0.68 / 255 one unit lower): its render box */
+        ribbon: { x: 31, y: 652, width: 1019, height: 239 },
+        /** the ribbon's text, band +8.04 / +112.55: Fira Sans Black 90 / 70, CENTER / CENTER */
+        title: { x: 133, y: 663.04, width: 816, height: 104.51, fontSize: 90 },
+        subtitle: { x: 133, y: 767.55, width: 816, height: 70.34, fontSize: 70 },
+        /** icon_close_dark_2 28:49423: band +824, +40, 50 × 50 */
+        close: { x: 957, y: 695, width: 50, height: 50 },
+        glow: null,
+        /** No Figma node: Core's crown at the donor offsets from the ribbon's top edge (−103.5 / −163.5), centred on it. */
         stars: [
-          { x: 268.5, y: 627.5, size: 240 },
-          { x: 540.5, y: 567.5, size: 288 },
-          { x: 812.5, y: 627.5, size: 240 }
+          { x: 268.5, y: 548.5, size: 240 },
+          { x: 540.5, y: 488.5, size: 288 },
+          { x: 812.5, y: 548.5, size: 240 }
         ],
-        /** REWARDS 1:3974: Fira Sans Black 50 */
-        rewardsLabel: { x: 319, y: 973, width: 442, height: 60, fontSize: 50 },
-        /** icon_coin_128 1:3958 (256 box at 412, 1023): the coin's render box */
-        coin: { x: 442, y: 1051, width: 196, height: 210 },
-        /** 1:3973 "500": Fira Sans Black 80, hugging, centred at 540.5, 1271 */
-        amount: { x: 340.5, y: 1223, width: 400, height: 96, fontSize: 80 },
-        /** 1:3978 ui/button/surface green + CONTINUE (Fira Sans Black 60) */
-        next: { button: { x: 90, y: 1375.5, width: 439, height: 207 }, label: { x: 22, y: 13, width: 398, height: 159, fontSize: 60 } },
-        /** 1:3981 ui/button/surface orange + its highlight; the runtime RETRY label in CONTINUE's box (Figma's x2 offer is not Core's) */
-        retry: { button: { x: 551, y: 1375.5, width: 439, height: 207 }, label: { x: 22, y: 13, width: 398, height: 159, fontSize: 60 }, highlight: { x: 8, y: 5, width: 307, height: 172 } }
+        /** REWARDS 28:48315: Fira Sans Black 50 */
+        rewardsLabel: { x: 319, y: 888, width: 442, height: 60, fontSize: 50 },
+        /** icon_coin_128 28:48299 (256 box): the coin's render box */
+        coin: { x: 442, y: 966, width: 196, height: 210 },
+        /** 28:48314 "500": Fira Sans Black 80, hugging, centred at 540.5, 1186 */
+        amount: { x: 340.5, y: 1138, width: 400, height: 96, fontSize: 80 },
+        /** Btn_green_dark_2 28:48318 (440 × 200) + CONTINUE (60) centred on the face (5..170) */
+        next: { button: { x: 71.5, y: 1292, width: 440, height: 200 }, label: { x: 22, y: 9.5, width: 396, height: 159, fontSize: 60 } },
+        /**
+         * btn_orange_dark's inner button (460 × 200) and its highlight; the runtime RETRY label on the face (Figma's
+         * rewarded x2 offer — tv, x2 ticket, price — is not Core's). Both buttons on one row (Figma: 1293 / 1291).
+         */
+        retry: {
+          button: { x: 548.5, y: 1292, width: 460, height: 200 },
+          label: { x: 22, y: 9.5, width: 416, height: 159, fontSize: 60 },
+          highlight: { x: 17.2, y: 4.67, width: 322.43, height: 167.29 }
+        }
       },
       fail: {
         /** ui/ribbon/title grey 1:4141 */
@@ -428,6 +476,32 @@ export const READY_UI_STYLE_1 = {
         /** No Figma node: the kit's fail EXIT rule — 0.85 of the RETURN HOME art (599 × 207), 26 units under RETRY */
         exit: { button: { x: 285.5, y: 1693, width: 509, height: 176 }, label: { x: 21, y: 23, width: 467, height: 109, fontSize: 68 } }
       }
+    },
+    /**
+     * theme_light_6 `screen_ads_off` 28:48065: window-local boxes of the 1000 × 1860 promo window (40, 202 of the frame).
+     * The title lines are `wordNo` / `wordAds` (Fira Sans Black 120 / 100, the black 4-unit outline): line 1's vertical
+     * pink gradient (#ffaee8 → #ea001f, visible #f97cae → #f1365d) is drawn as its middle #f55985, and the group's soft
+     * shadow as the kit's hard one. The description's first line wraps in the 930 box (90), the rest is the note (50);
+     * the price row is "900" (80) + the 100 coin, no gap, centred on the button.
+     */
+    noAds: {
+      window: { width: 1000, height: 1860 },
+      /** icon_close_dark 28:48068 (120, its render box) */
+      close: { x: 838, y: 26, width: 120, height: 120 },
+      /** pic_decor_2 28:48073: render box */
+      decor: { x: -24.87, y: 289.13, width: 1045.75, height: 1045.75 },
+      /** pic_pig_1 28:48074 */
+      hero: { x: 150, y: 450, width: 700, height: 700 },
+      title: [
+        { x: 62, y: 130, width: 876, height: 240, fontSize: 120, fill: 0xf55985, stroke: { width: 4, color: 0x000000 } },
+        { x: 100, y: 232, width: 800, height: 240, fontSize: 100, stroke: { width: 4, color: 0x000000 } }
+      ],
+      description: { x: 35, y: 1164, width: 930, height: 250, fontSize: 90 },
+      note: { x: 35, y: 1434, width: 930, height: 90, fontSize: 50 },
+      /** Btn_green_dark_2 28:48077 (530 × 200) */
+      button: { x: 235, y: 1590, width: 530, height: 200 },
+      price: { y: 36, height: 128, gap: 0, fontSize: 80 },
+      coin: { width: 100, height: 100, y: 50 }
     }
   }
 } as const satisfies ReadyUiSkin;

@@ -1,0 +1,348 @@
+{
+ "about": "theme_light_6 (section 28:45250) P0/P1 sync: Result WIN, Moves, the gameplay settings button, No Ads. Figma's own transparent renders (get_screenshot contentsOnly) or read-only exports; no text inside. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "28:45250"
+ },
+ "assets": [
+  {
+   "key": "style2-result-ribbon",
+   "file": "style2/result_ribbon.webp",
+   "scale": 1,
+   "size": [
+    1020,
+    226
+   ],
+   "note": "pic_tape_red 28:45448 (one image fill, no text): Figma's render, render box = node box 1020 x 226",
+   "layers": [
+    {
+     "image": "png/style2-result-ribbon-28-45448.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1020,
+      226
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-result-rays",
+   "file": "style2/result_rays@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1834,
+    1786
+   ],
+   "note": "rayes 28:48361 (8-ray radial burst at 0.5, blur 40, 13 translucent stars): Figma's 0.5x render of its 1833 x 1785 render box",
+   "layers": [
+    {
+     "image": "png/style2-result-rays-28-48361@0.5x.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1834,
+      1786
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-result-close",
+   "file": "result/style1_close_dark@2x.webp",
+   "scale": 2,
+   "size": [
+    50,
+    50
+   ],
+   "note": "icon_close_dark_2 28:49423 (#000 at 0.45) inside the dark ribbon pic_tape_red_dark 28:49231: read-only exportAsync at 2x",
+   "layers": [
+    {
+     "image": "png/style1-result-close-28-49423@2x.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      50,
+      50
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-moves-panel",
+   "file": "style2/moves_panel.webp",
+   "scale": 1,
+   "size": [
+    280,
+    280
+   ],
+   "note": "btn_blue 28:48177 (component 28:45338 resized to 280, STRETCH rect, radius 41) without its texts",
+   "layers": [
+    {
+     "image": "png/style2-moves-panel-28-48177.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      280,
+      280
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-moves-panel",
+   "file": "hud/style1_moves_panel.webp",
+   "scale": 1,
+   "size": [
+    280,
+    280
+   ],
+   "note": "notification_back 28:48249 (component 28:45332 resized to 280, white, radius 41, soft ring) without its texts",
+   "layers": [
+    {
+     "image": "png/style1-moves-panel-28-48249.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      280,
+      280
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-button",
+   "file": "style2/button_settings.webp",
+   "scale": 1,
+   "size": [
+    214,
+    214
+   ],
+   "note": "btn_settings 28:48119 back: btn_blue 28:48120 (component 28:45338) at 214",
+   "layers": [
+    {
+     "image": "png/style2-settings-button-back-28-48120.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      214,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-settings-icon",
+   "file": "style2/icon_settings.webp",
+   "scale": 1,
+   "size": [
+    158,
+    158
+   ],
+   "note": "btn_settings 28:48119 icon: icon_settings 28:48121 (component 28:45300), its clipped soft shadow included",
+   "layers": [
+    {
+     "image": "png/style2-settings-button-icon-28-48121.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      158,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-settings-button",
+   "file": "hud/style1_settings_button.webp",
+   "scale": 1,
+   "size": [
+    214,
+    214
+   ],
+   "note": "btn_settings 28:48211 back: btn 28:48212 (remote btn/blue 1:252 at 214, = local btn_blue_dark 28:49339)",
+   "layers": [
+    {
+     "image": "png/style1-settings-button-back-28-48212.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      214,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-settings-icon",
+   "file": "hud/style1_icon_settings.webp",
+   "scale": 1,
+   "size": [
+    158,
+    158
+   ],
+   "note": "btn_settings 28:48211 icon: icon_settings_dark 28:48213 (component 28:48958), drawn 10 above the back's centre",
+   "layers": [
+    {
+     "image": "png/style1-settings-button-icon-28-48213.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      158,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "noads-panel",
+   "file": "offer/promo_panel.webp",
+   "scale": 1,
+   "size": [
+    1012,
+    1872
+   ],
+   "note": "Rectangle 66112 28:48043 / 28:48067 (byte-identical in both rows): #3b1576, radius 41, inner highlight / bottom band, a 6-unit 20 % ring. Render 1012 x 1872 = the 1000 x 1860 box + 6 on every side",
+   "nineSlice": {
+    "figma": {
+     "left": 46,
+     "top": 46,
+     "right": 46,
+     "bottom": 52
+    },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 3
+   },
+   "layers": [
+    {
+     "image": "png/noads-panel-28-48043.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1012,
+      1872
+     ]
+    }
+   ],
+   "pad": {
+    "left": 6,
+    "top": 6,
+    "right": 6,
+    "bottom": 6
+   }
+  },
+  {
+   "key": "noads-rays",
+   "file": "offer/noads_rays@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1046,
+    1046
+   ],
+   "note": "pic_decor_2 28:48987 (rays + 17 stars, blurred) via 28:48058 / 28:48073 (byte-identical): render 1045.75 square, drawn at 0.5",
+   "layers": [
+    {
+     "image": "png/noads-rays-28-48058.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1046,
+      1046
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-noads-hero",
+   "file": "style2/noads_hero.webp",
+   "scale": 1,
+   "size": [
+    700,
+    700
+   ],
+   "note": "pic_no_ads_1 28:48059 (component 28:45573): one image fill, no text",
+   "layers": [
+    {
+     "image": "png/style2-noads-hero-28-48059.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      700,
+      700
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-noads-hero",
+   "file": "offer/style1_noads_hero.webp",
+   "scale": 1,
+   "size": [
+    700,
+    700
+   ],
+   "note": "pic_pig_1 28:48074 (a frame with one image fill, the dark-outlined no-ads picture), no text",
+   "layers": [
+    {
+     "image": "png/style1-noads-hero-28-48074.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      700,
+      700
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-noads-close",
+   "file": "offer/style1_noads_close.webp",
+   "scale": 1,
+   "size": [
+    120,
+    120
+   ],
+   "note": "icon_close_dark 28:48068 (component 28:48843): the round red close of the dark promo windows",
+   "layers": [
+    {
+     "image": "png/style1-noads-close-28-48068.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      120,
+      120
+     ]
+    }
+   ]
+  }
+ ]
+}

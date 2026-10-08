@@ -40,6 +40,7 @@ export const READY_UI_LEGACY_TEXT = Object.freeze({
     exit: READY_UI_EN['core.result.exit']
   }),
   hard: READY_UI_EN['core.level_map.hard'],
+  moves: READY_UI_EN['core.moves.label'],
   max: READY_UI_EN['core.common.max'],
   shopTitle: READY_UI_EN['core.shop.special_offer'],
   noAds: Object.freeze({

@@ -1,6 +1,7 @@
 import type { Texture } from 'pixi.js';
 import type { ReadyUiOptionalTextureName, ReadyUiTextures } from './assets';
 import type { NineSliceSpec } from './nineSlice';
+import type { FigmaTextLook } from './text';
 import { READY_UI_STYLE_1, STYLE_1_INCLUDE_NAMES } from './skins/style1';
 import { READY_UI_STYLE_2 } from './skins/style2';
 
@@ -12,10 +13,10 @@ import { READY_UI_STYLE_2 } from './skins/style2';
  */
 
 /** The modal windows a style can cover. */
-export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result';
+export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds';
 
 /** Non-modal Core views whose visuals may come from the same selected skin. */
-export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen';
+export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton';
 
 /** The roles each covered window draws with, in the view's order. A covering style must give every one an asset. */
 export const READY_UI_SKIN_WINDOW_ROLES = {
@@ -30,8 +31,9 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
   ],
   result: [
     'resultGlowWin', 'resultGlowFail', 'rewardCoin', 'lifeLostArt', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'buttonExit',
-    'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail'
-  ]
+    'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail', 'resultStar'
+  ],
+  noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon']
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 /**
@@ -47,7 +49,9 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton', 'iconShop', 'iconHome']
+  levelMapScreen: ['playButton', 'iconShop', 'iconHome'],
+  moves: ['movesPanel'],
+  settingsButton: ['settingsButtonBack', 'settingsButtonIcon']
 } as const satisfies Record<ReadyUiSkinView, readonly string[]>;
 
 export type ReadyUiSkinRole = (typeof READY_UI_SKIN_VIEW_ROLES)[ReadyUiSkinView][number];
@@ -63,7 +67,7 @@ export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typ
 export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel'];
 
 /** The roles of the OFFER panel (`windows.offer`) that Lives and Confirm draw under themselves; required only with that layout. */
 const OFFER_ROLES: readonly ReadyUiSkinRole[] = ['offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'buttonPrimary', 'priceIcon'];
@@ -393,6 +397,53 @@ export interface ReadyUiSkinLevelMapScreenLayout {
   };
 }
 
+/**
+ * SettingsButtonView: the settings button of a screen without a HudView gear (a gameplay screen) — `settingsButtonBack`
+ * at `back` with the `settingsButtonIcon` in its `icon` box (back-local, from its top-left), `margins` design units from
+ * the safe area's top and right edges.
+ */
+export interface ReadyUiSkinSettingsButtonLayout {
+  readonly back: { readonly width: number; readonly height: number };
+  readonly icon: ReadyUiSkinBox;
+  readonly margins: { readonly top: number; readonly right: number };
+  /** The tap square's minimum side (units). */
+  readonly minHitSize: number;
+}
+
+/**
+ * MovesView: the moves counter of a gameplay screen. Boxes are BOX-LOCAL (x / y from the box's top-left; the view's
+ * origin is the box centre): `panel` is the `movesPanel` render box (its shadow may reach outside the box), `label` the
+ * caption (`MOVES`), `count` the runtime number — each with its own fill / OUTSIDE stroke over the style's text look.
+ */
+export interface ReadyUiSkinMovesLayout {
+  readonly box: { readonly width: number; readonly height: number };
+  readonly panel: ReadyUiSkinBox;
+  readonly label: ReadyUiSkinLivesTextBox;
+  readonly count: ReadyUiSkinLivesTextBox;
+}
+
+/**
+ * No Ads. Boxes are WINDOW-LOCAL (x / y from the window box's top-left; the panel origin is the window centre); the
+ * price row is button-local. `noAdsPanel` is the window shell, a 9-slice over the window box (its bleed in the caps' `pad`);
+ * the art boxes are render boxes: `noAdsClose` (the ×),
+ * `noAdsDecor` (the rays / stars behind the hero, decoration), `noAdsArt` (the hero), `buttonPrimary` (9-slice) and the
+ * coin `priceIcon` after a coin price. The copy is runtime: the two title lines are `wordNo` / `wordAds`; the description
+ * is split at its first line break — its first part in `description` (it wraps inside the box), the rest in `note`.
+ */
+export interface ReadyUiSkinNoAdsLayout {
+  readonly window: { readonly width: number; readonly height: number };
+  readonly close: ReadyUiSkinBox;
+  readonly decor: ReadyUiSkinBox;
+  readonly hero: ReadyUiSkinBox;
+  readonly title: readonly [ReadyUiSkinLivesTextBox, ReadyUiSkinLivesTextBox];
+  readonly description: ReadyUiSkinLivesTextBox;
+  readonly note: ReadyUiSkinLivesTextBox;
+  readonly button: ReadyUiSkinBox;
+  /** Button-local: the price text, `gap`, the coin (`priceIcon`, only for a coin price), one row centred on the button; `y` = the row's top. */
+  readonly price: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number; readonly fill?: number; readonly stroke?: { readonly width: number; readonly color: number } };
+  readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+}
+
 /** A Result button: its box in the frame, its label box button-local (from the button box's top-left). */
 export interface ReadyUiSkinResultButtonLayout {
   readonly button: ReadyUiSkinBox;
@@ -406,8 +457,11 @@ export interface ReadyUiSkinResultOutcomeLayout {
   /** The ribbon's runtime title (`LEVEL n`). */
   readonly title: ReadyUiSkinTextBox;
   readonly close: ReadyUiSkinBox;
-  /** `resultGlowWin` / `resultGlowFail`: the blurred band behind the content (render box; decoration, never measured). */
-  readonly glow: ReadyUiSkinBox;
+  /**
+   * `resultGlowWin` / `resultGlowFail`: the blurred band behind the content (render box; decoration, never measured);
+   * `null` = this outcome draws no glow (its role is not needed).
+   */
+  readonly glow: ReadyUiSkinBox | null;
 }
 
 /**
@@ -424,17 +478,21 @@ export interface ReadyUiSkinResultLayout {
     readonly rewardsLabel: ReadyUiSkinTextBox;
     /** `rewardCoin` (render box). */
     readonly coin: ReadyUiSkinBox;
-    /** The reward amount, centred on this box. */
-    readonly amount: ReadyUiSkinTextBox;
+    /** The reward amount, centred on this box (its own fill / OUTSIDE stroke over the style's look, when given). */
+    readonly amount: ReadyUiSkinLivesTextBox;
     /** CONTINUE on `buttonPrimary`. */
     readonly next: ReadyUiSkinResultButtonLayout;
-    /** The secondary (RETRY) on `buttonRewarded` with the `buttonHighlight` layer (`highlight`, button-local). */
-    readonly retry: ReadyUiSkinResultButtonLayout & { readonly highlight: ReadyUiSkinBox };
+    /**
+     * The secondary (RETRY) on `buttonRewarded` with the `buttonHighlight` layer (`highlight`, button-local); `null` =
+     * this style's rewarded surface has no highlight layer (no `buttonHighlight` art).
+     */
+    readonly retry: ReadyUiSkinResultButtonLayout & { readonly highlight: ReadyUiSkinBox | null };
   };
   readonly fail: ReadyUiSkinResultOutcomeLayout & {
     /** `lifeLostArt` (render box) and its runtime delta (`-1`, LEFT / CENTER). */
     readonly lifeLost: ReadyUiSkinBox;
-    readonly lifeDelta: ReadyUiSkinTextBox;
+    /** LEFT-aligned unless the box says otherwise; its own fill / OUTSIDE stroke over the style's look, when given. */
+    readonly lifeDelta: ReadyUiSkinLivesTextBox;
     /** The outcome line (`FAILED`, the params' subtitle) under the art. */
     readonly status: ReadyUiSkinTextBox;
     /** RETRY on `buttonPrimary`. */
@@ -451,6 +509,7 @@ export interface ReadyUiSkinLayouts {
   readonly offer?: ReadyUiSkinOfferLayout;
   readonly settings?: ReadyUiSkinSettingsLayouts;
   readonly result?: ReadyUiSkinResultLayout;
+  readonly noAds?: ReadyUiSkinNoAdsLayout;
 }
 
 /** A style's own font file (under `assets/pixi-ui/`), registered under `family` by `loadReadyUiAssets({ skin })`. */
@@ -485,6 +544,8 @@ export interface ReadyUiSkin {
   readonly levelMap?: ReadyUiSkinLevelMapLayout;
   readonly bottomNav?: ReadyUiSkinBottomNavLayout;
   readonly levelMapScreen?: ReadyUiSkinLevelMapScreenLayout;
+  readonly moves?: ReadyUiSkinMovesLayout;
+  readonly settingsButton?: ReadyUiSkinSettingsButtonLayout;
 }
 
 /** A skin's role textures, as `loadReadyUiAssets({ skin })` puts them under `textures.skins[skin.id]` (by asset key). */
@@ -496,7 +557,7 @@ export const READY_UI_SKINS = {
   [READY_UI_STYLE_2.id]: READY_UI_STYLE_2
 } as const satisfies Record<string, ReadyUiSkin>;
 
-const STANDALONE_VIEWS: readonly ReadyUiSkinView[] = ['hud', 'levelMap', 'bottomNav', 'levelMapScreen'];
+const STANDALONE_VIEWS: readonly ReadyUiSkinView[] = ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton'];
 
 function viewLayout(skin: ReadyUiSkin, view: ReadyUiSkinView): unknown {
   return STANDALONE_VIEWS.includes(view) ? skin[view as ReadyUiSkinStandaloneView] : skin.windows[view as ReadyUiSkinWindow];
@@ -519,7 +580,8 @@ function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly 
  * layout has no highlight; the OFFER panel's roles only when the style has `windows.offer`); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
  * art, `background` → the map background). BottomNav item icons are never required by the nav alone; LevelMapScreen
- * requires PLAY and the icons of its SHOP / HOME slots.
+ * requires PLAY and the icons of its SHOP / HOME slots. Result needs every role but `buttonHighlight` when its WIN
+ * secondary has no highlight layer and an outcome's glow when that outcome draws none.
  */
 export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): readonly ReadyUiSkinRole[] {
   if (view === 'hud') {
@@ -557,6 +619,14 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     if (layouts?.map.language || layouts?.gameplay.language) roles.push('settingsBtnLanguage');
     if (layouts?.map.language?.icon || layouts?.gameplay.language?.icon) roles.push('settingsIconLanguage');
     return roles;
+  }
+  if (view === 'result') {
+    const layout = skin.windows.result;
+    const without: ReadyUiSkinRole[] = [];
+    if (layout?.win.retry.highlight === null) without.push('buttonHighlight');
+    if (layout?.win.glow === null) without.push('resultGlowWin');
+    if (layout?.fail.glow === null) without.push('resultGlowFail');
+    return READY_UI_SKIN_WINDOW_ROLES.result.filter((role) => !without.includes(role));
   }
   return READY_UI_SKIN_VIEW_ROLES[view];
 }
@@ -599,13 +669,15 @@ export function validateReadyUiSkin(skin: ReadyUiSkin): void {
   }
 }
 
-export type ReadyUiSkinStandaloneView = 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen';
+export type ReadyUiSkinStandaloneView = 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton';
 
 export interface ReadyUiSkinViewLayouts {
   readonly hud: ReadyUiSkinHudLayout;
   readonly levelMap: ReadyUiSkinLevelMapLayout;
   readonly bottomNav: ReadyUiSkinBottomNavLayout;
   readonly levelMapScreen: ReadyUiSkinLevelMapScreenLayout;
+  readonly moves: ReadyUiSkinMovesLayout;
+  readonly settingsButton: ReadyUiSkinSettingsButtonLayout;
 }
 
 /**
@@ -717,6 +789,17 @@ export function resolveWindowSkin<W extends ReadyUiSkinWindow>(
   }
   if (found.missing.length) throw styleError(found.missing);
   return { skin, layout, art: found.art as WindowSkinLook<W>['art'] };
+}
+
+/** A text box's look: the style's (`skinTextLook`), with the box's own fill / OUTSIDE stroke over it. */
+export function skinTextBoxLook(look: FigmaTextLook, box: ReadyUiSkinLivesTextBox): FigmaTextLook {
+  const own: FigmaTextLook = { ...look };
+  if (box.fill !== undefined) own.fill = box.fill;
+  if (box.stroke) {
+    own.strokeOutside = box.stroke.width;
+    own.strokeColor = box.stroke.color;
+  }
+  return own;
 }
 
 /** The runtime text look of a style's views: its stroke / shadow, and its own font and fill when it has them. */

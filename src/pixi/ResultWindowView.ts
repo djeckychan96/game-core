@@ -6,7 +6,8 @@ import { WinStarsEffect } from './fx/WinStarsEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
 import { localizedText } from './localization';
 import { READY_UI_LEGACY_TEXT } from './locales/legacy';
-import { resolveWindowSkin, selectWindowSkin, skinNineSlice, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinResultButtonLayout, type WindowSkinLook } from './skin';
+import type { NineSliceSpec } from './nineSlice';
+import { resolveWindowSkin, selectWindowSkin, skinAssetKey, skinNineSlice, skinTextBoxLook, skinTextLook, type ReadyUiSkin, type ReadyUiSkinBox, type ReadyUiSkinLivesTextBox, type ReadyUiSkinResultButtonLayout, type WindowSkinLook } from './skin';
 import { UiButton } from './UiButton';
 import { createFigmaLabel, createLabel, fitLabelWidth, formatAmount, placeFigmaLabel, type FigmaTextLook } from './text';
 import { resolveTheme } from './theme';
@@ -124,8 +125,9 @@ interface StyledNodes {
   look: ResultLook;
   ribbonWin: Sprite;
   ribbonFail: Sprite;
-  glowWin: Sprite;
-  glowFail: Sprite;
+  /** null: the style draws no glow for that outcome. */
+  glowWin: Sprite | null;
+  glowFail: Sprite | null;
   lifeLost: Sprite;
   lifeDelta: Text;
   status: Text;
@@ -152,8 +154,10 @@ interface StyledNodes {
  * style's ribbon per outcome (red / grey) with its tinted ×, the blurred glow band behind the content, the reward coin,
  * the CTA surfaces as the style's 9-slices (the WIN secondary on the rewarded surface with its highlight), the fail's
  * life-lost art with its runtime delta and the outcome line under it, EXIT on the style's exit surface; every text is
- * runtime text in the style's boxes. Same params, callbacks, stars, confetti and fit rule; the scale is the style
- * frame's contain-fit, like every styled window. The style's hero art slot is game content and is not drawn.
+ * runtime text in the style's boxes; the crown's stars are the style's `resultStar` at its rest boxes, an outcome's glow
+ * is optional (`glow: null`), the WIN highlight too (`highlight: null`), and EXIT is a 9-slice when its asset has caps.
+ * Same params, callbacks, stars, confetti and fit rule; the scale is the style frame's contain-fit, like every styled
+ * window. The style's hero art slot is game content and is not drawn.
  */
 export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   /** The Ready UI style drawing this window, or null (donor). */
@@ -204,10 +208,12 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     const starSpecs = look
       ? look.layout.win.stars.map((s) => ({ x: fx(look, s.x), y: fy(look, s.y), size: s.size }))
       : [{ x: -272, y: -540, size: 240 }, { x: 0, y: -600, size: 288 }, { x: 272, y: -540, size: 240 }];
+    // the stars are the style's own art (`resultStar`), the kit's gold star for the donor look
+    const starTexture = look ? look.art.resultStar : t.starGold;
     for (const spec of starSpecs) {
-      const star = new Sprite(t.starGold);
+      const star = new Sprite(starTexture);
       star.anchor.set(0.5);
-      star.scale.set(spec.size / Math.max(1, t.starGold.width));
+      star.scale.set(spec.size / Math.max(1, starTexture.width));
       star.position.set(spec.x, spec.y);
       star.visible = false;
       // never measured: the tap area takes the rest box of an earned star, not whatever transform it has mid-flight
@@ -223,6 +229,8 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
       const { skin, layout: L, art: A } = look;
       const text: FigmaTextLook = skinTextLook(skin);
       const label = (value: string, fontSize: number): Text => createFigmaLabel(this.theme, value, fontSize, text);
+      /** A text box with its own fill / OUTSIDE stroke over the style's look. */
+      const boxLabel = (value: string, box: ReadyUiSkinLivesTextBox): Text => createFigmaLabel(this.theme, value, box.fontSize, skinTextBoxLook(text, box));
       const art = (texture: Texture, b: ReadyUiSkinBox): Sprite => {
         const sprite = new Sprite(texture);
         sprite.position.set(fx(look, b.x), fy(look, b.y));
@@ -231,11 +239,11 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
         return sprite;
       };
       /** A styled CTA: the surface (a 9-slice, or fixed art drawn at the box), its runtime label in the style's button-local box. */
-      const button = (id: string, texture: Texture, role: 'buttonPrimary' | 'buttonRewarded' | null, layout: ReadyUiSkinResultButtonLayout, value: string, onTap: () => void): UiButton => {
+      const button = (id: string, texture: Texture, caps: NineSliceSpec | undefined, layout: ReadyUiSkinResultButtonLayout, value: string, onTap: () => void): UiButton => {
         const b = layout.button;
         const view = this.addButton(new UiButton({
           ui: this.ui, id: `${this.id}:${id}`, theme: this.theme, texture,
-          ...(role ? { nineSlice: skinNineSlice(skin, role, 'result') } : {}),
+          ...(caps ? { nineSlice: caps } : {}),
           width: b.width, height: b.height, pressScale: 0.9, onTap
         }));
         view.position.set(fx(look, b.x + b.width / 2), fy(look, b.y + b.height / 2));
@@ -246,30 +254,34 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
         return view;
       };
 
-      const glowWin = art(A.resultGlowWin, L.win.glow);
-      const glowFail = art(A.resultGlowFail, L.fail.glow);
+      const glowWin = L.win.glow ? art(A.resultGlowWin, L.win.glow) : null;
+      const glowFail = L.fail.glow ? art(A.resultGlowFail, L.fail.glow) : null;
       // the glows reach far outside the composition: never part of the fit, the centring or the tap area
-      glowWin.measurable = glowFail.measurable = false;
+      for (const glow of [glowWin, glowFail]) if (glow) glow.measurable = false;
       this.rewardCoin = art(A.rewardCoin, L.win.coin);
-      this.rewardAmount = label('0', L.win.amount.fontSize);
+      this.rewardAmount = boxLabel('0', L.win.amount);
       this.rewardCaption = label(rewardsText, L.win.rewardsLabel.fontSize);
       placeFigmaLabel(this.rewardCaption, { ...panelBox(look, L.win.rewardsLabel), align: 'center' });
       const lifeLost = art(A.lifeLostArt, L.fail.lifeLost);
-      const lifeDelta = label(this.lifeDeltaText ?? '', L.fail.lifeDelta.fontSize);
-      placeFigmaLabel(lifeDelta, { ...panelBox(look, L.fail.lifeDelta), align: 'left' });
+      const lifeDelta = boxLabel(this.lifeDeltaText ?? '', L.fail.lifeDelta);
+      placeFigmaLabel(lifeDelta, { ...panelBox(look, L.fail.lifeDelta), align: L.fail.lifeDelta.align ?? 'left' });
       const status = label('', L.fail.status.fontSize);
 
-      this.nextButton = button('next', A.buttonPrimary, 'buttonPrimary', L.win.next, nextText, () => this.finish('next'));
-      this.retryButton = button('retry', A.buttonRewarded, 'buttonRewarded', L.win.retry, retryText, () => this.finish('retry'));
+      const primaryCaps = skinNineSlice(skin, 'buttonPrimary', 'result');
+      this.nextButton = button('next', A.buttonPrimary, primaryCaps, L.win.next, nextText, () => this.finish('next'));
+      this.retryButton = button('retry', A.buttonRewarded, skinNineSlice(skin, 'buttonRewarded', 'result'), L.win.retry, retryText, () => this.finish('retry'));
       const highlight = L.win.retry.highlight;
-      const glare = new Sprite(A.buttonHighlight);
-      glare.position.set(highlight.x - L.win.retry.button.width / 2, highlight.y - L.win.retry.button.height / 2);
-      glare.width = highlight.width;
-      glare.height = highlight.height;
-      glare.eventMode = 'none';
-      this.retryButton.addChildAt(glare, 1); // over the surface, under the label
-      this.failRetryButton = button('fail-retry', A.buttonPrimary, 'buttonPrimary', L.fail.retry, retryText, () => this.finish('retry'));
-      this.exitButton = button('exit', A.buttonExit, null, L.fail.exit, exitText, () => this.finish('exit'));
+      if (highlight) {
+        const glare = new Sprite(A.buttonHighlight);
+        glare.position.set(highlight.x - L.win.retry.button.width / 2, highlight.y - L.win.retry.button.height / 2);
+        glare.width = highlight.width;
+        glare.height = highlight.height;
+        glare.eventMode = 'none';
+        this.retryButton.addChildAt(glare, 1); // over the surface, under the label
+      }
+      this.failRetryButton = button('fail-retry', A.buttonPrimary, primaryCaps, L.fail.retry, retryText, () => this.finish('retry'));
+      // EXIT: fixed art drawn at its box, or a 9-slice when the style's asset carries caps
+      this.exitButton = button('exit', A.buttonExit, skin.assets[skinAssetKey(skin, 'result', 'buttonExit')]?.nineSlice, L.fail.exit, exitText, () => this.finish('exit'));
 
       const ribbonWin = art(A.resultRibbonWin, L.win.ribbon);
       const ribbonFail = art(A.resultRibbonFail, L.fail.ribbon);
@@ -277,11 +289,12 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
       this.subtitleText = label('COMPLETED!', L.win.subtitle.fontSize);
 
       // decoration never takes input: taps on it still land inside the panel's hit area (no backdrop close)
-      for (const node of [glowWin, glowFail, this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta, status, ribbonWin, ribbonFail, this.titleText, this.subtitleText]) node.eventMode = 'none';
+      for (const node of [glowWin, glowFail, this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta, status, ribbonWin, ribbonFail, this.titleText, this.subtitleText]) if (node) node.eventMode = 'none';
       // Figma bottom → top: the glow band, the reward / the broken heart, the CTAs, the outcome line, the ribbon; then
       // the crown (as the donor: over the ribbon, under its text), the ribbon text and the × (placeClose)
+      for (const glow of [glowWin, glowFail]) if (glow) this.panel.addChild(glow);
       this.panel.addChild(
-        glowWin, glowFail, this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta,
+        this.rewardCoin, this.rewardAmount, this.rewardCaption, lifeLost, lifeDelta,
         this.nextButton, this.retryButton, this.failRetryButton, this.exitButton, status, ribbonWin, ribbonFail,
         this.starsFx, ...this.stars, this.starsFx.front, this.titleText, this.subtitleText
       );
@@ -386,8 +399,10 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
       placeFigmaLabel(this.subtitleText, { ...panelBox(look, L.win.subtitle), align: 'center' });
       placeFigmaLabel(this.rewardAmount, { ...panelBox(look, L.win.amount), align: 'center' });
     }
-    nodes.ribbonWin.visible = nodes.glowWin.visible = !fail;
-    nodes.ribbonFail.visible = nodes.glowFail.visible = fail;
+    nodes.ribbonWin.visible = !fail;
+    nodes.ribbonFail.visible = fail;
+    if (nodes.glowWin) nodes.glowWin.visible = !fail;
+    if (nodes.glowFail) nodes.glowFail.visible = fail;
     const lifeLost = fail && this.lifeDeltaText !== null;
     nodes.lifeLost.visible = nodes.lifeDelta.visible = lifeLost;
     if (this.closeButton) this.closeButton.background.texture = fail ? look.art.resultCloseFail : look.art.resultCloseWin;
