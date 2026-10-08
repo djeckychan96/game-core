@@ -269,7 +269,9 @@ export const READY_UI_STYLE_1 = {
    * (39 from the right edge); the tape 978 × 116 at 51, 493 with "SPECIAL OFFER" — runtime copy — Fira Sans Black 60 and
    * the kit's 4 / 4 outline at 111, 503, 858 × 78; the cards 310 × 406 at 51 / 385 / 719 × 633 / 1063 (render −4, −4,
    * 318 × 418); the amount 60 at 9.76, 31, 290 × 72, the pack box 25, 86, 260 × 220, the price 56 centred on the card's
-   * inner face; the scroll frame ends 64 above the navigation panel (the light screen's `Frame 615`).
+   * inner face; the scroll frame ends 64 above the navigation panel (the light screen's `Frame 615`). Desktop: the light
+   * PC tab's rule (theme_light_7 43:25602; the dark PC 43:23091 is the legacy modal over gameplay, not the tab): the
+   * awning at y −110, the × 21 right of this tape (51 + 978) on its centre line: centre 1110, 551.
    */
   shopScreen: {
     background: { color: 0x451262, art: true },
@@ -279,7 +281,7 @@ export const READY_UI_STYLE_1 = {
       ribbon: { x: 51, y: 493, width: 978, height: 116 },
       label: { x: 111, y: 503, width: 858, height: 78, fontSize: 60 }
     },
-    grid: { top: 633, columns: 3, pitchX: 334, pitchY: 430 },
+    grid: { top: 633, columns: 3, pitchX: 334, pitchY: 430, rows: 2 },
     card: {
       box: { width: 310, height: 406 },
       art: { x: -4, y: -4, width: 318, height: 418 },
@@ -287,7 +289,8 @@ export const READY_UI_STYLE_1 = {
       amount: { x: 9.76, y: 31, width: 290, height: 72, fontSize: 60 },
       price: { x: 20.76, y: 313.5, width: 268, height: 67, fontSize: 56 }
     },
-    scroll: { top: 485, bottomGap: 64 }
+    scroll: { top: 485, bottomGap: 64 },
+    desktop: { awningY: -110, close: { x: 1110, y: 551 } }
   },
   windows: {
     /** Figma `screen/confirm-exit`: window-local boxes (the `ui/window/base` box sits at 60, 675 of the frame). */

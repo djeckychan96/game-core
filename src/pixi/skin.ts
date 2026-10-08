@@ -427,8 +427,10 @@ export interface ReadyUiSkinMovesLayout {
 
 /**
  * ShopScreen (the SHOP tab of the main-screen navigation, not a modal): FRAME coordinates (x / y in the style's `frame`;
- * the frame's top edge is the viewport's top edge, its centre the safe area's horizontal centre, contain-fit scale),
- * card parts CARD-LOCAL (from the card box's top-left). The screen fill is `background.color` (the whole viewport) under
+ * the frame's top edge is the viewport's top edge, its centre the safe area's horizontal centre), card parts CARD-LOCAL
+ * (from the card box's top-left). Two compositions, as Figma draws them: the MOBILE one (the phone frame scaled to the
+ * safe width, the awning under the status bar) while the designed `grid.rows` fit above the navigation at that scale,
+ * else the DESKTOP one (`desktop`: the design-height scale with the column compact in the centre). The screen fill is `background.color` (the whole viewport) under
  * the optional `shopBackground` picture (cover-fit); `shopAwning` is one tile of the awning, repeated across the viewport
  * width from the frame centre at the top edge; the title tape (`shopTitle`, a horizontal 9-slice at `title.ribbon`) and
  * the card grid scroll together between `scroll.top` and `scroll.bottomGap` units above the navigation panel.
@@ -447,9 +449,10 @@ export interface ReadyUiSkinShopScreenLayout {
   readonly title: { readonly ribbon: ReadyUiSkinBox; readonly label: ReadyUiSkinLivesTextBox };
   /**
    * The card grid: `columns` per row, the first row's card box top at `top`, card boxes `pitchX` / `pitchY` apart and
-   * the columns centred on the frame; a last row with fewer cards is centred too.
+   * the columns centred on the frame; a last row with fewer cards is centred too. `rows` = the designed rows (Figma: two,
+   * the six packs) that decide the composition — never the item count.
    */
-  readonly grid: { readonly top: number; readonly columns: number; readonly pitchX: number; readonly pitchY: number };
+  readonly grid: { readonly top: number; readonly columns: number; readonly pitchX: number; readonly pitchY: number; readonly rows: number };
   /** One pack card: its logical box, the `shopCard` render box, the pack art box (`shopPack<n>` or the item's own), the amount and the price. */
   readonly card: {
     readonly box: { readonly width: number; readonly height: number };
@@ -460,6 +463,12 @@ export interface ReadyUiSkinShopScreenLayout {
   };
   /** The scrolled area: from frame y `top` down to `bottomGap` units above the navigation panel's top edge. */
   readonly scroll: { readonly top: number; readonly bottomGap: number };
+  /**
+   * The desktop composition (Figma PC `screen_market_pc`): the frame at the design-height scale (contain-fit), the awning
+   * tiles raised to `awningY` (a desktop has no status bar under them) and the × centred at `close` (frame coordinates:
+   * beside the title tape), kept inside the safe area.
+   */
+  readonly desktop: { readonly awningY: number; readonly close: { readonly x: number; readonly y: number } };
 }
 
 /**

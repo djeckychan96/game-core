@@ -117,11 +117,11 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     expect(kit.uiErrors).toEqual([]);
   });
 
-  it('lays the cards out on the Figma grid of the frame (3 per row, contain-fit, frame top on the viewport top)', () => {
+  it('lays the cards out on the Figma grid of the frame (3 per row, the phone frame at the width, frame top on the viewport top)', () => {
     const kit = createKit();
     const { shop } = createShop(kit, style);
     const layout = style.skin.shopScreen!;
-    const s = Math.min(390 / 1080, 844 / 2344);
+    const s = 390 / 1080;
     const body = field<Container>(shop, 'body');
     expect(body.scale.x).toBeCloseTo(s, 6);
     expect(body.position.x).toBeCloseTo(195, 6);
@@ -146,6 +146,45 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     const bounds = tiles.map((t) => t.getBounds());
     expect(Math.min(...bounds.map((b) => b.left))).toBeLessThanOrEqual(0);
     expect(Math.max(...bounds.map((b) => b.right))).toBeGreaterThanOrEqual(1280);
+    shop.destroy();
+  });
+
+  it('two Figma compositions: MOBILE (phone width, awning under the status bar) while two rows fit, else DESKTOP (PC: compact column, awning raised, x beside the tape)', () => {
+    const kit = createKit();
+    const { shop } = createShop(kit, style, { onClose: () => {} });
+    const layout = style.skin.shopScreen!;
+    const body = field<Container>(shop, 'body');
+    const awning = field<Container>(shop, 'awning');
+    const close = field<UiButton>(shop, 'closeButton');
+    const gridWidth = (): number => {
+      const bounds = ITEMS.map((item) => card(shop, item.id).getBounds());
+      return Math.max(...bounds.map((b) => b.right)) - Math.min(...bounds.map((b) => b.left));
+    };
+    // phones (19.5:9 and 16:9): the frame at the width, the three cards ~90 % of it like the phone frame (978 of 1080)
+    for (const [w, h] of [[390, 844], [320, 568], [360, 640]] as const) {
+      shop.resize(w, h);
+      expect(body.scale.x, `${w}x${h}`).toBeCloseTo(w / 1080, 6);
+      expect(awning.y).toBe(0);
+      expect(gridWidth() / w).toBeGreaterThan(0.9);
+      expect(close.x).toBeCloseTo(540 - layout.close.right - layout.close.width / 2, 6);
+      expect(shop.scrollable).toBe(false);
+    }
+    // a phone whose bottom inset lifts the navigation keeps the phone frame while the rows still fit above it
+    shop.resize(320, 568, { insets: { top: 20, bottom: 34 } });
+    expect(body.scale.x).toBeCloseTo(320 / 1080, 6);
+    // desktop windows (wide, or too short for the phone frame): the design-height scale, the PC awning and x
+    for (const [w, h] of [[1280, 800], [501, 547], [768, 1024]] as const) {
+      shop.resize(w, h);
+      const s = Math.min(w / 1080, h / 2344);
+      expect(body.scale.x, `${w}x${h}`).toBeCloseTo(s, 6);
+      expect(gridWidth()).toBeCloseTo(978 * s + (layout.card.art.width - 310) * s, 0);
+      expect(awning.y).toBe(layout.desktop.awningY);
+      expect([close.x, close.y]).toEqual([layout.desktop.close.x - 540, layout.desktop.close.y]);
+      expect(shop.scrollable).toBe(false);
+    }
+    // the desktop x never leaves the safe area
+    shop.resize(400, 520, { insets: { right: 40 } });
+    expect(close.x + layout.close.width / 2).toBeLessThanOrEqual((400 - 40 - 180) / body.scale.x + 1e-6);
     shop.destroy();
   });
 

@@ -570,7 +570,9 @@ export const READY_UI_STYLE_2 = {
    * tape at 40, 493 (render −4, −1: 36, 492, 1008 × 118) with "SHOP" Calibri Bold 80 white at 65, 512, 950 × 78; the cards
    * 310 × 406 at 51 / 385 / 719 × 629 / 1061 (render −6, −6, 322 × 418); the amount #3f598c 60 at 9.76, 31, 290 × 73, the
    * pack box 25, 86, 260 × 220, the price white 60 centred on the card's white face (Figma's soft 30 % shadow is not
-   * drawn); the scroll frame `Frame 615` ends 64 above the navigation panel.
+   * drawn); the scroll frame `Frame 615` ends 64 above the navigation panel. Desktop: theme_light_7 `screen_market_pc`
+   * 43:25602 (4168 × 2344, x − 1544 → this frame): the same column at the design-height scale, the awning tiles at y −110,
+   * `btn_close` 136 at 2605, 483 (centre 1129, 551: 21 right of the tape, on its centre line).
    */
   shopScreen: {
     background: { color: 0x0f172c, art: false },
@@ -580,7 +582,7 @@ export const READY_UI_STYLE_2 = {
       ribbon: { x: 36, y: 492, width: 1008, height: 118 },
       label: { x: 65, y: 512, width: 950, height: 78, fontSize: 80 }
     },
-    grid: { top: 629, columns: 3, pitchX: 334, pitchY: 432 },
+    grid: { top: 629, columns: 3, pitchX: 334, pitchY: 432, rows: 2 },
     card: {
       box: { width: 310, height: 406 },
       art: { x: -6, y: -6, width: 322, height: 418 },
@@ -588,6 +590,7 @@ export const READY_UI_STYLE_2 = {
       amount: { x: 9.76, y: 31, width: 290, height: 73, fontSize: 60, fill: 0x3f598c },
       price: { x: 20.76, y: 310.5, width: 268, height: 73, fontSize: 60 }
     },
-    scroll: { top: 486, bottomGap: 64 }
+    scroll: { top: 486, bottomGap: 64 },
+    desktop: { awningY: -110, close: { x: 1129, y: 551 } }
   }
 } as const satisfies ReadyUiSkin;

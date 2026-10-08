@@ -87,10 +87,14 @@ const CARD_PRESS_SCALE = 0.9;
  * reports `onBuy(item)`; `setBuyEnabled(false)` holds the cards while the host's purchase is in flight. The modal
  * `ShopWindowView` is a separate, unchanged view.
  *
- * Layout: the style's 1080 × 2344 frame at the contain-fit design scale, its top edge on the viewport's top edge (the
- * awning reaches up under the status bar, like Figma's phone frame) and its centre on the safe area's centre; the
- * background and the awning tiles span the whole viewport; the × keeps its distance from the safe area's right edge
- * (never above the safe top); the navigation sits at the bottom edge above the bottom inset.
+ * Layout: the style's 1080 × 2344 frame, its top edge on the viewport's top edge and its centre on the safe area's centre,
+ * in one of Figma's two compositions. MOBILE (the phone frame): scaled to the safe width — the three cards span the
+ * width like Figma's phone — while the designed rows (`grid.rows`) fit above the navigation at that scale; the awning
+ * reaches up under the status bar, the × keeps its distance from the safe area's right edge (never above the safe top).
+ * DESKTOP (Figma PC, every viewport where the mobile one does not fit — wide or short): the contain-fit design scale
+ * (the column compact in the centre), the awning raised to `desktop.awningY` and the × beside the title tape. In both
+ * the background and the awning tiles span the whole viewport and the navigation sits at the bottom edge above the
+ * bottom inset (its own unchanged scale).
  */
 export class ShopScreen extends Container {
   readonly id: string;
@@ -341,7 +345,12 @@ export class ShopScreen extends Container {
     const left = Math.max(0, insets.left ?? 0);
     const right = Math.max(0, insets.right ?? 0);
     const layout = this.layout;
-    const s = Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
+    // the navigation first (its own design scale): the composition depends on where its panel starts
+    this.nav.resize(w, h, { insets: { bottom, left, right }, pixelRatio: this.pixelRatio });
+    const mobileScale = (w - left - right) / this.skin.frame.width;
+    const designedBottom = layout.grid.top + (layout.grid.rows - 1) * layout.grid.pitchY + layout.card.box.height + layout.scroll.bottomGap;
+    const mobile = designedBottom * mobileScale <= this.nav.top;
+    const s = mobile ? mobileScale : Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
     this.scale_ = s;
     const centerX = left + (w - left - right) / 2;
 
@@ -361,6 +370,7 @@ export class ShopScreen extends Container {
 
     // awning tiles `width` apart, one centred on the frame, across the whole viewport width
     const tile = layout.awning;
+    this.awning.y = mobile ? 0 : layout.desktop.awningY;
     const kMin = Math.floor((edgeL + tile.width / 2) / tile.width);
     const kMax = Math.ceil((edgeR - tile.width / 2) / tile.width);
     const count = Math.max(1, kMax - kMin + 1);
@@ -379,11 +389,12 @@ export class ShopScreen extends Container {
 
     if (this.closeButton) {
       const close = layout.close;
+      const safeRight = (w - right - centerX) / s;
+      const safeTop = top / s;
       this.closeButton.setIdleScale(1);
-      this.closeButton.position.set((w - right - centerX) / s - close.right - close.width / 2, Math.max(close.y, top / s) + close.height / 2);
+      if (mobile) this.closeButton.position.set(safeRight - close.right - close.width / 2, Math.max(close.y, safeTop) + close.height / 2);
+      else this.closeButton.position.set(Math.min(this.frameX(layout.desktop.close.x), safeRight - close.width / 2), Math.max(layout.desktop.close.y, safeTop + close.height / 2));
     }
-
-    this.nav.resize(w, h, { insets: { bottom, left, right }, pixelRatio: this.pixelRatio });
 
     // the scrolled column: from `scroll.top` down to `bottomGap` above the navigation panel
     const areaTop = layout.scroll.top;

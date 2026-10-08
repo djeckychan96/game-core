@@ -277,7 +277,7 @@ function showTab(tab: 'shop' | 'home') {                                        
 | `title`, `setTitle(text)` | the tape's title; default `core.shop.title` (SHOP / МАГАЗИН) |
 | `show()`, `hide()`, `shown`, `hidden` (option) | visibility only; `hide()` cancels a press, a drag or a fling in progress (never a purchase, never a late scroll) |
 | `scrollY`, `scrollable`, `scrollToTop()` | the column scrolls (drag, fling through MotionRuntime scope `<id>:scroll`, wheel) only when the cards do not fit; a drag is never a purchase |
-| `resize(w, h, { insets, pixelRatio })` | the style's frame at the contain-fit scale, its top on the viewport's top (the awning under the status bar), centred on the safe area; the background and the awning tiles span the viewport, the × keeps its distance from the safe right edge (never above the safe top), the navigation at the bottom above the bottom inset |
+| `resize(w, h, { insets, pixelRatio })` | Figma's two compositions (theme_light_7 43:23372 / 43:25602): MOBILE — the phone frame at the safe width (the three cards ~90 % of it, the awning under the status bar, the × in its corner) while the designed two rows fit above the navigation; else DESKTOP — the contain-fit design scale (compact centred column), the awning raised 110 units, the × beside the title tape. The frame top on the viewport top, centred on the safe area; background and awning tiles span the viewport; the navigation keeps its own scale at the bottom |
 | `getCardContainer(itemId)`, `destroy()` | a card for host FX / checks; destroy disposes every ButtonController, cancels the scroll, removes listeners (repeat-safe) |
 
 The modal `ShopWindowView` below is a separate, unchanged view (donor look under every style).
