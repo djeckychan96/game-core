@@ -218,8 +218,10 @@ class ResourceBadge extends Container {
     this.countText = createLabel(theme, '0', {
       fontSize: heartCount ? heartCount.fontSize : layout.resourceCount.fontSize,
       stroke: heartCount ? heartCount.stroke : false,
-      ...options.text
+      ...options.text,
+      ...(heartCount?.fill !== undefined ? { fill: heartCount.fill } : {})
     });
+    if (heartCount?.strokeColor !== undefined) this.countText.style.stroke = { color: heartCount.strokeColor, width: heartCount.stroke, join: 'round' };
     this.capsuleText = createLabel(theme, '', { fontSize: layout.capsuleText.fontSize, stroke: false, ...options.text });
     if (options.icon === 'heart') {
       if (heartCount) this.countText.position.set(heartCount.x, heartCount.y);

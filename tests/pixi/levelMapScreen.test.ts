@@ -284,8 +284,10 @@ describe('LevelMapScreen — the look stays the style\'s', () => {
     expect(SLOTS.map((slot) => item(slot).x)).toEqual([-664, 0, 664]);
     expect([sprite(item('home'), 'style-2:iconHome').y, sprite(item('home'), 'style-2:iconHome').width]).toEqual([43, 288]);
     expect(sprite(item('shop'), 'style-2:iconShop').y).toBe(93.517);
-    expect(sprite(item('shop'), 'style-2:iconShop').width).toBeCloseTo(267.034, 6);
+    expect(sprite(item('shop'), 'style-2:iconShop').width).toBeCloseTo(220, 6);
     expect(sprite(item('lock'), 'style-2:navLock').y).toBe(97.517);
+    // theme_light_8: the inactive art is drawn 220 (at its 267 box the house / lock ran into the captions)
+    expect(sprite(item('lock'), 'style-2:navLock').width).toBeCloseTo(220, 6);
     const caption = (slot: string): Text => descendants(item(slot), Text)[0]!;
     expect([caption('home').style.fontSize, caption('lock').style.fontSize, caption('lock').style.fontFamily]).toEqual([60, 40, 'Carlito']);
     expect(caption('lock').style.stroke).toBeFalsy();

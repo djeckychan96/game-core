@@ -64,6 +64,7 @@ try {
       await page.screenshot({ path: `${out}/style${style}-${width}x${height}-1-map.png` });
 
       await click(centre('(g) => g.screen.nav.getItemContainer("shop")'));
+      await step(400); // the tab's entrance (380 ms): the gallery hides the map once it is in
       const inShop = await state();
       check(!inShop.map && inShop.shop && !inShop.blocking && inShop.last === 'nav:shop → tab:shop', `${label} SHOP → shop tab`, inShop);
       await frame();
@@ -79,11 +80,13 @@ try {
       await click(centre('(g) => g.shopTab.nav.getItemContainer("home")'));
       const home = await state();
       check(home.map && !home.shop && home.last === 'nav:home → tab:home' && home.focus === before.focus && home.play === before.play, `${label} HOME → the same map`, { before, home });
+      await step(400); // the tab's leave (300 ms)
       await frame();
       await page.screenshot({ path: `${out}/style${style}-${width}x${height}-3-back-home.png` });
 
       // the HUD coin "+" opens the same tab, its × closes it
       await click('(() => { const p = window.__gallery.screen.hud.coinAnchor; return { x: p.x, y: p.y }; })()');
+      await step(400);
       const viaHud = await state();
       check(viaHud.shop && !viaHud.map && viaHud.last === 'hud:coins → tab:shop', `${label} coin + → shop tab`, viaHud);
       await click(centre('(g) => g.shopTab.closeButton'));

@@ -1,5 +1,5 @@
 import { Container, type FederatedPointerEvent, type FederatedWheelEvent, Graphics, NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
-import type { LocalizationTextProvider, MotionHandle, MotionRuntime, UiRuntime } from '../index';
+import type { LocalizationTextProvider, MotionHandle, MotionRuntime, UiRuntime, WindowState } from '../index';
 import type { ReadyUiTextures } from './assets';
 import { BottomNavView } from './BottomNavView';
 import { levelMapNavOptions, type LevelMapScreenInsets, type LevelMapScreenNav, type LevelMapScreenResizeOptions } from './LevelMapScreen';
@@ -66,8 +66,32 @@ export interface ShopScreenOptions {
   height?: number;
 }
 
+/** Where the tab is: hidden, opening (`entering`), open, or closing (`leaving`) — the WindowController's state names. */
+export type ShopScreenState = WindowState;
+
+export interface ShopScreenShowOptions {
+  /** `false` = shown at once (no entrance). Default true. */
+  animate?: boolean;
+  /** Runs once this show has finished its entrance (at once when the tab is already open); a `hide()` before that drops it. */
+  onShown?: () => void;
+}
+
+export interface ShopScreenHideOptions {
+  /** `false` = hidden at once (no leave). Default true. */
+  animate?: boolean;
+  /**
+   * Runs once this hide has finished its leave and the tab is invisible (at once when it is already hidden) — e.g. the
+   * host's map return; a `show()` before that drops it (the tab never closed).
+   */
+  onHidden?: () => void;
+}
+
 interface ShopCard {
   readonly item: ShopScreenItem;
+  /** The card's motion layer: the entrance fades and lifts it (the button keeps its own scale and alpha). */
+  readonly slot: Container;
+  /** The grid row: the entrance staggers the rows. */
+  readonly row: number;
   readonly button: UiButton;
   readonly pack: Sprite;
   readonly amount: Text;
@@ -76,6 +100,33 @@ interface ShopCard {
 
 const DRAG_THRESHOLD = 6;
 const CARD_PRESS_SCALE = 0.9;
+
+/**
+ * The tab's entrance / leave: ONE progress (0 hidden … 1 open) tweened linearly, each part on its own stretch of it with
+ * an ease-out — the awning (and the ×) slide down from above the viewport, the background and the navigation fade in,
+ * the title and then the card rows rise into place, row by row. The leave runs the same curve backwards (the cards go
+ * first, the background last), and an interrupted transition turns round from where it is, its time scaled by the
+ * distance left. Plain alpha / position writes, no filters.
+ */
+const TRANSITION = {
+  enterMs: 380,
+  leaveMs: 300,
+  background: [0, 0.5],
+  awning: [0, 0.7],
+  title: [0.2, 0.65],
+  /** row r: from `rowStart + rowStep × min(r, 3)`, over `rowSpan` */
+  rowStart: 0.3,
+  rowStep: 0.1,
+  rowSpan: 0.4,
+  /** design units the title and the cards rise by */
+  rise: 36
+} as const;
+
+/** `p` mapped onto the stretch [from, to] (0 before it, 1 after it), eased out (cubic, MotionRuntime's `easeOut`). */
+function stretch(p: number, from: number, to: number): number {
+  const t = Math.min(1, Math.max(0, (p - from) / (to - from)));
+  return 1 - (1 - t) ** 3;
+}
 
 /**
  * The shop TAB of the main-screen navigation (theme_light_6 `market_screen_*`): a full-screen, opaque, NON-modal screen —
@@ -95,6 +146,12 @@ const CARD_PRESS_SCALE = 0.9;
  * (the column compact in the centre), the awning raised to `desktop.awningY` and the × beside the title tape. In both
  * the background and the awning tiles span the whole viewport and the navigation sits at the bottom edge above the
  * bottom inset (its own unchanged scale).
+ *
+ * Motion: `show()` / `hide()` play a short entrance / leave (380 / 300 ms, see TRANSITION) that a call in the other
+ * direction turns round from where it is; `{ animate: false }` switches at once. While open or opening the screen takes
+ * every tap over it (nothing under it is reached); while leaving it takes none — a host that shows its map under it
+ * before `hide()` gets the map's taps at once — and no card or × reports. `hide({ onHidden })` runs the host's
+ * continuation once the leave is over (the tab invisible).
  */
 export class ShopScreen extends Container {
   readonly id: string;
@@ -115,8 +172,12 @@ export class ShopScreen extends Container {
   private readonly scrollArea: Container;
   private readonly content: Container;
   private readonly contentMask: Graphics;
+  /** The awning and the ×: the transition slides this layer down from above the viewport. */
+  private readonly chrome: Container;
   private readonly awning: Container;
   private readonly awningTiles: Sprite[] = [];
+  /** The title tape and its text: the transition fades and lifts this layer. */
+  private readonly titleGroup: Container;
   private readonly ribbon: NineSliceSprite;
   private readonly titleText: Text;
   private readonly closeButton: UiButton | null;
@@ -133,6 +194,15 @@ export class ShopScreen extends Container {
   private scrollHandle: MotionHandle | null = null;
   private viewport = { width: 390, height: 844, insets: {} as LevelMapScreenInsets };
   private disposed = false;
+  private stateValue: ShopScreenState = 'shown';
+  /** The transition progress: 0 hidden … 1 open. */
+  private progress = 1;
+  /** Body units the chrome slides up by when hidden (its lowest part ends at the viewport's top edge). */
+  private chromeTravel = 0;
+  private transitionHandle: MotionHandle | null = null;
+  private readonly transitionScope: string;
+  /** Continuations of the transition in flight (same direction); a turn-round drops them. */
+  private pending: Array<() => void> = [];
 
   constructor(options: ShopScreenOptions) {
     super();
@@ -148,6 +218,7 @@ export class ShopScreen extends Container {
     this.onBuy = options.onBuy;
     this.onCloseTap = options.onClose ?? null;
     this.scrollScope = `${this.id}:scroll`;
+    this.transitionScope = `${this.id}:transition`;
     const art = this.look.art;
     const layout = this.layout;
     const textLook = skinTextLook(skin);
@@ -180,11 +251,15 @@ export class ShopScreen extends Container {
     const titleBox = layout.title.label;
     this.titleText = createFigmaLabel(this.theme, localizedText(options.title, options.i18n, 'core.shop.title', READY_UI_EN['core.shop.title']), titleBox.fontSize, skinTextBoxLook(textLook, titleBox));
     this.titleText.eventMode = 'none';
-    this.content.addChild(this.ribbon, this.titleText);
+    this.titleGroup = new Container();
+    this.titleGroup.addChild(this.ribbon, this.titleText);
+    this.content.addChild(this.titleGroup);
     this.placeTitle();
 
+    this.chrome = new Container();
     this.awning = new Container();
     this.awning.eventMode = 'none';
+    this.chrome.addChild(this.awning);
 
     const close = layout.close;
     this.closeButton = this.onCloseTap ? new UiButton({
@@ -199,8 +274,8 @@ export class ShopScreen extends Container {
       onTap: () => this.closeTapped()
     }) : null;
 
-    this.body.addChild(this.scrollArea, this.awning);
-    if (this.closeButton) this.body.addChild(this.closeButton);
+    if (this.closeButton) this.chrome.addChild(this.closeButton);
+    this.body.addChild(this.scrollArea, this.chrome);
 
     this.nav = new BottomNavView({
       ui: options.ui,
@@ -224,7 +299,12 @@ export class ShopScreen extends Container {
     this.scrollArea.on('wheel', this.onWheel, this);
 
     this.buildCards(options.items ?? []);
-    this.visible = options.hidden !== true;
+    if (options.hidden === true) {
+      this.stateValue = 'hidden';
+      this.progress = 0;
+    }
+    this.visible = this.stateValue !== 'hidden';
+    this.eventMode = this.visible ? 'static' : 'none';
     this.resize(options.width ?? 390, options.height ?? 844);
   }
 
@@ -233,9 +313,14 @@ export class ShopScreen extends Container {
     return this.cards.map((card) => card.item);
   }
 
-  /** Whether the screen is shown (a hidden tab draws nothing and takes no input). */
+  /** Whether the tab is the current one: open or opening (false from `hide()` on, while it still fades out). */
   get shown(): boolean {
-    return this.visible;
+    return this.stateValue === 'shown' || this.stateValue === 'entering';
+  }
+
+  /** `hidden` | `entering` | `shown` | `leaving` (a hidden tab draws nothing and takes no input). */
+  get state(): ShopScreenState {
+    return this.stateValue;
   }
 
   /** Whether a tap on an available card reports `onBuy` (false while the host's purchase is in flight). */
@@ -252,17 +337,33 @@ export class ShopScreen extends Container {
     return this.scrollMin < 0;
   }
 
-  /** Shows the tab: visibility only — items, scroll and the buying state stay as they were. */
-  show(): void {
+  /**
+   * Shows the tab with its entrance (or at once with `animate: false`); called while it leaves, it turns round from where
+   * it is. Items, scroll and the buying state stay as they were.
+   */
+  show(options: ShopScreenShowOptions = {}): void {
     if (this.disposed) return;
+    if (this.stateValue === 'leaving') this.pending = [];
+    if (options.onShown) this.pending.push(options.onShown);
     this.visible = true;
+    this.eventMode = 'static';
+    this.stateValue = 'entering';
+    this.transitionTo(1, options.animate !== false);
   }
 
-  /** Hides the tab; a press, a drag or a fling in progress is cancelled (never a purchase, never a late scroll). */
-  hide(): void {
+  /**
+   * Hides the tab with its leave (or at once with `animate: false`); called while it opens, it turns round from where it
+   * is. A press, a drag or a fling in progress is cancelled at once (never a purchase, never a late scroll) and the
+   * screen takes no input from here on; `onHidden` runs when it is invisible.
+   */
+  hide(options: ShopScreenHideOptions = {}): void {
     if (this.disposed) return;
-    this.visible = false;
+    if (this.stateValue === 'entering') this.pending = [];
+    if (options.onHidden) this.pending.push(options.onHidden);
     this.cancelInput();
+    this.eventMode = 'none';
+    if (this.stateValue !== 'hidden') this.stateValue = 'leaving';
+    this.transitionTo(0, options.animate !== false);
   }
 
   /** Replaces the packs (the host's catalog changed): new cards in the same layout, scroll kept within the new range. */
@@ -313,6 +414,8 @@ export class ShopScreen extends Container {
   override destroy(options?: Parameters<Container['destroy']>[0]): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.pending = [];
+    this.stopTransition(); // before Pixi nulls the layers' positions
     this.stopFling();
     this.motion.cancelScope(this.scrollScope);
     this.scrollArea.off('pointerdown', this.onPointerDown, this);
@@ -354,6 +457,8 @@ export class ShopScreen extends Container {
     this.scale_ = s;
     const centerX = left + (w - left - right) / 2;
 
+    // an opaque screen: while open it takes every tap over it, so nothing under it is reached
+    this.hitArea = new Rectangle(0, 0, w, h);
     this.background.clear().rect(0, 0, w, h).fill(layout.background.color);
     if (this.backgroundArt) {
       const texture = this.backgroundArt.texture;
@@ -387,6 +492,7 @@ export class ShopScreen extends Container {
       sprite.position.set((kMin + i) * tile.width - tile.width / 2, 0);
     });
 
+    this.chromeTravel = this.awning.y + tile.height;
     if (this.closeButton) {
       const close = layout.close;
       const safeRight = (w - right - centerX) / s;
@@ -394,6 +500,7 @@ export class ShopScreen extends Container {
       this.closeButton.setIdleScale(1);
       if (mobile) this.closeButton.position.set(safeRight - close.right - close.width / 2, Math.max(close.y, safeTop) + close.height / 2);
       else this.closeButton.position.set(Math.min(this.frameX(layout.desktop.close.x), safeRight - close.width / 2), Math.max(layout.desktop.close.y, safeTop + close.height / 2));
+      this.chromeTravel = Math.max(this.chromeTravel, this.closeButton.y + Math.max(close.height, close.minHitSize) / 2);
     }
 
     // the scrolled column: from `scroll.top` down to `bottomGap` above the navigation panel
@@ -405,6 +512,7 @@ export class ShopScreen extends Container {
     this.setScroll(this.scrollOffset);
 
     applyTextResolution(this.body, s * this.pixelRatio);
+    this.applyTransition();
   }
 
   /** The bottom of the scrolled column (frame y): the last card row's art, or the title tape when there is no card. */
@@ -427,7 +535,10 @@ export class ShopScreen extends Container {
       if (typeof item.price !== 'string') throw new Error(`ShopScreen: item '${item.id}' needs a price string (already localized)`);
       ids.add(item.id);
     }
-    for (const card of this.cards) card.button.destroy();
+    for (const card of this.cards) {
+      card.button.destroy();
+      card.slot.destroy();
+    }
     this.cards = [];
 
     const layout = this.layout;
@@ -468,11 +579,14 @@ export class ShopScreen extends Container {
       const inRow = Math.min(grid.columns, items.length - row * grid.columns);
       const boxLeft = this.frameX(this.skin.frame.width / 2 + (column - (inRow - 1) / 2) * grid.pitchX - card.box.width / 2);
       button.position.set(boxLeft + cx, grid.top + row * grid.pitchY + cy);
-      this.content.addChild(button);
-      const entry: ShopCard = { item, button, pack, amount, price };
+      const layer = new Container();
+      layer.addChild(button);
+      this.content.addChild(layer);
+      const entry: ShopCard = { item, slot: layer, row, button, pack, amount, price };
       this.cards.push(entry);
       this.applyCardState(entry);
     });
+    this.applyTransition();
   }
 
   private packTexture(item: ShopScreenItem, index: number): Texture {
@@ -486,18 +600,93 @@ export class ShopScreen extends Container {
   private applyCardState(card: ShopCard): void {
     const available = card.item.available !== false;
     card.button.setEnabled(available && this.buying);
-    // unavailable: UiButton's own disabled look; held for a purchase in flight: the donor's 85 %
-    if (available) card.button.alpha = this.buying ? 1 : 0.85;
+    // unavailable: UiButton's own disabled look; held for a purchase in flight: the donor's 85 % — unless the style
+    // draws its inert cards otherwise (a light card faded over a dark fill turns its white face grey)
+    const inert = this.layout.card.inertAlpha;
+    if (available) card.button.alpha = this.buying ? 1 : inert?.held ?? 0.85;
+    else if (inert) card.button.alpha = inert.unavailable;
   }
 
   private buy(item: ShopScreenItem): void {
-    if (this.disposed || !this.visible || !this.buying || item.available === false) return;
+    if (this.disposed || !this.shown || !this.buying || item.available === false) return;
     this.onBuy(item);
   }
 
   private closeTapped(): void {
-    if (this.disposed || !this.visible) return;
+    if (this.disposed || !this.shown) return;
     this.onCloseTap?.();
+  }
+
+  // --- transition ---
+
+  /** Moves the progress to `target` (1 open, 0 hidden): tweened over the share of the full time still to go, or at once. */
+  private transitionTo(target: 0 | 1, animate: boolean): void {
+    this.stopTransition();
+    const distance = Math.abs(target - this.progress);
+    if (!animate || distance === 0) {
+      this.progress = target;
+      this.applyTransition();
+      this.settleTransition();
+      return;
+    }
+    const handle: MotionHandle = this.motion.tween({
+      scope: this.transitionScope,
+      bindings: [{ get: () => this.progress, set: (value: number) => { this.progress = value; this.applyTransition(); }, to: target }],
+      durationMs: (target === 1 ? TRANSITION.enterMs : TRANSITION.leaveMs) * distance,
+      ease: 'linear',
+      onComplete: () => {
+        if (this.transitionHandle !== handle) return;
+        this.transitionHandle = null;
+        this.settleTransition();
+      },
+      onCancel: () => {
+        // cancelled from outside (`core.cancelAll()`, the scope): the tab lands where it was going, never half-drawn
+        if (this.transitionHandle !== handle) return;
+        this.transitionHandle = null;
+        this.progress = target;
+        this.applyTransition();
+        this.settleTransition();
+      }
+    });
+    this.transitionHandle = handle;
+  }
+
+  private stopTransition(): void {
+    const handle = this.transitionHandle;
+    this.transitionHandle = null;
+    handle?.cancel(); // its onCancel sees the handle is no longer current: the progress stays where it is
+  }
+
+  /** The progress reached its target: the state settles, a hidden tab goes invisible, the continuations run. */
+  private settleTransition(): void {
+    if (this.disposed) return;
+    if (this.progress >= 1) this.stateValue = 'shown';
+    else {
+      this.stateValue = 'hidden';
+      this.visible = false;
+    }
+    const done = this.pending;
+    this.pending = [];
+    for (const callback of done) callback();
+  }
+
+  /** Draws the parts for the current progress (layout positions stay the layout's: only the layers' alpha / offsets move). */
+  private applyTransition(): void {
+    const p = this.progress;
+    const fade = stretch(p, TRANSITION.background[0], TRANSITION.background[1]);
+    this.background.alpha = fade;
+    if (this.backgroundArt) this.backgroundArt.alpha = fade;
+    this.nav.alpha = fade;
+    this.chrome.y = (stretch(p, TRANSITION.awning[0], TRANSITION.awning[1]) - 1) * this.chromeTravel;
+    const title = stretch(p, TRANSITION.title[0], TRANSITION.title[1]);
+    this.titleGroup.alpha = title;
+    this.titleGroup.y = (1 - title) * TRANSITION.rise;
+    for (const card of this.cards) {
+      const from = TRANSITION.rowStart + TRANSITION.rowStep * Math.min(card.row, 3);
+      const k = stretch(p, from, Math.min(1, from + TRANSITION.rowSpan));
+      card.slot.alpha = k;
+      card.slot.y = (1 - k) * TRANSITION.rise;
+    }
   }
 
   // --- scroll ---

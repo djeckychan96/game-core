@@ -59,7 +59,7 @@ export type { ReadyUiOffer, ReadyUiOfferArt, ReadyUiOfferItem } from './OfferPan
 export { ShopWindowView } from './ShopWindowView';
 export type { ShopItem, ShopWindowParams, ShopWindowViewOptions } from './ShopWindowView';
 export { ShopScreen } from './ShopScreen';
-export type { ShopScreenItem, ShopScreenOptions, ShopPackRole } from './ShopScreen';
+export type { ShopScreenItem, ShopScreenOptions, ShopPackRole, ShopScreenState, ShopScreenShowOptions, ShopScreenHideOptions } from './ShopScreen';
 export { SettingsWindowView } from './SettingsWindowView';
 export type { SettingsLanguage, SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
 export { NoAdsWindowView } from './NoAdsWindowView';

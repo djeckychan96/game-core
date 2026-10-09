@@ -184,16 +184,25 @@ describe('Style 2 — the theme_light_3 LevelMap screen package', () => {
 });
 
 describe('Style 2 — HudView', () => {
-  it('draws the Style 2 roles with runtime values: no gear, no count in the heart, #3f598c Carlito counters, Figma bar pitch', () => {
+  it('draws the Style 2 roles with runtime values: no gear, the lives count on the heart with the timer, #3f598c Carlito counters, Figma bar pitch', () => {
     const kit = createKit();
     const hud = new HudView({ ui: kit.ui, motion: kit.motion, textures: styled(kit), theme: STYLE_2_THEME, coins: 1234, lives: 2, maxLives: 5, stars: 17, onLivesTap: () => {}, onCoinsTap: () => {}, width: 1422, height: 800 });
     hud.setLives(2, '12:34');
     expect(labels(hud)).toEqual(expect.arrayContaining(['style-2:hudCapsule', 'style-2:hudHeart', 'style-2:hudCoin', 'style-2:hudPlus', 'style-2:hudStar']));
     expect(labels(hud).some((label) => label.includes('Gear'))).toBe(false);
     expect(field(hud, 'gear')).toBeNull();
-    // runtime values only; the heart shows no count (Figma), the capsule shows the timer
-    expect(texts(hud)).toEqual(expect.arrayContaining(['12:34', '1\u2009234', '17']));
-    expect(texts(hud)).not.toContain('2');
+    // runtime values only: the count on the heart AND the timer on the capsule at once (Style 2's heart number: white,
+    // the #9b170b outline, centred on the heart) — a pure view binding, no lives logic in the HUD
+    expect(texts(hud)).toEqual(expect.arrayContaining(['2', '12:34', '1\u2009234', '17']));
+    const heart = descendants(hud, Text).find((text) => text.text === '2')!;
+    const heartIcon = descendants(hud, Sprite).find((sprite) => sprite.texture.source.label === 'style-2:hudHeart')!;
+    expect([heart.x, heart.y]).toEqual([heartIcon.x, heartIcon.y]);
+    expect([heart.style.fill, heart.style.fontSize, heart.style.fontFamily]).toEqual([0xffffff, 98, 'Carlito']);
+    const outline = heart.style.stroke as { color: number; width: number };
+    expect([outline.color, outline.width]).toEqual([0x9b170b, 7]);
+    hud.setLives(1, '04:59');
+    expect(texts(hud)).toEqual(expect.arrayContaining(['1', '04:59']));
+    hud.setLives(2, '12:34');
     const counter = descendants(hud, Text).find((text) => text.text === '1\u2009234')!;
     expect(counter.style.fill).toBe(0x3f598c);
     expect(counter.style.fontFamily).toBe('Carlito');
@@ -202,9 +211,9 @@ describe('Style 2 — HudView', () => {
     expect(badges.map((badge) => badge.x)).toEqual([0, 610, 1220]);
     // Figma size at the frame's height (no area rule): the row is unscaled at 1422 × 800
     expect(field<Container>(hud, 'row').scale.x).toBeCloseTo(800 / 2344, 6);
-    // full lives: MAX, no plus
+    // full lives: the count stays on the heart, MAX on the capsule, no plus
     hud.setLives(5);
-    expect(texts(hud)).toContain('MAX');
+    expect(texts(hud)).toEqual(expect.arrayContaining(['5', 'MAX']));
     hud.destroy();
   });
 
@@ -331,7 +340,8 @@ describe('BottomNavView — generic items, host routing', () => {
     expect(background(shop).height).toBeCloseTo(286 + 28, 6);
     expect(spriteByLabel(shop, 'style-2:iconShop').width).toBeCloseTo(288, 6);
     expect(spriteByLabel(shop, 'style-2:iconShop').y).toBe(43);
-    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(267.034, 6);
+    // theme_light_8: an inactive icon's art is drawn 220 in its 267 box (at 267 it ran into the caption under it)
+    expect(spriteByLabel(home, 'style-2:iconHome').width).toBeCloseTo(220, 6);
     expect(spriteByLabel(home, 'style-2:iconHome').y).toBe(93.517);
     const shopLabel = descendants(shop, Text)[0]!;
     const homeLabel = descendants(home, Text)[0]!;
@@ -340,7 +350,7 @@ describe('BottomNavView — generic items, host routing', () => {
     // locked: the style's lock instead of the icon, with the item's caption (theme_light_5 captions its LOCK slot)
     expect(labels(events)).toEqual(['style-2:navLock']);
     expect(texts(events)).toEqual(['EVENTS']);
-    expect(spriteByLabel(events, 'style-2:navLock').width).toBeCloseTo(267.034, 6);
+    expect(spriteByLabel(events, 'style-2:navLock').width).toBeCloseTo(220, 6);
     expect(spriteByLabel(events, 'style-2:navLock').y).toBe(97.517);
     // slots: pitch 664 around the centre
     expect([shop.x, home.x, events.x]).toEqual([-664, 0, 664]);

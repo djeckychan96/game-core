@@ -177,6 +177,11 @@ left and 83 from the top. `setCoins(n)`, `setLives(n, timerText)`, `setLivesTime
 donor's 12-unit margin, measured from the top of the viewport including the top inset), `coinAnchor` /
 `starAnchor` (world positions for flight effects). Counter changes pulse through MotionRuntime.
 
+The count on the heart and the timer / `MAX` on the capsule are shown together whenever the style's `hud.heartCount` is
+set (Style 1 and, since theme_light_8, Style 2: white Carlito 98 with Style 2's #9b170b heart-number outline, centred on
+the heart; theme_light_8's own `icon_bar` still draws the heart bare). Pure view: the host passes `setLives(n, timer)` /
+`setLivesTimer(text)` from its LivesRuntime; nothing about regeneration lives in the HUD.
+
 Layout geometry is never measured from animated sprites: every badge declares its design box as
 Pixi's `boundsArea`, so `resize()` (the row's area fit, `barHeight`, `getBounds()` read by hosts)
 sees the same numbers whether an icon is mid-pulse or a badge mid-press. A pulse tweens a factor
@@ -262,20 +267,31 @@ const shop = new ShopScreen({
 const mapScreen = new LevelMapScreen({ ...readyUi, /* … */ nav: { shop: { onTap: () => showTab('shop') }, home: { onTap: … }, lock: {} },
   hud: { /* … */ onCoinsTap: () => showTab('shop') } });
 function showTab(tab: 'shop' | 'home') {                                              // routing stays the host's
-  mapScreen.visible = tab === 'home';
-  if (tab === 'shop') shop.show(); else shop.hide();
+  if (tab === 'shop') shop.show({ onShown: () => { mapScreen.visible = false; } });   // the entrance over the map
+  else { mapScreen.visible = true; shop.hide(); }                                     // the map back under the leave
 }
 ```
 
+`show()` / `hide()` animate (theme_light_8 has no motion spec; Core's): the entrance (380 ms) slides the awning and the ×
+down from above the viewport, fades the background and the navigation in and lifts the title, then the card rows, into
+place (row by row); the leave (300 ms) runs it backwards — cards first, the background last, then the tab is invisible.
+One progress, one MotionRuntime tween (scope `<id>:transition`), plain alpha / position writes (no filters). A call in
+the other direction turns it round from where it is (its time scaled by the distance left), so rapid SHOP / HOME taps
+never hang or leave it half drawn; `core.cancelAll()` lands it where it was going; `destroy()` cancels it. While open or
+opening the screen takes every tap over it (nothing under it is reached); from `hide()` on it takes none, so the map
+shown under it gets its taps at once, and no card / × reports. Routing as above: keep the map drawn while the tab comes
+in (hide it in `onShown`), show it before `hide()`. A host that hides its map first and shows the tab still works (the
+tab then fades in over an empty stage).
+
 | Option / member | Meaning |
 | --- | --- |
-| `items: ShopScreenItem[]`, `setItems(items)`, `items` | the host's packs in card order: `ShopItem` (`id`, `amount`, already-localized `price`) + `icon?` (a host texture, or a style role `shopPack1`…`shopPack6`; default the style's art for the slot, the sixth for later slots) + `available?` (`false` = dimmed, inert). Ids unique; a bad entry throws |
+| `items: ShopScreenItem[]`, `setItems(items)`, `items` | the host's packs in card order: `ShopItem` (`id`, `amount`, already-localized `price`) + `icon?` (a host texture, or a style role `shopPack1`…`shopPack6`; default the style's art for the slot, the sixth for later slots) + `available?` (`false` = inert, drawn with the style's inert look). Ids unique; a bad entry throws |
 | `onBuy(item)` | settled tap on an available card while buying is enabled; the screen stays open — the purchase (PurchaseRuntime / the platform) is the host's |
-| `setBuyEnabled(enabled)`, `buyEnabled` | holds every card (inert, 85 %) while the host's purchase is in flight |
+| `setBuyEnabled(enabled)`, `buyEnabled` | holds every card (inert) while the host's purchase is in flight. The inert look is the style's `shopScreen.card.inertAlpha` (held / unavailable): Style 1 the donor's 85 % / 55 %; Style 2 none (1 / 1) — its #ffffff card face faded over the #0f172c fill read grey (85 % = #dbdcdf) |
 | `onClose` | the style's ×, drawn only with it (e.g. back to the map) |
 | `nav` | the LevelMapScreen slots `{ shop, home, lock }` (SHOP drawn selected; a SHOP / HOME slot without `onTap` is inert, LOCK shakes) or a generic item list; `screen.nav` is the BottomNavView |
 | `title`, `setTitle(text)` | the tape's title; default `core.shop.title` (SHOP / МАГАЗИН) |
-| `show()`, `hide()`, `shown`, `hidden` (option) | visibility only; `hide()` cancels a press, a drag or a fling in progress (never a purchase, never a late scroll) |
+| `show({ animate?, onShown? })`, `hide({ animate?, onHidden? })`, `shown`, `state`, `hidden` (option) | the entrance / leave above (`animate: false` = at once; `hidden: true` starts hidden, no motion). `shown` = the tab is the current one (true from `show()`, false from `hide()` on); `state` = `hidden` \| `entering` \| `shown` \| `leaving`. `onShown` / `onHidden` run when that transition is over (at once when there is nothing to do); a turn-round drops the other direction's continuation (it never completed). `hide()` cancels a press, a drag or a fling in progress at once (never a purchase, never a late scroll) |
 | `scrollY`, `scrollable`, `scrollToTop()` | the column scrolls (drag, fling through MotionRuntime scope `<id>:scroll`, wheel) only when the cards do not fit; a drag is never a purchase |
 | `resize(w, h, { insets, pixelRatio })` | Figma's two compositions (theme_light_7 43:23372 / 43:25602): MOBILE — the phone frame at the safe width (the three cards ~90 % of it, the awning under the status bar, the × in its corner) while the designed two rows fit above the navigation; else DESKTOP — the contain-fit design scale (compact centred column), the awning raised 110 units, the × beside the title tape. The frame top on the viewport top, centred on the safe area; background and awning tiles span the viewport; the navigation keeps its own scale at the bottom |
 | `getCardContainer(itemId)`, `destroy()` | a card for host FX / checks; destroy disposes every ButtonController, cancels the scroll, removes listeners (repeat-safe) |
@@ -495,7 +511,7 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | SettingsWindowView | covered — SOUND / MUSIC / optional HAPTIC, close, version, optional HOME / RESTART and the language row (Style 1's blue `Btn`, no Figma node) as one dense column (`map` / `gameplay`); theme_light_4 22:28430 type: SETTINGS 100, plain version, the violet shell × | covered — theme_light_4 22:28904 (in-level) / 22:28915 (map): Sound / Music (muted OFF button under the red slash), Restart level / Return home with icons, the Language row (`btn_main` + globe), no HAPTIC (`haptic: null`; asking for it throws) (docs/figma/style2-settings, docs/figma/style2-theme-light-4) |
 | HudView | covered — exact lives / coins / gear Figma art; optional stars retain the existing Core semantics | covered — `theme_light_3` 8:23174: three bars, no gear, no count in the heart, `#3f598c` Carlito counters |
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
-| BottomNavView, LevelMapScreen | covered — theme_light_5 24:37523 / 24:37548 + the dark nav components: PLAY without a level line, SHOP \| HOME \| LOCK with the raised blue column, #261a30-outlined captions (docs/figma/theme-light-5-level-map-nav) | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen); theme_light_5 24:38532 slot boxes, HOME selected, LOCK captioned (docs/figma/theme-light-5-level-map-nav) |
+| BottomNavView, LevelMapScreen | covered — theme_light_5 24:37523 / 24:37548 + the dark nav components: PLAY without a level line, SHOP \| HOME \| LOCK with the raised blue column, #261a30-outlined captions (docs/figma/theme-light-5-level-map-nav) | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen); theme_light_5 24:38532 slot boxes, HOME selected, LOCK captioned (docs/figma/theme-light-5-level-map-nav); theme_light_8 46:35507…46:35531: the inactive icons' art drawn 220 (at 267 it ran into the captions) |
 | ResultWindowView | covered — WIN theme_light_6 28:48286: the red ribbon with its black 45 % ×, no glow, reward coin, CONTINUE 440 × 200 + RETRY 460 × 200 (orange with the highlight; Figma's rewarded x2 offer is not Core's), centred on 540 (docs/figma/theme-light-6); FAIL Figma `screen/result-fail` 1:4029: grey ribbon, glow band, broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | covered — WIN theme_light_6 28:48352: the red ribbon, the rays, `icon_star` stars, the coin + #943300-outlined amount, CONTINUE on `btn_green` + the secondary on the bare `btn_yellow`, the popups' red × (no × in Figma); FAIL derived from Style 2's parts (no Figma FAIL) (docs/figma/theme-light-6) |
 | MovesView | covered — theme_light_6 28:48247: the white box, "MOVES" + the #ffc300 count with the kit outline | covered — theme_light_6 28:48175: the blue box, white Carlito "MOVES" + count |
 | SettingsButtonView | covered — theme_light_6 28:48211: blue `btn` 214 + the outlined gear 10 above the centre, 90 / 90 | covered — theme_light_6 28:48119: `btn_blue` 214 + `icon_settings`, 90 / 90 |

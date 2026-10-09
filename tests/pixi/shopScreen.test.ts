@@ -204,13 +204,18 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     tap(card(shop, 'b'), kit);
     expect(bought).toEqual(['a']);
     expect(card(shop, 'b').enabled).toBe(false);
-    expect(card(shop, 'b').alpha).toBeLessThan(1);
-    // the host's purchase is in flight: every card is held, the unavailable one stays dimmed
+    // the inert looks: Style 1 (dark) keeps the donor's fades; the light Style 2 card never fades (its #ffffff face over
+    // the #0f172c fill would read grey) — inert only
+    const inert = style.skin === READY_UI_STYLE_2 ? { held: 1, unavailable: 1 } : { held: 0.85, unavailable: 0.55 };
+    expect(card(shop, 'b').alpha).toBe(inert.unavailable);
+    // the host's purchase is in flight: every card is held, the unavailable one stays as it was
     shop.setBuyEnabled(false);
     expect(shop.buyEnabled).toBe(false);
     tap(card(shop, 'c'), kit);
     expect(bought).toEqual(['a']);
-    expect(card(shop, 'c').alpha).toBe(0.85);
+    expect(card(shop, 'c').alpha).toBe(inert.held);
+    expect(card(shop, 'b').alpha).toBe(inert.unavailable);
+    expect(card(shop, 'c').enabled).toBe(false);
     shop.setBuyEnabled(true);
     tap(card(shop, 'c'), kit);
     expect(bought).toEqual(['a', 'c']);
@@ -299,6 +304,122 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     expect(kit.uiErrors).toEqual([]);
   });
 
+  it('show / hide: a short entrance and leave (awning from above, fading background, staggered rows); the host waits for the end', () => {
+    const kit = createKit();
+    const { shop } = createShop(kit, style, { hidden: true, onClose: () => {} });
+    const background = field<Container>(shop, 'background');
+    const chrome = field<Container>(shop, 'chrome');
+    const title = field<Container>(shop, 'titleGroup');
+    const rows = (row: number) => field<Array<{ row: number; slot: Container }>>(shop, 'cards').filter((c) => c.row === row).map((c) => c.slot);
+    expect([shop.state, shop.shown, shop.visible]).toEqual(['hidden', false, false]);
+    const done: string[] = [];
+    shop.show({ onShown: () => done.push('shown') });
+    // the tab is the current one at once and takes the taps over it; its parts start out of place
+    expect([shop.state, shop.shown, shop.visible, shop.eventMode]).toEqual(['entering', true, true, 'static']);
+    expect(kit.ui.isBlocking()).toBe(false);
+    expect(background.alpha).toBe(0);
+    expect(chrome.y).toBeLessThan(0);
+    expect(rows(0).every((slot) => slot.alpha === 0)).toBe(true);
+    advance(kit.core, 176);
+    // half way: the awning on its way down, the background fading in, the first row ahead of the second
+    expect(chrome.y).toBeLessThan(0);
+    expect(background.alpha).toBeGreaterThan(0.5);
+    expect(background.alpha).toBeLessThan(1);
+    expect(shop.nav.alpha).toBe(background.alpha);
+    expect(title.alpha).toBeGreaterThan(rows(0)[0]!.alpha);
+    expect(rows(0)[0]!.alpha).toBeGreaterThan(rows(1)[0]!.alpha);
+    expect(rows(1)[0]!.y).toBeGreaterThan(0);
+    expect(done).toEqual([]);
+    advance(kit.core, 240);
+    expect([shop.state, done]).toEqual(['shown', ['shown']]);
+    expect([background.alpha, chrome.y, title.alpha, title.y, shop.nav.alpha]).toEqual([1, 0, 1, 0, 1]);
+    expect([...rows(0), ...rows(1)].every((slot) => slot.alpha === 1 && slot.y === 0)).toBe(true);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+
+    shop.hide({ onHidden: () => done.push('hidden') });
+    // the tab is left at once (no tap reaches it); it stays drawn while it leaves: the cards go first, the background last
+    expect([shop.state, shop.shown, shop.visible, shop.eventMode]).toEqual(['leaving', false, true, 'none']);
+    advance(kit.core, 96);
+    expect(rows(1)[0]!.alpha).toBeLessThan(background.alpha);
+    expect(background.alpha).toBe(1);
+    advance(kit.core, 240);
+    expect([shop.state, shop.visible, done]).toEqual(['hidden', false, ['shown', 'hidden']]);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // the next entrance starts from the hidden look again; animate: false switches at once
+    shop.show({ animate: false, onShown: () => done.push('instant') });
+    expect([shop.state, background.alpha, chrome.y, done.at(-1)]).toEqual(['shown', 1, 0, 'instant']);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    shop.destroy();
+    expect(kit.uiErrors).toEqual([]);
+    expect(kit.motionErrors).toEqual([]);
+  });
+
+  it('show / hide are interruptible: a turn-round goes on from where it is, rapid taps settle, superseded continuations drop, destroy cleans up', () => {
+    const kit = createKit();
+    const { shop, bought } = createShop(kit, style, { hidden: true });
+    const background = field<Container>(shop, 'background');
+    const progress = (): number => field<number>(shop, 'progress');
+    const done: string[] = [];
+    shop.show({ onShown: () => done.push('shown:1') });
+    advance(kit.core, 160);
+    const reached = progress();
+    const alpha = background.alpha;
+    expect(reached).toBeGreaterThan(0.2);
+    expect(reached).toBeLessThan(0.8);
+    // HOME tapped mid-entrance: the leave starts where the entrance is — no jump — and takes only that share of its time
+    shop.hide({ onHidden: () => done.push('hidden:1') });
+    expect([progress(), background.alpha]).toEqual([reached, alpha]);
+    advance(kit.core, 48);
+    expect(progress()).toBeLessThan(reached);
+    expect(progress()).toBeGreaterThan(0);
+    // SHOP again before it is gone: it turns round once more; the dropped hide never reports
+    shop.show({ onShown: () => done.push('shown:2') });
+    advance(kit.core, 600);
+    expect([shop.state, done]).toEqual(['shown', ['shown:2']]);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    // a burst of taps (16 ms apart) never hangs or leaves it half drawn
+    for (let i = 0; i < 12; i++) {
+      shop.hide();
+      advance(kit.core, 16);
+      shop.show();
+      advance(kit.core, 16);
+    }
+    expect(kit.motion.getStats().activeMotions).toBe(1);
+    advance(kit.core, 600);
+    expect([shop.state, progress(), background.alpha, kit.motion.getStats().activeMotions]).toEqual(['shown', 1, 1, 0]);
+    // the same direction twice: both continuations run at its end; nothing to do = at once
+    shop.hide({ onHidden: () => done.push('hidden:a') });
+    advance(kit.core, 100);
+    shop.hide({ onHidden: () => done.push('hidden:b') });
+    advance(kit.core, 400);
+    expect(done.slice(-2)).toEqual(['hidden:a', 'hidden:b']);
+    shop.hide({ onHidden: () => done.push('hidden:again') });
+    expect(done.at(-1)).toBe('hidden:again');
+    // while it leaves no card buys (the press is cancelled, a late tap is ignored)
+    shop.show({ animate: false });
+    shop.show({ onShown: () => done.push('shown:again') });
+    expect(done.at(-1)).toBe('shown:again');
+    shop.hide();
+    tap(card(shop, 'pack_a'), kit);
+    expect(bought).toEqual([]);
+    // cancelled from outside (core.cancelAll()): it lands where it was going, never half drawn
+    shop.show();
+    advance(kit.core, 100);
+    kit.core.cancelAll();
+    expect([shop.state, progress(), background.alpha]).toEqual(['shown', 1, 1]);
+    // destroyed mid-leave: the tween is gone, the continuation never runs, nothing throws later
+    shop.hide({ onHidden: () => done.push('hidden:destroyed') });
+    advance(kit.core, 100);
+    shop.destroy();
+    expect(kit.motion.getStats().activeMotions).toBe(0);
+    advance(kit.core, 600);
+    shop.show();
+    shop.hide();
+    expect(done).not.toContain('hidden:destroyed');
+    expect(kit.uiErrors).toEqual([]);
+    expect(kit.motionErrors).toEqual([]);
+  });
+
   it('scrolls when the packs do not fit: a drag moves the column and is never a purchase; hide and destroy settle everything', () => {
     const kit = createKit();
     const many = Array.from({ length: 13 }, (_, i) => ({ id: `p${i}`, amount: i + 1, price: `${i}` }));
@@ -313,18 +434,19 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     area.emit('pointerup', pointer(100, 300) as never);
     expect(bought).toEqual([]);
     expect(shop.scrollY).toBeLessThan(0);
-    // the release flings on through MotionRuntime; hide() stops it where it is
+    // the release flings on through MotionRuntime; hide() stops it where it is (its leave is the one motion left)
     expect(kit.motion.getStats().activeMotions).toBe(1);
     advance(kit.core, 100);
     shop.hide();
-    expect(kit.motion.getStats().activeMotions).toBe(0);
+    expect(kit.motion.getStats().activeMotions).toBe(1);
     const y = shop.scrollY;
     advance(kit.core, 1000);
     expect(shop.scrollY).toBe(y);
+    expect(kit.motion.getStats().activeMotions).toBe(0);
     shop.scrollToTop();
     expect(shop.scrollY).toBe(0);
     // the wheel scrolls too, clamped to the content
-    shop.show();
+    shop.show({ animate: false });
     area.emit('wheel', { deltaY: 100000, stopPropagation(): void {} } as never);
     expect(shop.scrollY).toBeLessThan(0);
     const bottom = shop.scrollY;

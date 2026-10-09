@@ -460,8 +460,13 @@ export const READY_UI_STYLE_2 = {
     plus: { x: 85, y: 48, width: 114, height: 114 },
     /** Bars at 60 / 670 / 1280. */
     badgeGap: 610,
-    /** Figma's heart carries no count: the lives value drives the capsule text (MAX / timer) and the "+". */
-    heartCount: null,
+    /**
+     * The lives count on the heart, with the timer / MAX on the capsule. theme_light_8's `icon_bar` 46:35379 still draws
+     * the heart bare (its one text is the capsule's), so the number takes Style 2's own heart-number look — the Lives
+     * popup's count over the same `icon_heart_1` art (22:28930: Calibri Bold 140, white, a #9b170b 5-unit OUTSIDE stroke,
+     * centred on the 338 heart) — scaled to the 236 HUD heart: 98, an outline of 3.5 (Pixi's centred stroke 7).
+     */
+    heartCount: { x: 0, y: 0, fontSize: 98, stroke: 7, fill: 0xffffff, strokeColor: 0x9b170b },
     /** The text box 233, 69, 300 × 98: Calibri Bold 80, centre. */
     capsuleText: { x: 265, y: 0, fontSize: 80 },
     resourceCount: { x: 265, y: 0, fontSize: 80 },
@@ -505,7 +510,10 @@ export const READY_UI_STYLE_2 = {
   },
   /**
    * theme_light_5 24:38532: `navigation_shop` / `_home` / `_lock` (352 × 396, top 1948 = 110 units above the panel rect
-   * at 2058) centred at 1420 / 2084 / 2748 — on the frame's centre now.
+   * at 2058) centred at 1420 / 2084 / 2748 — on the frame's centre now. theme_light_8 (46:38432 map, 46:36104 shop;
+   * components 46:35507 / 46:35516 / 46:35525) keeps every box, but its renders draw an inactive icon's art at ~0.77 of
+   * its 267 box: 216 × 198 (shop), 214 × 209 (home), 186 × 194 (lock) — the 220 a Core texture (art 281 / 288 wide)
+   * needs. Drawn at the full 267, the house and the lock ran into the captions under them.
    */
   bottomNav: {
     /** `bottom_panel` rect: 286 high at 2058 (to the frame bottom). */
@@ -521,14 +529,18 @@ export const READY_UI_STYLE_2 = {
       label: { x: -142, y: 173, width: 284, height: 70, fontSize: 60 }
     },
     normal: {
-      /** state=shop_inactive: `icon_shop` 267.034 at 42.482, 70. */
-      icon: { x: 0, y: 93.517, size: 267.034 },
+      /**
+       * state=shop_inactive: `icon_shop` 267.034 at 42.482, 70 (centre 93.517), its art drawn 220 (render 46:35513: rows
+       * 107..305 of the 396 component, the caption's glyphs from 311). Every inactive item takes it — theme_light_8's
+       * home_inactive sits 19 higher (art 80..289, caption 271); Core keeps one inactive layout per state.
+       */
+      icon: { x: 0, y: 93.517, size: 220 },
       /** "SHOP" 0, 290, 352 × 74, Calibri Bold 40. */
       label: { x: -176, y: 180, width: 352, height: 74, fontSize: 40 }
     },
     locked: {
-      /** state=lock_inactive: `icon_lock` 267.034 at 42.482, 74. */
-      icon: { x: 0, y: 97.517, size: 267.034 },
+      /** state=lock_inactive: `icon_lock` 267.034 at 42.482, 74, its art drawn 220 (render 46:35531: rows 110..304, glyphs from 312). */
+      icon: { x: 0, y: 97.517, size: 220 },
       /** "LOCK" 0, 291.059, 352 × 74, Calibri Bold 40. */
       label: { x: -176, y: 181.059, width: 352, height: 74, fontSize: 40 }
     },
@@ -588,7 +600,13 @@ export const READY_UI_STYLE_2 = {
       art: { x: -6, y: -6, width: 322, height: 418 },
       pack: { x: 25, y: 86, width: 260, height: 220 },
       amount: { x: 9.76, y: 31, width: 290, height: 73, fontSize: 60, fill: 0x3f598c },
-      price: { x: 20.76, y: 310.5, width: 268, height: 73, fontSize: 60 }
+      price: { x: 20.76, y: 310.5, width: 268, height: 73, fontSize: 60 },
+      /**
+       * theme_light_8 `market_screen_light` 46:36104 draws no inert card, and its `base_white` face is #ffffff: any fade
+       * over the #0f172c fill greys that face (the 85 % hold gave #dbdcdf), so an inert Style 2 card stays opaque — it is
+       * told only by its missing press.
+       */
+      inertAlpha: { held: 1, unavailable: 1 }
     },
     scroll: { top: 486, bottomGap: 64 },
     desktop: { awningY: -110, close: { x: 1129, y: 551 } }

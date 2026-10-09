@@ -291,8 +291,19 @@ export interface ReadyUiSkinHudLayout {
   readonly starIconSize: number;
   readonly plus: ReadyUiSkinBox;
   readonly badgeGap: number;
-  /** The lives count inside the heart; `null` = this style's heart carries no count (the lives value still drives MAX / timer and "+"). */
-  readonly heartCount: { readonly x: number; readonly y: number; readonly fontSize: number; readonly stroke: number } | null;
+  /**
+   * The lives count inside the heart, next to the MAX / timer caption on the capsule; `null` = this style's heart carries
+   * no count (the lives value still drives MAX / timer and "+"). `stroke` = the label's stroke width; `fill` /
+   * `strokeColor` = its own colours (default: the counter fill / the theme's stroke colour).
+   */
+  readonly heartCount: {
+    readonly x: number;
+    readonly y: number;
+    readonly fontSize: number;
+    readonly stroke: number;
+    readonly fill?: number;
+    readonly strokeColor?: number;
+  } | null;
   readonly capsuleText: { readonly x: number; readonly y: number; readonly fontSize: number };
   readonly resourceCount: { readonly x: number; readonly y: number; readonly fontSize: number };
   /** Counter / capsule text colour; absent = the theme's text fill. */
@@ -460,6 +471,12 @@ export interface ReadyUiSkinShopScreenLayout {
     readonly pack: ReadyUiSkinBox;
     readonly amount: ReadyUiSkinLivesTextBox;
     readonly price: ReadyUiSkinLivesTextBox;
+    /**
+     * The alpha an inert card is drawn at over the screen fill (it stays inert either way): `held` while buying is off
+     * (`setBuyEnabled(false)`, the host's purchase in flight), `unavailable` for a pack not on sale (`available: false`).
+     * Default: the donor's 0.85 hold and UiButton's disabled look (0.55).
+     */
+    readonly inertAlpha?: { readonly held: number; readonly unavailable: number };
   };
   /** The scrolled area: from frame y `top` down to `bottomGap` units above the navigation panel's top edge. */
   readonly scroll: { readonly top: number; readonly bottomGap: number };

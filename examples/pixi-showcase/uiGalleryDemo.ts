@@ -4,8 +4,9 @@
 //   ?style=1 | 2     the style (default 1)
 //   ?screen=<id>     the window over the map screen (default map = no window); ids in SCREENS below. Both styles draw
 //                    the same LevelMapScreen contract (select a level → PLAY, SHOP | HOME | LOCK); every callback lands
-//                    in the status line ("last: …"). SHOP (and the HUD coin "+") switches to the ShopScreen tab, its
-//                    HOME / × back to the same map screen (`shop-screen` opens the page on that tab)
+//                    in the status line ("last: …"). SHOP (and the HUD coin "+") switches to the ShopScreen tab (its
+//                    entrance over the map), its HOME / × back to the same map screen (its leave off the map;
+//                    `shop-screen` opens the page on that tab)
 //   ?locale=ru       showcase/manual-QA locale override — production gets it from the ready platform
 //   ?moves=<n>       the gameplay screen's moves left (default 38)
 //   ?ui=0            hide the gallery controls (screenshots)
@@ -212,9 +213,14 @@ const shopTab = mapScreen ? new ShopScreen({
 if (mapScreen && screenId === 'shop-screen') mapScreen.visible = false;
 function showTab(tab: 'shop' | 'home', event: string): void {
   if (!mapScreen || !shopTab) return;
-  mapScreen.visible = tab === 'home';
-  if (tab === 'shop') shopTab.show();
-  else shopTab.hide();
+  // the tab plays its entrance over the map and its leave off it: the map stays drawn under it while it comes in (and
+  // is hidden once it is in), and is back under it before it leaves
+  if (tab === 'shop') {
+    shopTab.show({ onShown: () => { mapScreen.visible = false; } });
+  } else {
+    mapScreen.visible = true;
+    shopTab.hide();
+  }
   log(`${event} → tab:${tab}`);
 }
 const gameplay = mapScreen ? null : new GameplayDemo();
