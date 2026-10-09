@@ -333,3 +333,124 @@ describe('OFFER alignment: the window and its OFFER share one horizontal centre 
     });
   }
 });
+
+describe('an inert OFFER (enabled: false): shown under Lives / Confirm, its buy button never buys', () => {
+  for (const skin of [S1, READY_UI_STYLE_2]) {
+    it(`${skin.id} Lives: drawn without onOffer, a buy tap runs nothing and keeps the window open; REFILL / GET still work`, () => {
+      const kit = createKit();
+      const log: string[] = [];
+      const view = new LivesWindowView({
+        ui: kit.ui, motion: kit.motion, textures: styled(kit, roles(skin), skin), theme: { skin }, id: 'lives',
+        onRefill: (p) => log.push(`refill:${p.refillPrice}`), onWatchAd: () => log.push('ad'), onDismiss: (r) => log.push(`dismiss:${r}`)
+      });
+      view.resize(1080, 2344);
+      view.show({ ...LIVES, offer: { ...OFFER, enabled: false } });
+      advance(kit.core, 400);
+      const offer = offerOf(view) as OfferPanel;
+      expect(offer.parent).toBe(panelOf(view));
+      expect(offer.visible).toBe(true);
+      expect(texts(offer)).toEqual(['OFFER', '35d', '5', '10', '900', 'x3']);
+      expect(offer.buyButton.enabled).toBe(false);
+      expect(offer.buyButton.alpha).toBe(0.55); // the kit's disabled look by default
+      tap(offer.buyButton, kit);
+      advance(kit.core, 300);
+      expect(log).toEqual([]);
+      expect(view.state).toBe('shown');
+      // the window's own actions are untouched
+      tap(field<UiButton>(view, 'refillButton'), kit);
+      advance(kit.core, 300);
+      expect(log).toEqual(['refill:900']);
+      view.show({ ...LIVES, offer: { ...OFFER, enabled: false } });
+      advance(kit.core, 400);
+      tap(field<UiButton>(view, 'adButton'), kit);
+      advance(kit.core, 300);
+      expect(log).toEqual(['refill:900', 'ad']);
+      view.destroy();
+      expect(kit.ui.getStats().buttons).toBe(0);
+    });
+
+    it(`${skin.id} Confirm RESTART: an inert offer under the window, RESTART still confirms`, () => {
+      const kit = createKit();
+      const log: string[] = [];
+      const view = new ConfirmWindowView({
+        ui: kit.ui, motion: kit.motion, textures: styled(kit, roles(skin), skin), theme: { skin }, id: 'restart', action: 'restart',
+        onConfirm: () => log.push('confirm'), onDismiss: (r) => log.push(`dismiss:${r}`)
+      });
+      view.resize(1080, 2344);
+      view.show({ offer: { ...OFFER, icon: 'offerCoinArt', iconLabel: '2000', enabled: false, dimDisabled: false } });
+      advance(kit.core, 400);
+      const offer = offerOf(view) as OfferPanel;
+      expect(offer.parent).toBe(panelOf(view));
+      expect(texts(offer)).toContain('2000');
+      expect(offer.buyButton.enabled).toBe(false);
+      expect(offer.buyButton.alpha).toBe(1); // dimDisabled: false keeps the full look
+      tap(offer.buyButton, kit);
+      advance(kit.core, 300);
+      expect(log).toEqual([]);
+      expect(view.state).toBe('shown');
+      tap(field<UiButton>(view, 'confirmButton'), kit);
+      advance(kit.core, 300);
+      expect(log).toEqual(['confirm']);
+      view.destroy();
+      expect(kit.ui.getStats().buttons).toBe(0);
+    });
+  }
+
+  it('enabled: false wins over onOffer; enabled: true without onOffer is shown but inert; the next show re-arms the button', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const view = lives(kit, styled(kit), log);
+    view.show({ ...LIVES, offer: { ...OFFER, enabled: false, dimDisabled: false } });
+    advance(kit.core, 400);
+    const offer = offerOf(view) as OfferPanel;
+    expect([offer.buyButton.enabled, offer.buyButton.alpha]).toEqual([false, 1]);
+    tap(offer.buyButton, kit);
+    advance(kit.core, 300);
+    expect(log).toEqual([]);
+    expect(view.state).toBe('shown');
+    view.close('button');
+    advance(kit.core, 300);
+    // the same window, a buyable offer: active at full look again, the buy is the close continuation
+    view.show({ ...LIVES, offer: OFFER });
+    advance(kit.core, 400);
+    expect([offer.buyButton.enabled, offer.buyButton.alpha]).toEqual([true, 1]);
+    tap(offer.buyButton, kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['dismiss:button', 'offer:900']);
+    view.destroy();
+
+    const noHandler = lives(kit, styled(kit), log, { onOffer: undefined } as unknown as Partial<LivesWindowViewOptions>);
+    noHandler.show({ ...LIVES, offer: { ...OFFER, enabled: true } });
+    advance(kit.core, 400);
+    const shown = offerOf(noHandler) as OfferPanel;
+    expect(shown.visible).toBe(true);
+    expect(shown.buyButton.enabled).toBe(false); // never active without onOffer
+    tap(shown.buyButton, kit);
+    advance(kit.core, 300);
+    expect(noHandler.state).toBe('shown');
+    noHandler.destroy();
+
+    const confirmNoHandler = confirm(kit, styled(kit), log, { onOffer: undefined } as unknown as Partial<ConfirmWindowViewOptions>);
+    confirmNoHandler.show({ offer: OFFER }); // no `enabled`: the old rule, no panel without onOffer
+    advance(kit.core, 400);
+    expect(offerOf(confirmNoHandler)).toBeNull();
+    confirmNoHandler.destroy();
+    expect(log).toEqual(['dismiss:button', 'offer:900']);
+  });
+
+  it('the donor look ignores an inert offer too', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    const donor = lives(kit, kit.textures, log, { variant: 'donor', onOffer: undefined } as unknown as Partial<LivesWindowViewOptions>);
+    donor.show({ ...LIVES, offer: { ...OFFER, enabled: false } });
+    advance(kit.core, 400);
+    expect(offerOf(donor)).toBeNull();
+    donor.destroy();
+    const donorConfirm = confirm(kit, kit.textures, log, { variant: 'donor', onOffer: undefined } as unknown as Partial<ConfirmWindowViewOptions>);
+    donorConfirm.show({ offer: { ...OFFER, enabled: false } });
+    advance(kit.core, 400);
+    expect(offerOf(donorConfirm)).toBeNull();
+    donorConfirm.destroy();
+    expect(log).toEqual([]);
+  });
+});

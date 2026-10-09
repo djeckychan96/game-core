@@ -1,6 +1,6 @@
 import { CanvasTextMetrics, Container, type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
-import { OfferPanel, type ReadyUiOffer } from './OfferPanel';
+import { OfferPanel, offerState, type ReadyUiOffer } from './OfferPanel';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -30,8 +30,9 @@ export interface LivesWindowParams {
    */
   refillOffer?: boolean;
   /**
-   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn only with `onOffer`). The window
-   * and the panel are centred together; absent / null = the window alone, centred as before.
+   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn with `onOffer`, or whenever the offer
+   * says `enabled` — `false` = shown with an inert buy button). The window and the panel are centred together; absent /
+   * null = the window alone, centred as before.
    */
   offer?: ReadyUiOffer | null;
 }
@@ -70,7 +71,10 @@ export interface LivesWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
   /** Close continuations. */
   onRefill: (params: LivesWindowParams) => void;
   onWatchAd?: (params: LivesWindowParams) => void;
-  /** The OFFER panel's buy button (close continuation; the purchase is the host's). Without it no offer is drawn. */
+  /**
+   * The OFFER panel's buy button (close continuation; the purchase is the host's). Without it an offer is drawn only when
+   * it gives `enabled`, and its buy button is then inert.
+   */
   onOffer?: (params: LivesWindowParams) => void;
 }
 
@@ -250,7 +254,7 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
           ui: this.ui, theme: this.theme, i18n: this.i18n, id: this.id, skin, window: 'lives', layout: offer, text: textLook,
           art: { offerPanel: A.offerPanel, offerBadge: A.offerBadge, offerLivesArt: A.offerLivesArt, offerCoinArt: A.offerCoinArt, buttonPrimary: A.buttonPrimary, priceIcon: A.priceIcon, windowClose: A.windowClose },
           register: (button) => this.addButton(button),
-          onBuy: () => this.finish('offer'),
+          onBuy: () => { if (this.params?.offer?.enabled !== false) this.finish('offer'); },
           onClose: () => this.close('button')
         })
         : null;
@@ -408,13 +412,14 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
   /** Shows / hides the OFFER panel under the window and gives the styled fit the composition's share of the frame. */
   private layoutOffer(look: LivesLook, params: LivesWindowParams): void {
     const offer = params.offer ?? null;
-    const show = this.createOfferPanel !== null && offer !== null && this.onOffer !== null;
+    const state = offerState(offer, this.onOffer !== null);
+    const show = this.createOfferPanel !== null && state.show;
     if (show && !this.offerPanel && this.createOfferPanel) this.offerPanel = this.createOfferPanel();
     const panel = this.offerPanel;
     if (panel) {
       // only an offer on show is in the scene: a window without one keeps exactly its own layers
       panel.visible = show;
-      panel.buyButton.setEnabled(show);
+      panel.setBuyEnabled(show && state.enabled, offer?.dimDisabled ?? true);
       panel.closeButton?.setEnabled(show);
       if (show && panel.parent !== this.panel) this.panel.addChild(panel);
       else if (!show && panel.parent) panel.parent.removeChild(panel);

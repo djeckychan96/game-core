@@ -35,6 +35,25 @@ export interface ReadyUiOffer {
   price: number;
   /** Corner badge text (`x3`, `-60%`); absent / empty = no badge. */
   badge?: string;
+  /**
+   * Whether the buy button can be tapped. Omitted: the panel is drawn only with the window's `onOffer` and its button is
+   * then active (as before). Given: the panel is drawn with or without `onOffer`, and `false` shows the button inert — a
+   * tap runs no callback and does not close the window (e.g. an offer the game cannot sell yet). Never active without
+   * `onOffer`.
+   */
+  enabled?: boolean;
+  /** An inert buy button keeps the kit's dimmed disabled look; `false` keeps its full look. Default true. */
+  dimDisabled?: boolean;
+}
+
+/**
+ * The OFFER this show (Lives, Confirm): drawn (an offer; without `enabled` also needs the window's `onOffer`) and its buy
+ * button tappable (handled and not `enabled: false`).
+ */
+export function offerState(offer: ReadyUiOffer | null, handled: boolean): { show: boolean; enabled: boolean } {
+  if (!offer) return { show: false, enabled: false };
+  const show = offer.enabled === undefined ? handled : true;
+  return { show, enabled: show && handled && offer.enabled !== false };
 }
 
 /** The OFFER panel's art, resolved from the window's style look. */
@@ -160,6 +179,12 @@ export class OfferPanel extends Container {
     this.addChild(surface, this.title, this.hero, this.heroLabel, ...this.items.flatMap((item) => [item.icon, item.label]), this.buyButton);
     if (this.closeButton) this.addChild(this.closeButton);
     this.addChild(this.badge, this.badgeLabel);
+  }
+
+  /** The buy button: tappable, or inert — dimmed like any disabled kit button, or at its full look with `dim: false`. */
+  setBuyEnabled(enabled: boolean, dim = true): void {
+    this.buyButton.setEnabled(enabled);
+    if (!enabled && !dim) this.buyButton.alpha = 1;
   }
 
   set(offer: ReadyUiOffer): void {

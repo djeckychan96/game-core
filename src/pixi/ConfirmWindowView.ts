@@ -1,6 +1,6 @@
 import { type NineSliceSprite, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
-import { OfferPanel, type ReadyUiOffer } from './OfferPanel';
+import { OfferPanel, offerState, type ReadyUiOffer } from './OfferPanel';
 import type { ReadyUiOptionalTextureName } from './assets';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -32,8 +32,9 @@ const ACTION_LABEL = {
 /** `show()` params; every one optional (`show()` with none = the window alone). */
 export interface ConfirmWindowParams {
   /**
-   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn only with `onOffer`), e.g. a
-   * pack offered instead of restarting. The window and the panel are centred together.
+   * Styled only: an OFFER panel under the window (the style's `windows.offer`; drawn with `onOffer`, or whenever the offer
+   * says `enabled` — `false` = shown with an inert buy button), e.g. a pack offered instead of restarting. The window and
+   * the panel are centred together.
    */
   offer?: ReadyUiOffer | null;
 }
@@ -65,7 +66,10 @@ export interface ConfirmWindowViewOptions extends Omit<ModalWindowOptions, 'id'>
   illustration?: boolean;
   /** The one action button, a close continuation. Cancel = the × or the backdrop → `onDismiss`. */
   onConfirm: () => void;
-  /** The OFFER panel's buy button (close continuation; the purchase is the host's). Without it no offer is drawn. */
+  /**
+   * The OFFER panel's buy button (close continuation; the purchase is the host's). Without it an offer is drawn only when
+   * it gives `enabled`, and its buy button is then inert.
+   */
   onOffer?: (offer: ReadyUiOffer) => void;
 }
 
@@ -254,7 +258,7 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
         register: (button) => this.addButton(button),
         onBuy: () => {
           const shown = this.offer;
-          if (shown) this.close('button', () => this.onOffer?.(shown));
+          if (shown && shown.enabled !== false) this.close('button', () => this.onOffer?.(shown));
         },
         onClose: () => this.close('button')
       })
@@ -265,14 +269,15 @@ export class ConfirmWindowView extends ModalWindow<ConfirmWindowParams | void> {
   protected applyParams(params: ConfirmWindowParams | void): void {
     const L = this.layout;
     const offer = (params && params.offer) ?? null;
-    const show = L !== null && this.createOfferPanel !== null && offer !== null && this.onOffer !== null;
+    const state = offerState(offer, this.onOffer !== null);
+    const show = L !== null && this.createOfferPanel !== null && state.show;
     if (show && !this.offerPanel && this.createOfferPanel) this.offerPanel = this.createOfferPanel();
     const panel = this.offerPanel;
     this.offer = show ? offer : null;
     if (panel) {
       // only an offer on show is in the scene: a window without one keeps exactly its own layers
       panel.visible = show;
-      panel.buyButton.setEnabled(show);
+      panel.setBuyEnabled(show && state.enabled, offer?.dimDisabled ?? true);
       panel.closeButton?.setEnabled(show);
       if (show && panel.parent !== this.panel) this.panel.addChild(panel);
       else if (!show && panel.parent) panel.parent.removeChild(panel);

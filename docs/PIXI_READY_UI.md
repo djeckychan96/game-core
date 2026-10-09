@@ -366,7 +366,8 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   omitted, the button shows only with `onWatchAd`, as before;
   styled with neither, their row closes up (the window ends under the heart / timer and is centred again).
   Styled: `show({ …, offer })` draws the style's OFFER panel under the window (see below), `onOffer(params)` is its buy
-  continuation; without `offer` (or `onOffer`) the window is alone and centred as before.
+  continuation; without `offer` (or, unless the offer gives `enabled`, without `onOffer`) the window is alone and
+  centred as before.
 - **ShopWindowView** — the donor's **full-screen** shop: striped awning tiled across the top
   (36/255 of the height), the 89-unit × at the top-right, then the blue `SPECIAL OFFER` ribbon
   and a 3-column grid of 318 × 418 pack cards (amount on top, coin pile, price on the bottom band)
@@ -402,18 +403,25 @@ while any of them is open.
 ### OFFER panel (styled Lives / Confirm)
 
 A style with `windows.offer` draws an OFFER panel under Lives and Confirm (theme_light_4: a pack offered instead of
-waiting for a life or restarting). It is data only — `ReadyUiOffer` `{ title?, icon, iconLabel?, items?, price, badge? }`:
+waiting for a life or restarting). It is data only — `ReadyUiOffer` `{ title?, icon, iconLabel?, items?, price, badge?, enabled?, dimDisabled? }`:
 the hero is the style's `'offerLivesArt'` (unlimited lives) / `'offerCoinArt'` or a host texture, `items` are at most two
 host icons with their counts (boosters are game content), `price` is a coin price on the buy button, `badge` the corner
 text (`x3`, `-60%`; none = no badge). `LivesWindowView.show({ …, offer })` / `ConfirmWindowView.show({ offer })` with
 `onOffer` set; the buy tap closes the window and runs `onOffer` (the purchase is the host's), the panel's × (when the
 style draws one) closes the window like the window's ×. The panel sits on the window's horizontal centre, and the window
 and the panel are centred together; a show without an offer builds nothing and keeps the window alone. The donor look and the pre-style `include` path never draw it.
+`enabled` splits the panel's visibility from its buy tap (the Lives `adEnabled` pattern): omitted, the panel needs
+`onOffer` and its button is active, as before; given, the panel is drawn with or without `onOffer`, and `enabled: false`
+shows the buy button inert — a tap runs no callback and does not close the window (an offer the game cannot sell yet,
+e.g. a QA preview); it is never active without `onOffer`. An inert button has the kit's dimmed disabled look;
+`dimDisabled: false` keeps its full look. The panel's × and the window's own buttons are unaffected.
 
 ```ts
 lives.show({ lives, maxLives, timerText, refillPrice: 900,
   offer: { icon: 'offerLivesArt', iconLabel: '35d', items: [{ icon: lampTexture, label: '5' }, { icon: wandTexture, label: '10' }], price: 900, badge: 'x3' } });
 restartConfirm.show({ offer: { icon: 'offerCoinArt', iconLabel: '2000', price: 900 } });
+// shown, not for sale: no onOffer needed, the buy button keeps its look and does nothing
+restartConfirm.show({ offer: { icon: 'offerCoinArt', iconLabel: '2000', price: 900, enabled: false, dimDisabled: false } });
 ```
 
 ### ClickRippleEffect (Pixi FX)
