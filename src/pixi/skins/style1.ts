@@ -135,6 +135,17 @@ export const READY_UI_STYLE_1 = {
     iconHome: { file: 'nav/style1_icon_home.webp' },
     /** theme_light_6 dark MOVES 28:48247: `notification_back` 28:48249 at 280 (white, radius 41, a soft ring), no text. */
     movesPanel: { file: 'hud/style1_moves_panel.webp' },
+    /**
+     * theme_light_8 `screen_gameplay_pc_dark` 46:38230, the host's row around the MOVES box
+     * (docs/figma/theme-light-8-gameplay): the lamp / wand stand on `notification_back` 46:38262 / 46:38257 at 280 — the
+     * MOVES box's render, pixel for pixel; `reward_emblem_2_dark` 46:35808 (the base and its three empty star slots, no
+     * sample "3" / stars); `btn_lvl` 46:38267 = `btn_grey_dark` 46:38268 (266, no "Lvl 7", no lock) + `icon_lock_dark`
+     * 46:38841 = the nav lock's art (drawn ~1.6 % larger in its 288 box: mean |Δ| 2.2).
+     */
+    boosterBack: { file: 'hud/style1_moves_panel.webp' },
+    levelEmblem: { file: 'level/style1_emblem.webp' },
+    lockedSlotBack: { file: 'hud/style1_locked_slot.webp' },
+    lockedSlotIcon: { file: 'nav/style1_icon_lock.webp' },
     /** theme_light_6 dark gameplay `btn_settings` 28:48211: the blue `btn` 28:48212 at 214 and `icon_settings_dark` 28:48213. */
     settingsButtonBack: { file: 'hud/style1_settings_button.webp' },
     settingsButtonIcon: { file: 'hud/style1_icon_settings.webp' },

@@ -160,6 +160,17 @@ export const READY_UI_STYLE_2 = {
     buttonExit: { file: 'style2/button_rewarded.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
     /** theme_light_6 MOVES `Group 1358` 28:48175: `btn_blue` 28:48177 at 280 (the 214 component resized: radius 41 kept), no text. */
     movesPanel: { file: 'style2/moves_panel.webp' },
+    /**
+     * theme_light_8 `screen_gameplay_pc` 46:38123, the host's row around the MOVES box (docs/figma/theme-light-8-gameplay):
+     * `popup_back` 46:38152 behind the lamp / wand (the export-set component 46:35631 at the gameplay's 300: white, the
+     * orange rim keeps its 7 / 34 insets); `reward_stars_1` 46:35715 is the map's open node (the same render: mean |Δ|
+     * 0.53); `btn_lvl` 46:38172 = `btn_grey` 46:38173 (266 × 265, no "Lvl 7", no lock) + `icon_lock` 46:35402 = the nav
+     * lock's render (mean |Δ| 0.8).
+     */
+    boosterBack: { file: 'style2/booster_back.webp' },
+    levelEmblem: { file: 'style2/level_node_open.webp' },
+    lockedSlotBack: { file: 'style2/locked_slot.webp' },
+    lockedSlotIcon: { file: 'style2/nav_lock.webp' },
     /** theme_light_6 gameplay `btn_settings` 28:48119: `btn_blue` 28:48120 at 214 and `icon_settings` 28:48121 (158, centred). */
     settingsButtonBack: { file: 'style2/button_settings.webp' },
     settingsButtonIcon: { file: 'style2/icon_settings.webp' },

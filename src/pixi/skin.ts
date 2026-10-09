@@ -44,7 +44,10 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
  * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons.
  * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
- * its layout has a background picture (`background.art`).
+ * its layout has a background picture (`background.art`). MovesView draws `movesPanel` alone; the other `moves` roles
+ * are the gameplay row's art around the MOVES box that a host composes itself (no Core view draws them, never
+ * required): `boosterBack` (the square behind a booster button), `levelEmblem` (the level's star emblem: the base and
+ * its empty star slots), `lockedSlotBack` / `lockedSlotIcon` (the grey "Lv N" slot and its lock).
  */
 export const READY_UI_SKIN_VIEW_ROLES = {
   ...READY_UI_SKIN_WINDOW_ROLES,
@@ -52,7 +55,7 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
   levelMapScreen: ['playButton', 'iconShop', 'iconHome'],
-  moves: ['movesPanel'],
+  moves: ['movesPanel', 'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'],
   settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
   shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
 } as const satisfies Record<ReadyUiSkinView, readonly string[]>;
@@ -649,7 +652,7 @@ function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly 
  * art, `background` → the map background). BottomNav item icons are never required by the nav alone; LevelMapScreen
  * requires PLAY and the icons of its SHOP / HOME slots. Result needs every role but `buttonHighlight` when its WIN
  * secondary has no highlight layer and an outcome's glow when that outcome draws none. ShopScreen needs every role but
- * `shopBackground` when its layout has no background picture.
+ * `shopBackground` when its layout has no background picture. Moves needs `movesPanel` only (its host roles are optional).
  */
 export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): readonly ReadyUiSkinRole[] {
   if (view === 'hud') {
@@ -671,6 +674,7 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
+  if (view === 'moves') return ['movesPanel'];
   if (view === 'shopScreen') {
     const roles = READY_UI_SKIN_VIEW_ROLES.shopScreen;
     return skin.shopScreen?.background.art ? roles : roles.filter((role) => role !== 'shopBackground');

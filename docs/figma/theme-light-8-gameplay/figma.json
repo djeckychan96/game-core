@@ -1,0 +1,101 @@
+{
+ "about": "theme_light_8 (section 46:35261) gameplay HUD art a host composes around the MOVES box: the booster back, the level emblem, the locked slot. Only the images Core did not ship yet; Figma's own transparent renders (get_screenshot contentsOnly) at the gameplay instance size, no text inside. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "46:35261"
+ },
+ "assets": [
+  {
+   "key": "style2-booster-back",
+   "file": "style2/booster_back.webp",
+   "scale": 1,
+   "size": [
+    300,
+    300
+   ],
+   "note": "popup_back 46:38152 (component 46:35357 = the export-set 46:35631, 186, resized to 300: fixed 7 / 34 insets) behind the lamp / wand of screen_gameplay_pc 46:38123; render box = node box",
+   "layers": [
+    {
+     "image": "png/style2-booster-back-46-38152.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      300,
+      300
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-locked-slot",
+   "file": "style2/locked_slot.webp",
+   "scale": 1,
+   "size": [
+    266,
+    265
+   ],
+   "note": "btn_grey 46:38173 (component 46:35355, 214, resized to 266 x 265) of btn_lvl 46:38172, without the \"Lvl 7\" text and the lock",
+   "layers": [
+    {
+     "image": "png/style2-locked-slot-46-38173.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      266,
+      265
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-locked-slot",
+   "file": "hud/style1_locked_slot.webp",
+   "scale": 1,
+   "size": [
+    266,
+    266
+   ],
+   "note": "btn_grey_dark 46:38268 (component 46:39090, 214, resized to 266) of btn_lvl 46:38267 in screen_gameplay_pc_dark 46:38230, without the \"Lvl 7\" text and the lock",
+   "layers": [
+    {
+     "image": "png/style1-locked-slot-46-38268.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      266,
+      266
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-emblem",
+   "file": "level/style1_emblem.webp",
+   "scale": 1,
+   "size": [
+    384,
+    384
+   ],
+   "note": "reward_emblem_2_dark export-set 46:35808 (component 46:38949): the base with its three empty star slots, no sample \"3\" / stars",
+   "layers": [
+    {
+     "image": "png/style1-emblem-46-35808.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      384,
+      384
+     ]
+    }
+   ]
+  }
+ ]
+}

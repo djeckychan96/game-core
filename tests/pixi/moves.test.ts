@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Container, Sprite, Text, Texture, TextureSource } from 'pixi.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { advance, createKit, pointer } from './setup';
 import { LocalizationRuntime } from '../../src/localization';
@@ -10,7 +10,7 @@ import { HudView } from '../../src/pixi/HudView';
 import { MovesView } from '../../src/pixi/MovesView';
 import { SettingsButtonView } from '../../src/pixi/SettingsButtonView';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
-import { requiredSkinRoles, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
+import { READY_UI_SKIN_VIEW_ROLES, requiredSkinRoles, resolveSkinView, validateReadyUiSkin, type ReadyUiSkin, type ReadyUiSkinRole, type ReadyUiSkinTextures } from '../../src/pixi/skin';
 import { READY_UI_STYLE_1 } from '../../src/pixi/skins/style1';
 import { READY_UI_STYLE_2 } from '../../src/pixi/skins/style2';
 import type { UiButton } from '../../src/pixi/UiButton';
@@ -188,4 +188,49 @@ describe('SettingsButtonView — the gameplay settings button', () => {
     expect(() => new SettingsButtonView({ ui: kit.ui, id: 'broken', textures, theme: { skin: READY_UI_STYLE_2 } })).toThrow("SettingsButtonView style 'style-2': no settingsButtonIcon (style2/icon_settings.webp) in textures");
     expect(pixiEntry).toHaveProperty('SettingsButtonView');
   });
+});
+
+describe('theme_light_8 gameplay row — the host art around the MOVES box', () => {
+  const HOST_ROLES = ['boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'] as const;
+  const px = (file: string): number[] => {
+    const b = readFileSync(resolve(rootDir, 'assets/pixi-ui', file));
+    expect(b.toString('ascii', 12, 16), file).toBe('VP8L');
+    const bits = b.readUInt32LE(21);
+    return [(bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1];
+  };
+
+  it('are optional moves roles: MovesView still needs movesPanel alone, a style without them still validates', () => {
+    expect(READY_UI_SKIN_VIEW_ROLES.moves).toEqual(['movesPanel', ...HOST_ROLES]);
+    const assets = Object.fromEntries(Object.entries(READY_UI_STYLE_2.assets).filter(([key]) => !(HOST_ROLES as readonly string[]).includes(key)));
+    const bare = { ...READY_UI_STYLE_2, id: 'style-2-bare', assets } as ReadyUiSkin;
+    expect(() => validateReadyUiSkin(bare)).not.toThrow();
+    expect(requiredSkinRoles(bare, 'moves')).toEqual(['movesPanel']);
+    const kit = createKit();
+    const view = new MovesView({ textures: styled(kit, bare), theme: { skin: bare }, remaining: 3 });
+    expect(view.children.filter((child) => child instanceof Sprite).map((s) => (s as Sprite).texture.source.label)).toEqual(['style-2-bare:movesPanel']);
+  });
+
+  it('both styles ship them lossless at the gameplay sizes; renders Core already had are reused, never duplicated', () => {
+    const S1 = READY_UI_STYLE_1.assets;
+    const S2 = READY_UI_STYLE_2.assets;
+    // Style 2 46:38123: popup_back at 300, reward_stars_1 384 (= the open map node), btn_grey 266 x 265, icon_lock 288 (= the nav lock)
+    expect(HOST_ROLES.map((role) => px(S2[role].file))).toEqual([[300, 300], [384, 384], [266, 265], [288, 288]]);
+    expect(S2.levelEmblem.file).toBe(S2.levelNodeNormal.file);
+    expect(S2.lockedSlotIcon.file).toBe(S2.navLock.file);
+    // Style 1 46:38230: notification_back 280 (= the MOVES box), reward_emblem_2_dark 384, btn_grey_dark 266, icon_lock_dark 288 (= the nav lock)
+    expect(HOST_ROLES.map((role) => px(S1[role].file))).toEqual([[280, 280], [384, 384], [266, 266], [288, 288]]);
+    expect(S1.boosterBack.file).toBe(S1.movesPanel.file);
+    expect(S1.lockedSlotIcon.file).toBe(S1.navLock.file);
+    for (const role of HOST_ROLES) expect(S1[role].file, role).not.toBe(S2[role].file);
+  });
+
+  for (const skin of [READY_UI_STYLE_1, READY_UI_STYLE_2] as const) {
+    it(`${skin.id}: a host reads them from textures.skins['${skin.id}'] by role (loadReadyUiAssets({ skin }) files every asset)`, () => {
+      const kit = createKit();
+      const textures = styled(kit, skin);
+      for (const role of HOST_ROLES) expect(textures.skins![skin.id]![role]!.source.label).toBe(`${skin.id}:${role}`);
+      const look = resolveSkinView('host', 'moves', skin, textures);
+      expect(Object.keys(look.art).sort()).toEqual(['movesPanel', ...HOST_ROLES].sort());
+    });
+  }
 });

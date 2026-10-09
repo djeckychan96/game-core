@@ -131,8 +131,10 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     expect('levelMap' in READY_UI_STYLE_1).toBe(true);
     expect('bottomNav' in READY_UI_STYLE_1).toBe(true);
     expect('levelMapScreen' in READY_UI_STYLE_1).toBe(true);
-    // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles)
-    expect(ROLES.sort()).toEqual([...new Set(READY_UI_STYLE_1.covers.flatMap((view) => requiredSkinRoles(READY_UI_STYLE_1, view)))].sort());
+    // the roles Style 1 ships = the roles its covered views' layouts draw (requiredSkinRoles) + the gameplay row's host art
+    const hostArt = READY_UI_SKIN_VIEW_ROLES.moves.filter((role) => !requiredSkinRoles(READY_UI_STYLE_1, 'moves').includes(role));
+    expect(hostArt).toEqual(['boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon']);
+    expect(ROLES.sort()).toEqual([...new Set([...READY_UI_STYLE_1.covers.flatMap((view) => requiredSkinRoles(READY_UI_STYLE_1, view)), ...hostArt])].sort());
     // one dense column (the language row included; the rows a show does not draw close up)
     expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 907 });
     expect(READY_UI_STYLE_1.windows.settings.gameplay.window).toEqual({ width: 960, height: 1371 });
