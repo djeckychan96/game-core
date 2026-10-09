@@ -993,6 +993,28 @@ describe('Style 2 — Refill Hearts (theme_light_4 22:28924) through the existin
     noHandler.destroy();
   });
 
+  it('adEnabled: false shows GET disabled (with or without onWatchAd) and the tap never calls it', () => {
+    const kit = createKit();
+    const log: string[] = [];
+    for (const extra of [{}, { onWatchAd: undefined } as unknown as Partial<LivesWindowViewOptions>]) {
+      const view = show(kit, livesView(kit, extra, log), { ...PARAMS, adOffer: true, adEnabled: false });
+      const ad = field<UiButton>(view, 'adButton');
+      expect([ad.visible, ad.enabled]).toEqual([true, false]);
+      expect(field<UiButton>(view, 'refillButton').x).toBe(FX(297)); // the two-button row stays
+      tap(ad, kit);
+      advance(kit.core, 300);
+      expect(view.state).toBe('shown');
+      view.destroy();
+    }
+    const active = show(kit, livesView(kit, {}, log), { ...PARAMS, adOffer: true, adEnabled: true });
+    expect(field<UiButton>(active, 'adButton').enabled).toBe(true);
+    tap(field<UiButton>(active, 'adButton'), kit);
+    advance(kit.core, 300);
+    expect(log).toEqual(['ad:3']);
+    active.destroy();
+    expect(kit.uiErrors).toEqual([]);
+  });
+
   it('copy: explicit text wins, then the provider (RU / EN), then the legacy default', () => {
     const kit = createKit();
     const copy = (view: LivesWindowView): string[] => [

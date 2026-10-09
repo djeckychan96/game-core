@@ -361,6 +361,9 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   at x −261 with `n/max`, `Next heart in` + countdown (`setTimer` while open; `MAX` when full),
   REFILL with the coin price and a "+1 for an ad" button at y 350; `onRefill`, `onWatchAd`. `refillOffer: false`
   (a game without a refill economy) hides REFILL, `adOffer: false` the ad button; the one shown takes the centre;
+  `adEnabled` (rewarded ad available now) splits the ad button's visibility from its tap: given, the button shows
+  whenever offered and `adEnabled: false` draws it disabled (also without `onWatchAd`, which it never calls);
+  omitted, the button shows only with `onWatchAd`, as before;
   styled with neither, their row closes up (the window ends under the heart / timer and is centred again).
   Styled: `show({ …, offer })` draws the style's OFFER panel under the window (see below), `onOffer(params)` is its buy
   continuation; without `offer` (or `onOffer`) the window is alone and centred as before.

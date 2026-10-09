@@ -521,6 +521,50 @@ describe('LivesWindowView', () => {
   });
 });
 
+describe('LivesWindowView adEnabled: the GET button shown while the rewarded ad is unavailable', () => {
+  const PARAMS: LivesWindowParams = { lives: 3, maxLives: 5, timerText: '17:42', refillPrice: 900 };
+  // [branch, options, REFILL x beside a shown GET]
+  const branches: Array<[string, Partial<LivesWindowViewOptions>, number]> = [['donor', {}, -253], ['figma (Style 1)', { variant: 'figma' }, 275.5 - 540]];
+  for (const [branch, variant, refillX] of branches) {
+    it(`${branch}: visibility follows adOffer, the tap needs adEnabled and onWatchAd`, () => {
+      const kit = createKit();
+      const log: string[] = [];
+      /** Opens the window, taps GET, returns [visible, enabled, still open]; the log says whether onWatchAd ran. */
+      const check = (params: Partial<LivesWindowParams>, handled: boolean): [boolean, boolean, boolean] => {
+        const view = new LivesWindowView({
+          ui: kit.ui, motion: kit.motion, textures: kit.textures, ...variant, onRefill: () => log.push('refill'),
+          ...(handled ? { onWatchAd: (p: LivesWindowParams) => log.push(`ad:${p.lives}`) } : {})
+        });
+        view.show({ ...PARAMS, ...params });
+        advance(kit.core, 400);
+        const ad = field<UiButton>(view, 'adButton');
+        const state: [boolean, boolean] = [ad.visible, ad.enabled];
+        if (ad.visible) expect(field<UiButton>(view, 'refillButton').x).toBe(refillX); // a shown GET keeps the two-button row
+        tap(ad, kit);
+        advance(kit.core, 200);
+        const open = view.state === 'shown';
+        view.destroy();
+        return [...state, open];
+      };
+
+      expect(check({ adOffer: true, adEnabled: false }, true)).toEqual([true, false, true]);
+      expect(check({ adEnabled: false }, true)).toEqual([true, false, true]); // adOffer defaults to true
+      expect(check({ adOffer: true, adEnabled: false }, false)).toEqual([true, false, true]);
+      expect(check({ adOffer: true, adEnabled: true }, false)).toEqual([true, false, true]); // never active without a handler
+      expect(check({ adOffer: false, adEnabled: true }, true)).toEqual([false, false, true]);
+      expect(check({ adOffer: false, adEnabled: false }, true)).toEqual([false, false, true]);
+      expect(check({}, false)).toEqual([false, false, true]); // no adEnabled: unhandled stays hidden, as before
+      expect(log).toEqual([]);
+      expect(check({ adOffer: true, adEnabled: true }, true)).toEqual([true, true, false]);
+      expect(log).toEqual(['ad:3']);
+      expect(check({}, true)).toEqual([true, true, false]); // no adEnabled: handled is active, as before
+      expect(log).toEqual(['ad:3', 'ad:3']);
+      expect(kit.uiErrors).toEqual([]);
+      expect(kit.ui.getStats().buttons).toBe(0);
+    });
+  }
+});
+
 describe("LivesWindowView variant 'figma' (Style 1: theme_light_4 22:27562 on the screen/lives art, docs/figma/style1-theme-light-4)", () => {
   // Figma screen units → panel units: the Figma variant's panel origin is the screen centre (540, 1172)
   const X = (x: number) => x - 540;

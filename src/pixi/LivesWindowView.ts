@@ -19,6 +19,12 @@ export interface LivesWindowParams {
   /** Offer a "+1 for an ad" button. Default true. */
   adOffer?: boolean;
   /**
+   * Whether the offered ad button can be tapped (rewarded ad available now). Omitted: the button is shown only with
+   * `onWatchAd` and is then active (as before). Given: the button's visibility follows `adOffer` alone and `false` shows
+   * it disabled; it is never active without `onWatchAd`.
+   */
+  adEnabled?: boolean;
+  /**
    * Offer the coin REFILL button. Default true. `false` = no refill offer (a game without a refill economy): the button
    * is hidden and the rewarded button, when offered, takes the centre.
    */
@@ -110,6 +116,13 @@ function boxLook(look: FigmaTextLook, box: ReadyUiSkinLivesTextBox): FigmaTextLo
   return own;
 }
 
+/** The ad button this show: drawn (`adOffer`; without `adEnabled` also needs the handler) and tappable (handled and enabled). */
+function adState(params: LivesWindowParams, handled: boolean): { show: boolean; enabled: boolean } {
+  const offered = params.adOffer ?? true;
+  const show = params.adEnabled === undefined ? offered && handled : offered;
+  return { show, enabled: show && handled && (params.adEnabled ?? true) };
+}
+
 function sprite(texture: Texture, b: ReadyUiSkinBox): Sprite {
   const s = new Sprite(texture);
   s.position.set(b.x, b.y);
@@ -131,7 +144,8 @@ function sprite(texture: Texture, b: ReadyUiSkinBox): Sprite {
  * label are runtime text in the style's boxes.
  *
  * Both: the same params, actions and states — REFILL disabled at full lives and drawn only when offered
- * (`refillOffer`), the ad button only when offered and handled (the one shown button then centred), `setTimer` while
+ * (`refillOffer`), the ad button only when offered and handled (with `adEnabled`: when offered, disabled while the ad is
+ * unavailable or unhandled; the one shown button then centred), `setTimer` while
  * open, continuations after the close.
  */
 export class LivesWindowView extends ModalWindow<LivesWindowParams> {
@@ -303,10 +317,10 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
       placeFigmaLabel(this.timerText, { ...panelBox(look, L.timer), align: L.timer.align ?? 'center' });
       this.priceText.text = formatAmount(params.refillPrice);
       this.layoutPrice(look);
-      const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
+      const { show: showAd, enabled: adEnabled } = adState(params, this.onWatchAd !== null);
       const showRefill = params.refillOffer ?? true;
       this.adButton.visible = showAd;
-      this.adButton.setEnabled(showAd);
+      this.adButton.setEnabled(adEnabled);
       this.refillButton.visible = showRefill;
       this.refillButton.setEnabled(showRefill && !full);
       this.refillButton.x = showAd ? X(look, L.refill.x + L.refill.width / 2) : 0;
@@ -321,10 +335,10 @@ export class LivesWindowView extends ModalWindow<LivesWindowParams> {
     this.timerText.text = full ? this.fullLabel : params.timerText ?? '';
     fitLabelWidth(this.timerText, 420);
     this.priceText.text = formatAmount(params.refillPrice);
-    const showAd = (params.adOffer ?? true) && this.onWatchAd !== null;
+    const { show: showAd, enabled: adEnabled } = adState(params, this.onWatchAd !== null);
     const showRefill = params.refillOffer ?? true;
     this.adButton.visible = showAd;
-    this.adButton.setEnabled(showAd);
+    this.adButton.setEnabled(adEnabled);
     this.refillButton.visible = showRefill;
     this.refillButton.setEnabled(showRefill && !full);
     this.refillButton.x = showAd ? -253 : 0;
