@@ -146,6 +146,14 @@ export const READY_UI_STYLE_1 = {
     levelEmblem: { file: 'level/style1_emblem.webp' },
     lockedSlotBack: { file: 'hud/style1_locked_slot.webp' },
     lockedSlotIcon: { file: 'nav/style1_icon_lock.webp' },
+    /**
+     * theme_light_9 `screen_main_menu_pc_dark` 50:29520, its feature column 50:29603 (host art beside the map, see
+     * docs/figma/theme-light-9): the dark `icon_no_ads` 50:30494 (250), `blur_bg_dark_3` 50:30497 (the cyan glow, its
+     * 384 × 273 blurred render) and `pic_spark_2` 50:30430 (42).
+     */
+    iconNoAds: { file: 'level/style1_icon_no_ads.webp' },
+    featureGlow: { file: 'level/style1_feature_glow.webp' },
+    featureSpark: { file: 'level/style1_spark.webp' },
     /** theme_light_6 dark gameplay `btn_settings` 28:48211: the blue `btn` 28:48212 at 214 and `icon_settings_dark` 28:48213. */
     settingsButtonBack: { file: 'hud/style1_settings_button.webp' },
     settingsButtonIcon: { file: 'hud/style1_icon_settings.webp' },

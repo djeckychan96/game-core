@@ -35,8 +35,9 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  * (docs/figma/style2-level-map-screen); `settings`, from the approved `настройки` 8:17493 (docs/figma/style2-settings);
  * `confirm`, from the approved `попап рестарт` 8:22049 / `попап выйти` 8:22069 (docs/figma/style2-confirm); `lives`,
  * from the approved `screen_refill_hearts` 8:22838 (docs/figma/style2-refill-hearts); `result` (WIN 28:48352; FAIL
- * derived), `moves` (28:48175), `settingsButton` (28:48119) and `noAds` (28:48041) from theme_light_6 (section 28:45250,
- * the LIGHT row; docs/figma/theme-light-6); `shopScreen` — the SHOP tab — from theme_light_6 `market_screen_light`
+ * derived), `settingsButton` (28:48119) and `noAds` (28:48041 — theme_light_9's `screen_ads_off` 50:29087 draws the same
+ * boxes) from theme_light_6 (section 28:45250, the LIGHT row; docs/figma/theme-light-6); `moves` — the orange tab — from
+ * theme_light_9 (section 50:25954; docs/figma/theme-light-9); `shopScreen` — the SHOP tab — from theme_light_6 `market_screen_light`
  * 28:46095 (docs/figma/theme-light-6-shop). NOT COVERED — donor look: the modal ShopWindowView, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
  * not a source for this package; every covered screen is a provisional approved snapshot (the artist may still
  * change Style 2 — see each docs/figma folder).
@@ -158,24 +159,37 @@ export const READY_UI_STYLE_2 = {
     rewardCoin: { file: 'style2/icon_coin.webp' },
     resultStar: { file: 'style2/icon_star.webp' },
     buttonExit: { file: 'style2/button_rewarded.webp', nineSlice: { left: 48, top: 103, right: 48, bottom: 103 } },
-    /** theme_light_6 MOVES `Group 1358` 28:48175: `btn_blue` 28:48177 at 280 (the 214 component resized: radius 41 kept), no text. */
-    movesPanel: { file: 'style2/moves_panel.webp' },
     /**
-     * theme_light_8 `screen_gameplay_pc` 46:38123, the host's row around the MOVES box (docs/figma/theme-light-8-gameplay):
-     * `popup_back` 46:38152 behind the lamp / wand (the export-set component 46:35631 at the gameplay's 300: white, the
-     * orange rim keeps its 7 / 34 insets); `reward_stars_1` 46:35715 is the map's open node (the same render: mean |Δ|
-     * 0.53); `btn_lvl` 46:38172 = `btn_grey` 46:38173 (266 × 265, no "Lvl 7", no lock) + `icon_lock` 46:35402 = the nav
-     * lock's render (mean |Δ| 0.8).
+     * theme_light_9 MOVES `orange_active` 50:26381 (docs/figma/theme-light-9): the orange tab (#f9b72b → #ef6940 down
+     * its height, radius 26.7 inside a 5-unit grey ring), no text. Figma resizes the tab with the screen (mobile 250 × 310,
+     * PC 300 × 480: it always runs past the bottom edge) and its gradient with it, so it is a 9-slice whose centre band
+     * stretches: caps = the corners, the ring and the inner shadows.
      */
-    boosterBack: { file: 'style2/booster_back.webp' },
+    movesPanel: { file: 'style2/moves_tab.webp', nineSlice: { left: 36, top: 36, right: 36, bottom: 40 } },
+    /**
+     * theme_light_9 gameplay `screen_gameplay` 50:28877 / `screen_gameplay_pc` 50:29160, the host's row around the MOVES
+     * tab (docs/figma/theme-light-9): `booster_back` 50:29217 behind the wand / lamp — the orange-rimmed white square
+     * rotated 45° (the PC instance: the mobile art × 1.2, its rotated bounds 288.7); `reward_stars_1` is the map's open
+     * node (the STARS alternative of the tab); `btn_lvl` 50:29224 = `btn_grey` 50:29225 (240.1 = the mobile 200 × 1.2,
+     * no "Lvl 7", no lock) + `icon_lock` 50:26090 = the nav lock's render (mean |Δ| 0.77).
+     */
+    boosterBack: { file: 'style2/booster_diamond.webp' },
     levelEmblem: { file: 'style2/level_node_open.webp' },
     lockedSlotBack: { file: 'style2/locked_slot.webp' },
     lockedSlotIcon: { file: 'style2/nav_lock.webp' },
+    /**
+     * theme_light_9 main menu `screen_main_menu_pc` 50:29405, its feature column `icons` 50:29480 (host art beside the
+     * map): `icon_no_ads` 50:26354 (250, the No Ads entry), `blur_bg_3` 50:26300 (the cream glow behind each icon, its
+     * 384 × 273 blurred render) and `pic_spark_1` 50:26242 (190, drawn at 95 on the icon's top-right).
+     */
+    iconNoAds: { file: 'style2/icon_no_ads.webp' },
+    featureGlow: { file: 'style2/feature_glow.webp' },
+    featureSpark: { file: 'style2/spark.webp' },
     /** theme_light_6 gameplay `btn_settings` 28:48119: `btn_blue` 28:48120 at 214 and `icon_settings` 28:48121 (158, centred). */
     settingsButtonBack: { file: 'style2/button_settings.webp' },
     settingsButtonIcon: { file: 'style2/icon_settings.webp' },
     /**
-     * No Ads theme_light_6 `screen_ads_off` 28:48041: the same purple promo window and rays as Style 1's (byte-identical
+     * No Ads theme_light_6 `screen_ads_off` 28:48041 (= theme_light_9 50:29087, box for box): the same purple promo window and rays as Style 1's (byte-identical
      * renders, Style 1's files), the popups' red ×, the light hero `pic_no_ads_1` 28:45573; the buy button is `btn_green`
      * at 530 × 200 (caps 96: the 103 caps would shrink its corners at 200) and its coin the 288 HUD coin at 84.
      */
@@ -571,14 +585,16 @@ export const READY_UI_STYLE_2 = {
     }
   },
   /**
-   * theme_light_6 gameplay 28:48114, MOVES `Group 1358` 28:48175: the blue box, "MOVES" Calibri Bold 50 and the count
-   * 150, white, plain. Where the box goes is the host's composition.
+   * theme_light_9 gameplay `screen_gameplay` 50:28877: the orange tab `orange_active` 50:28929 (250 × 310) with
+   * `moves_txt` 50:28930 — "MOVES" Calibri Bold 50 at 20, 20 (200 × 60) and the count 150 at 20, 80 (200 × 140), white,
+   * plain. The tab rises from the screen's bottom edge (its lower part runs past it): the host places the box and
+   * stretches the panel to that edge (`MovesView.stretchPanel`). Where the box goes is the host's composition.
    */
   moves: {
-    box: { width: 280, height: 280 },
-    panel: { x: 0, y: 0, width: 280, height: 280 },
-    label: { x: 40, y: 47, width: 200, height: 60, fontSize: 50, fill: 0xffffff },
-    count: { x: 40, y: 116.69, width: 200, height: 140, fontSize: 150, fill: 0xffffff }
+    box: { width: 250, height: 310 },
+    panel: { x: 0, y: 0, width: 250, height: 310 },
+    label: { x: 20, y: 20, width: 200, height: 60, fontSize: 50, fill: 0xffffff },
+    count: { x: 20, y: 80, width: 200, height: 140, fontSize: 150, fill: 0xffffff }
   },
   /** theme_light_6 `btn_settings` 28:48119 (gameplay and victory): 214 at top 90 / right 90, the gear centred. */
   settingsButton: {

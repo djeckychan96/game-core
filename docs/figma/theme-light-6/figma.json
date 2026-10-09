@@ -75,29 +75,6 @@
    ]
   },
   {
-   "key": "style2-moves-panel",
-   "file": "style2/moves_panel.webp",
-   "scale": 1,
-   "size": [
-    280,
-    280
-   ],
-   "note": "btn_blue 28:48177 (component 28:45338 resized to 280, STRETCH rect, radius 41) without its texts",
-   "layers": [
-    {
-     "image": "png/style2-moves-panel-28-48177.png",
-     "at": [
-      0,
-      0
-     ],
-     "size": [
-      280,
-      280
-     ]
-    }
-   ]
-  },
-  {
    "key": "style1-moves-panel",
    "file": "hud/style1_moves_panel.webp",
    "scale": 1,

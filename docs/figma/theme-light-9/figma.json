@@ -1,0 +1,81 @@
+{
+ "about": "theme_light_9 (section 50:25954): the gameplay row's Style 2 art (booster diamond, the orange MOVES tab, the grey slot) and the main screen's feature-column art for the No Ads entry (icon, glow, spark) in both styles. Figma's own transparent renders (get_screenshot contentsOnly), 1 px / unit, no text inside. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "50:25954"
+ },
+ "assets": [
+  {
+   "key": "style2-booster-back",
+   "file": "style2/booster_diamond.webp",
+   "scale": 1,
+   "size": [289, 289],
+   "note": "booster_back 50:29217 of screen_gameplay_pc 50:29160 (component 50:26377, 170 rotated 45°, scaled ×1.2 to 204.1 = the mobile 50:28934 art × 1.2); render box = its rotated bounds 288.7",
+   "layers": [{ "image": "png/style2-booster-back-50-29217.png", "at": [0, 0], "size": [289, 289] }]
+  },
+  {
+   "key": "style2-moves-tab",
+   "file": "style2/moves_tab.webp",
+   "scale": 1,
+   "size": [250, 310],
+   "note": "orange_active 50:26381 (the component, 250 × 310; the mobile instance 50:28929 is cut by the frame bottom): the #f9b72b → #ef6940 vertical gradient that Figma stretches with the height (PC 50:29212 is 300 × 480), so the skin declares it a 9-slice whose centre band stretches",
+   "layers": [{ "image": "png/style2-moves-tab-50-26381.png", "at": [0, 0], "size": [250, 310] }]
+  },
+  {
+   "key": "style2-locked-slot",
+   "file": "style2/locked_slot.webp",
+   "scale": 1,
+   "size": [241, 241],
+   "note": "btn_grey 50:29225 of btn_lvl 50:29224 (screen_gameplay_pc, the mobile 50:28942 × 1.2: 240.1), without the \"Lvl 7\" text and the lock; render box 241",
+   "layers": [{ "image": "png/style2-locked-slot-50-29225.png", "at": [0, 0], "size": [241, 241] }]
+  },
+  {
+   "key": "style2-icon-no-ads",
+   "file": "style2/icon_no_ads.webp",
+   "scale": 1,
+   "size": [250, 252],
+   "note": "icon_no_ads 50:26354 (component, 250; its image reaches 2 above the box): the red crossed-out ADS button of the main menu's feature column 50:29487",
+   "layers": [{ "image": "png/style2-icon-no-ads-50-26354.png", "at": [0, 0], "size": [250, 252] }]
+  },
+  {
+   "key": "style2-feature-glow",
+   "file": "style2/feature_glow.webp",
+   "scale": 1,
+   "size": [384, 274],
+   "note": "blur_bg_3 50:26300 (360 × 240, the #fffbd8 layer-blurred disc and bars behind a feature icon): render box 384 × 273 (12 / 16.5 blur bleed around the box)",
+   "layers": [{ "image": "png/style2-feature-glow-50-26300.png", "at": [0, 0], "size": [384, 274] }]
+  },
+  {
+   "key": "style2-spark",
+   "file": "style2/spark.webp",
+   "scale": 1,
+   "size": [190, 190],
+   "note": "pic_spark_1 50:26242 (190; drawn at 95 on the feature icon's top-right)",
+   "layers": [{ "image": "png/style2-spark-50-26242.png", "at": [0, 0], "size": [190, 190] }]
+  },
+  {
+   "key": "style1-icon-no-ads",
+   "file": "level/style1_icon_no_ads.webp",
+   "scale": 1,
+   "size": [250, 250],
+   "note": "icon_no_ads 50:30494 (dark, 250) of screen_main_menu_pc_dark 50:29520 feature column 50:29608",
+   "layers": [{ "image": "png/style1-icon-no-ads-50-30494.png", "at": [0, 0], "size": [250, 250] }]
+  },
+  {
+   "key": "style1-feature-glow",
+   "file": "level/style1_feature_glow.webp",
+   "scale": 1,
+   "size": [384, 274],
+   "note": "blur_bg_dark_3 50:30497 (360 × 240, the cyan glow): render box 384 × 273",
+   "layers": [{ "image": "png/style1-feature-glow-50-30497.png", "at": [0, 0], "size": [384, 274] }]
+  },
+  {
+   "key": "style1-spark",
+   "file": "level/style1_spark.webp",
+   "scale": 1,
+   "size": [42, 42],
+   "note": "pic_spark_2 50:30430 (42, the dark column's small spark)",
+   "layers": [{ "image": "png/style1-spark-50-30430.png", "at": [0, 0], "size": [42, 42] }]
+  }
+ ]
+}

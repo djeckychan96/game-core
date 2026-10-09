@@ -42,19 +42,21 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * map with its own background or locked-node art), so the roles a covering style must ship are
  * `requiredSkinRoles(skin, view)`. `iconShop` / `iconHome` are item icons a style may ship for a BottomNavView item
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
- * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons.
+ * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons; its
+ * other roles are the main screen's feature column a host composes beside the map (no Core view draws them, never
+ * required): `iconNoAds` (the No Ads entry), `featureGlow` (the soft glow behind a feature icon) and `featureSpark`.
  * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
  * its layout has a background picture (`background.art`). MovesView draws `movesPanel` alone; the other `moves` roles
  * are the gameplay row's art around the MOVES box that a host composes itself (no Core view draws them, never
- * required): `boosterBack` (the square behind a booster button), `levelEmblem` (the level's star emblem: the base and
- * its empty star slots), `lockedSlotBack` / `lockedSlotIcon` (the grey "Lv N" slot and its lock).
+ * required): `boosterBack` (the back of a booster button: a square, or Style 2's diamond), `levelEmblem` (the level's
+ * star emblem: the base and its empty star slots), `lockedSlotBack` / `lockedSlotIcon` (the grey "Lv N" slot and its lock).
  */
 export const READY_UI_SKIN_VIEW_ROLES = {
   ...READY_UI_SKIN_WINDOW_ROLES,
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton', 'iconShop', 'iconHome'],
+  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'featureGlow', 'featureSpark'],
   moves: ['movesPanel', 'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'],
   settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
   shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
@@ -429,7 +431,8 @@ export interface ReadyUiSkinSettingsButtonLayout {
 
 /**
  * MovesView: the moves counter of a gameplay screen. Boxes are BOX-LOCAL (x / y from the box's top-left; the view's
- * origin is the box centre): `panel` is the `movesPanel` render box (its shadow may reach outside the box), `label` the
+ * origin is the box centre): `panel` is the `movesPanel` render box (its shadow may reach outside the box) — a 9-slice
+ * over that box when the asset declares caps (then `MovesView.stretchPanel` can lengthen it downwards) —, `label` the
  * caption (`MOVES`), `count` the runtime number — each with its own fill / OUTSIDE stroke over the style's text look.
  */
 export interface ReadyUiSkinMovesLayout {
@@ -650,7 +653,7 @@ function offerOnlyRoles(skin: ReadyUiSkin, view: 'lives' | 'confirm'): readonly 
  * layout has no highlight; the OFFER panel's roles only when the style has `windows.offer`); for Settings and the non-modal views the parts its layout draws (no haptic toggle → no haptic art, `offButtons` → the OFF buttons, a home icon → `settingsIconHome`;
  * no gear art → no gear roles, no HARD badge → no HARD roles, no glow → no glow role, `lockedNode` → the locked node
  * art, `background` → the map background). BottomNav item icons are never required by the nav alone; LevelMapScreen
- * requires PLAY and the icons of its SHOP / HOME slots. Result needs every role but `buttonHighlight` when its WIN
+ * requires PLAY and the icons of its SHOP / HOME slots (its feature-column art is optional). Result needs every role but `buttonHighlight` when its WIN
  * secondary has no highlight layer and an outcome's glow when that outcome draws none. ShopScreen needs every role but
  * `shopBackground` when its layout has no background picture. Moves needs `movesPanel` only (its host roles are optional).
  */
@@ -674,6 +677,8 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     return roles;
   }
   if (view === 'bottomNav') return ['navPanel', 'navSelected', 'navLock'];
+  // the feature column's art is the host's (optional)
+  if (view === 'levelMapScreen') return ['playButton', 'iconShop', 'iconHome'];
   if (view === 'moves') return ['movesPanel'];
   if (view === 'shopScreen') {
     const roles = READY_UI_SKIN_VIEW_ROLES.shopScreen;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Container, Sprite, Text, Texture, TextureSource } from 'pixi.js';
+import { Container, NineSliceSprite, Sprite, Text, Texture, TextureSource } from 'pixi.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { advance, createKit, pointer } from './setup';
@@ -55,9 +55,14 @@ describe('MovesView — the generic moves counter', () => {
       const view = new MovesView({ textures: styled(kit, skin), theme: { skin }, remaining: 38 });
       expect(view.skin).toBe(skin);
       expect([view.boxWidth, view.boxHeight]).toEqual([L.box.width, L.box.height]);
-      const panel = view.children.find((child) => child instanceof Sprite) as Sprite;
+      // the panel: the render sized to its box, or (caps declared: Style 2's tab) a 9-slice over the box
+      const panel = view.children[0] as Sprite | NineSliceSprite;
       expect(panel.texture.source.label).toBe(`${skin.id}:movesPanel`);
-      expect([panel.x, panel.y, panel.width, panel.height]).toEqual([L.panel.x - L.box.width / 2, L.panel.y - L.box.height / 2, L.panel.width, L.panel.height]);
+      expect(panel instanceof NineSliceSprite).toBe((skin.assets.movesPanel as { nineSlice?: unknown }).nineSlice !== undefined);
+      expect(view.panelStretches).toBe(panel instanceof NineSliceSprite);
+      const left = panel.x - panel.anchor.x * panel.width;
+      const top = panel.y - panel.anchor.y * panel.height;
+      expect([left, top, panel.width, panel.height]).toEqual([L.panel.x - L.box.width / 2, L.panel.y - L.box.height / 2, L.panel.width, L.panel.height]);
       const [caption, count] = texts(view);
       expect(caption!.text).toBe('MOVES');
       expect(count!.text).toBe('38');
@@ -190,7 +195,7 @@ describe('SettingsButtonView — the gameplay settings button', () => {
   });
 });
 
-describe('theme_light_8 gameplay row — the host art around the MOVES box', () => {
+describe('gameplay row (theme_light_8 / theme_light_9) — the host art around the MOVES box', () => {
   const HOST_ROLES = ['boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'] as const;
   const px = (file: string): number[] => {
     const b = readFileSync(resolve(rootDir, 'assets/pixi-ui', file));
@@ -207,14 +212,16 @@ describe('theme_light_8 gameplay row — the host art around the MOVES box', () 
     expect(requiredSkinRoles(bare, 'moves')).toEqual(['movesPanel']);
     const kit = createKit();
     const view = new MovesView({ textures: styled(kit, bare), theme: { skin: bare }, remaining: 3 });
-    expect(view.children.filter((child) => child instanceof Sprite).map((s) => (s as Sprite).texture.source.label)).toEqual(['style-2-bare:movesPanel']);
+    const art = view.children.filter((child) => child instanceof Sprite || child instanceof NineSliceSprite);
+    expect(art.map((s) => (s as Sprite).texture.source.label)).toEqual(['style-2-bare:movesPanel']);
   });
 
   it('both styles ship them lossless at the gameplay sizes; renders Core already had are reused, never duplicated', () => {
     const S1 = READY_UI_STYLE_1.assets;
     const S2 = READY_UI_STYLE_2.assets;
-    // Style 2 46:38123: popup_back at 300, reward_stars_1 384 (= the open map node), btn_grey 266 x 265, icon_lock 288 (= the nav lock)
-    expect(HOST_ROLES.map((role) => px(S2[role].file))).toEqual([[300, 300], [384, 384], [266, 265], [288, 288]]);
+    // Style 2 theme_light_9 50:29160: booster_back rotated 45° (bounds 288.7), reward_stars_1 384 (= the open map node),
+    // btn_grey 240.1 (render 241), icon_lock 288 (= the nav lock)
+    expect(HOST_ROLES.map((role) => px(S2[role].file))).toEqual([[289, 289], [384, 384], [241, 241], [288, 288]]);
     expect(S2.levelEmblem.file).toBe(S2.levelNodeNormal.file);
     expect(S2.lockedSlotIcon.file).toBe(S2.navLock.file);
     // Style 1 46:38230: notification_back 280 (= the MOVES box), reward_emblem_2_dark 384, btn_grey_dark 266, icon_lock_dark 288 (= the nav lock)

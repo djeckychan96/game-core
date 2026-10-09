@@ -144,7 +144,9 @@ const movesLeft = Math.max(0, Number.parseInt(params.get('moves') ?? '38', 10) |
  * (the standalone SettingsButtonView: a gameplay screen of a game without a HUD row uses it alone; on a phone, where
  * the two bars span the width, this demo moves it under the row — a demo layout, not a Core rule) and the moves counter
  * under the field. Where the counter goes is the host's composition: here the box centre 300 units left of the screen
- * centre and 270 above the bottom safe edge (Figma: 737 left of the field centre on the 4168-wide PC screen).
+ * centre and 270 above the bottom safe edge (Figma: 737 left of the field centre on the 4168-wide PC screen); a style
+ * whose panel stretches (Style 2's theme_light_9 tab 50:28929) rises from the screen's bottom edge instead — its top 266
+ * units above the bottom safe edge, the panel stretched down to the screen edge.
  */
 class GameplayDemo extends Container {
   readonly hud: HudView;
@@ -174,7 +176,13 @@ class GameplayDemo extends Container {
     const left = options.insets?.left ?? 0;
     const bottom = options.insets?.bottom ?? 0;
     this.moves.scale.set(s);
-    this.moves.position.set(Math.max(left + (60 + this.moves.boxWidth / 2) * s, width / 2 - 300 * s), height - bottom - 270 * s);
+    const x = Math.max(left + (60 + this.moves.boxWidth / 2) * s, width / 2 - 300 * s);
+    if (this.moves.panelStretches) {
+      this.moves.position.set(x, height - bottom - (266 - this.moves.boxHeight / 2) * s);
+      this.moves.stretchPanel((height - this.moves.y) / s);
+    } else {
+      this.moves.position.set(x, height - bottom - 270 * s);
+    }
     this.moves.setResolution(s * (options.pixelRatio ?? 1));
   }
 }

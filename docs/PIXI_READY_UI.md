@@ -300,8 +300,9 @@ The modal `ShopWindowView` below is a separate, unchanged view (donor look under
 
 ### MovesView
 
-The moves counter of a gameplay screen (no donor art: it needs a style that covers `moves` — Style 1 and Style 2, the
-theme_light_6 MOVES box). Visual only: it knows nothing about `MoveRuntime` or a game — the host passes the number.
+The moves counter of a gameplay screen (no donor art: it needs a style that covers `moves` — Style 1's theme_light_6
+white box, Style 2's theme_light_9 orange tab). Visual only: it knows nothing about `MoveRuntime` or a game — the host
+passes the number.
 
 | Option / member | Meaning |
 | --- | --- |
@@ -309,7 +310,13 @@ theme_light_6 MOVES box). Visual only: it knows nothing about `MoveRuntime` or a
 | `label` / `i18n` | the caption: explicit text, else `core.moves.label` (EN MOVES, RU ХОДЫ) |
 | `hidden`, `show()`, `hide()`, `shown` | visibility only |
 | `boxWidth`, `boxHeight` | the box's design size; the view's origin is the box centre — the host positions and scales it in its own composition |
+| `panelStretches`, `stretchPanel(bottom \| null)`, `panelBottom` | a style whose `movesPanel` declares 9-slice caps (Style 2's tab, which rises from the screen's bottom edge — Figma runs it past the frame) draws a 9-slice; the host lengthens it down to `bottom` (view units, origin = box centre — e.g. the screen edge mapped into the view). Only the panel grows: the box, the texts and the layout bounds stay; never shorter than the layout; `null` = the layout height. A plain panel (Style 1) ignores it |
 | `setResolution(onScreenScale × devicePixelRatio)` | crisp text after the host scales it |
+
+The gameplay row's other art is the host's to compose (no Core view draws it, never required): `textures.skins[id]`
+`boosterBack`, `levelEmblem`, `lockedSlotBack`, `lockedSlotIcon` (docs/figma/theme-light-8-gameplay; Style 2 from
+docs/figma/theme-light-9: the diamond booster back, the grey slot). Likewise the main screen's feature column beside the
+map: `iconNoAds`, `featureGlow`, `featureSpark` (optional `levelMapScreen` roles, both styles; theme_light_9 50:29480).
 
 ### SettingsButtonView
 
@@ -387,7 +394,9 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   `screen_ads_off`): the purple promo window, its ×, the rays and the hero, `wordNo` / `wordAds` as two title lines, the
   description's first line wrapping in its box and the rest as the note, the price on the style's green button — with the
   style's coin only for `show({ price, coinPrice: true })` (a game-coin price; a store price string stays alone). Same
-  params, callbacks and copy keys.
+  params, callbacks and copy keys. `show({ …, enabled: false })` (every look) = shown but not for sale: the buy button
+  stays, a tap neither closes the window nor calls `onBuy`, × / the backdrop still dismiss; `dimDisabled: false` keeps
+  its full colours (the OFFER panel's rule).
 - **StarterPackWindowView** — 975 × 1355 warm panel, the chest hero, `STARTER PACK` rotated
   −14° (a longer tier title shrinks to the donor's 430-unit cap), rewards row (coins, ∞-lives
   duration), red booster bar with the bulb, price button at y 542; configurable `rewards` /
@@ -524,9 +533,9 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | LevelMapView | covered — exact blue / violet HARD nodes, lock, HARD surface, rail and current glow; numbers, localized HARD and rating stars remain runtime layers | covered — orange open / blue locked nodes, lock, light ray, earned stars, the sky background; no HARD art, no glow |
 | BottomNavView, LevelMapScreen | covered — theme_light_5 24:37523 / 24:37548 + the dark nav components: PLAY without a level line, SHOP \| HOME \| LOCK with the raised blue column, #261a30-outlined captions (docs/figma/theme-light-5-level-map-nav) | covered — panel, raised selected column, lock; PLAY without wings (docs/figma/style2-level-map-screen); theme_light_5 24:38532 slot boxes, HOME selected, LOCK captioned (docs/figma/theme-light-5-level-map-nav); theme_light_8 46:35507…46:35531: the inactive icons' art drawn 220 (at 267 it ran into the captions) |
 | ResultWindowView | covered — WIN theme_light_6 28:48286: the red ribbon with its black 45 % ×, no glow, reward coin, CONTINUE 440 × 200 + RETRY 460 × 200 (orange with the highlight; Figma's rewarded x2 offer is not Core's), centred on 540 (docs/figma/theme-light-6); FAIL Figma `screen/result-fail` 1:4029: grey ribbon, glow band, broken heart + runtime `-1` + outcome line, TRY AGAIN + optional EXIT (the RETURN HOME art, no Figma node); the hero art is game content, not drawn (docs/figma/style1-result) | covered — WIN theme_light_6 28:48352: the red ribbon, the rays, `icon_star` stars, the coin + #943300-outlined amount, CONTINUE on `btn_green` + the secondary on the bare `btn_yellow`, the popups' red × (no × in Figma); FAIL derived from Style 2's parts (no Figma FAIL) (docs/figma/theme-light-6) |
-| MovesView | covered — theme_light_6 28:48247: the white box, "MOVES" + the #ffc300 count with the kit outline | covered — theme_light_6 28:48175: the blue box, white Carlito "MOVES" + count |
+| MovesView | covered — theme_light_6 28:48247: the white box, "MOVES" + the #ffc300 count with the kit outline | covered — theme_light_9 50:28929: the orange tab (a 9-slice the host stretches to the screen's bottom edge), white Carlito "MOVES" 50 + count 150 (docs/figma/theme-light-9) |
 | SettingsButtonView | covered — theme_light_6 28:48211: blue `btn` 214 + the outlined gear 10 above the centre, 90 / 90 | covered — theme_light_6 28:48119: `btn_blue` 214 + `icon_settings`, 90 / 90 |
-| NoAdsWindowView | covered — theme_light_6 28:48065: purple promo window, round red ×, rays, dark hero, Fira titles (line 1 pink) | covered — theme_light_6 28:48041: the same window and rays, the red ×, the light hero, Carlito titles with the red outline |
+| NoAdsWindowView | covered — theme_light_6 28:48065: purple promo window, round red ×, rays, dark hero, Fira titles (line 1 pink) | covered — theme_light_6 28:48041 (= theme_light_9 50:29087, box for box): the same window and rays, the red ×, the light hero, Carlito titles with the red outline |
 | ShopScreen (the SHOP tab) | covered — theme_light_6 `market_screen_dark` 28:46015: the purple gradient + bears, the dark awning, the stretched dark tape, the dark cards and pack art, the round × (docs/figma/theme-light-6-shop) | covered — theme_light_6 `market_screen_light` 28:46095: #0f172c, the light awning, the blue tape, the blue / white cards and pack art, the popups' red × (docs/figma/theme-light-6-shop) |
 | Shop (modal ShopWindowView), StarterPack | not covered — donor look (the styled shop is the ShopScreen tab) | not covered — donor look |
 

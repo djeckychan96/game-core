@@ -17,6 +17,14 @@ export interface NoAdsWindowParams {
    * false: a store price string (real money), no coin. The donor look ignores it.
    */
   coinPrice?: boolean;
+  /**
+   * The buy button takes taps (default true). `false` = the offer is shown but not for sale (no product yet, a QA
+   * preview): the button stays visible, a tap neither closes the window nor calls `onBuy`; × / the backdrop still dismiss.
+   * The OFFER panel's rule (`ReadyUiOffer.enabled`).
+   */
+  enabled?: boolean;
+  /** With `enabled: false`: dim the button like any disabled button (default true); `false` keeps its full colours. */
+  dimDisabled?: boolean;
 }
 
 export interface NoAdsWindowViewOptions extends Omit<ModalWindowOptions, 'id'> {
@@ -65,7 +73,7 @@ interface StyledNoAds {
 
 /**
  * "No Ads" offer. No purchase logic inside: the price is data, BUY is a close() continuation, × / the backdrop only
- * dismiss.
+ * dismiss. `enabled: false` shows the offer with an inert buy button (not for sale).
  *
  * Donor (no style): the donor's OfferNoAds prefab — 975 × 1355 blue panel with the crossed-out clapperboard baked in,
  * `NO` / `ADS` rotated −32° over the top-left corner, the description on the dark band at y 248, the green price button
@@ -189,6 +197,9 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
 
   protected applyParams(params: NoAdsWindowParams): void {
     this.params = params;
+    const enabled = params.enabled !== false;
+    this.buyButton.setEnabled(enabled);
+    if (!enabled && params.dimDisabled === false) this.buyButton.alpha = 1;
     const description = localizedText(params.description, this.i18n, 'core.no_ads.description', READY_UI_LEGACY_TEXT.noAds.description);
     const styled = this.styled;
     if (!styled) {
@@ -237,7 +248,7 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
 
   private finish(): void {
     const params = this.params;
-    if (!params) return;
+    if (!params || params.enabled === false) return;
     this.close('button', () => this.onBuy(params));
   }
 }
