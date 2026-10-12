@@ -1,6 +1,7 @@
 import { type Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
 import type { WindowHiddenReason } from '../index';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName } from './assets';
+import { DecorBurst } from './fx/DecorBurst';
 import { WinConfettiEffect, type WinConfettiConfig } from './fx/WinConfettiEffect';
 import { WinStarsEffect } from './fx/WinStarsEffect';
 import { ModalWindow, VICTORY_ENTRANCE, type ModalWindowOptions } from './ModalWindow';
@@ -126,8 +127,10 @@ interface StyledNodes {
   ribbonWin: Sprite;
   ribbonFail: Sprite;
   /** null: the style draws no glow for that outcome. */
-  glowWin: Sprite | null;
+  glowWin: Container | null;
   glowFail: Sprite | null;
+  /** The WIN rays turning and their stars twinkling (a style with `win.burst`), else null (a still glow). */
+  burst: DecorBurst | null;
   lifeLost: Sprite;
   lifeDelta: Text;
   status: Text;
@@ -254,7 +257,21 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
         return view;
       };
 
-      const glowWin = L.win.glow ? art(A.resultGlowWin, L.win.glow) : null;
+      // the WIN rays: a still glow, or (a style with `win.burst`) turning slowly with their stars twinkling — calm, far
+      // under the fireworks; the FAIL glow stays still
+      const winGlow = L.win.glow;
+      const burst = winGlow && L.win.burst
+        ? new DecorBurst({
+            motion: this.motion,
+            scope: `${this.id}:decor`,
+            rays: A.resultGlowWin,
+            box: { x: fx(look, winGlow.x), y: fy(look, winGlow.y), width: winGlow.width, height: winGlow.height },
+            burst: L.win.burst,
+            stars: (A.resultStarsWin as Texture | undefined) ?? null,
+            look: 'calm'
+          })
+        : null;
+      const glowWin = burst ?? (winGlow ? art(A.resultGlowWin, winGlow) : null);
       const glowFail = L.fail.glow ? art(A.resultGlowFail, L.fail.glow) : null;
       // the glows reach far outside the composition: never part of the fit, the centring or the tap area
       for (const glow of [glowWin, glowFail]) if (glow) glow.measurable = false;
@@ -298,7 +315,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
         this.nextButton, this.retryButton, this.failRetryButton, this.exitButton, status, ribbonWin, ribbonFail,
         this.starsFx, ...this.stars, this.starsFx.front, this.titleText, this.subtitleText
       );
-      this.styled = { look, ribbonWin, ribbonFail, glowWin, glowFail, lifeLost, lifeDelta, status };
+      this.styled = { look, ribbonWin, ribbonFail, glowWin, glowFail, burst, lifeLost, lifeDelta, status };
       if (this.closeButton) {
         this.closeButton.background.texture = A.resultCloseWin;
         this.closeButton.background.width = L.win.close.width;
@@ -381,6 +398,9 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
     // applyParams runs once per show (the controller's onShow): a WIN starts the confetti from t = 0
     if (fail) this.confetti?.cancel();
     else this.confetti?.play();
+    // the WIN rays grow in with the entrance, then turn until the window is hidden
+    if (fail) this.styled?.burst?.stop();
+    else this.styled?.burst?.play();
   }
 
   /** Styled: the outcome's ribbon, glow, × and text boxes; the fail's outcome line goes under its art (the ribbon has one line). */
@@ -453,6 +473,7 @@ export class ResultWindowView extends ModalWindow<ResultWindowParams> {
   protected override onHiddenView(_reason: WindowHiddenReason): void {
     this.starsFx.reset(); // no star, flash or spark stays after a close
     this.confetti?.cancel(); // the fx scope cancel already stopped the run; this keeps the stop independent of it
+    this.styled?.burst?.stop(); // its own scope: the rays and stars stop with the window
   }
 
   private finish(action: 'next' | 'retry' | 'exit'): void {

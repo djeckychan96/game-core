@@ -1,5 +1,5 @@
 import type { ReadyUiSkin } from '../skin';
-import { READY_UI_STYLE_1 } from './style1';
+import { NO_ADS_DECOR_BURST, READY_UI_STYLE_1 } from './style1';
 
 /** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
 const POPUP = {
@@ -152,7 +152,9 @@ export const READY_UI_STYLE_2 = {
      */
     resultRibbonWin: RESULT_RIBBON,
     resultRibbonFail: RESULT_RIBBON,
-    resultGlowWin: { file: 'style2/result_rays@0.5x.webp' },
+    resultGlowWin: { file: 'style2/result_rays_only@0.5x.webp' },
+    /** theme_light_10 `stars` 62:27022 of `pic_decor_1`: the WIN decor's STAR shapes (they twinkle over the turning rays). */
+    resultStarsWin: { file: 'style2/result_stars.webp' },
     resultGlowFail: { file: BLUE_GLOW.file },
     resultCloseWin: CLOSE,
     resultCloseFail: CLOSE,
@@ -195,6 +197,10 @@ export const READY_UI_STYLE_2 = {
      */
     noAdsPanel: READY_UI_STYLE_1.assets.noAdsPanel,
     noAdsDecor: READY_UI_STYLE_1.assets.noAdsDecor,
+    noAdsStars: READY_UI_STYLE_1.assets.noAdsStars,
+    /** theme_light_10 `title_coin_keeper` 62:29924: its two `pic_spark_1` (= featureSpark's art) and the RU title picture without them. */
+    noAdsSpark: { file: 'style2/spark.webp' },
+    noAdsTitle: { file: 'style2/noads_title_ru.webp' },
     noAdsClose: CLOSE,
     noAdsArt: { file: 'style2/noads_hero.webp' },
     'noAds:buttonPrimary': { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 96, right: 48, bottom: 96 } },
@@ -412,8 +418,11 @@ export const READY_UI_STYLE_2 = {
         title: { x: 170, y: 646, width: 740, height: 90, fontSize: 90 },
         subtitle: { x: 170, y: 714, width: 740, height: 90, fontSize: 70 },
         close: { x: 897, y: 441, width: 153, height: 158 },
-        /** rayes 28:48361: its render box (the 8-ray burst at 0.5 and the translucent stars), centred at 540.5 */
-        glow: { x: -376, y: 273, width: 1833, height: 1785 },
+        /**
+         * theme_light_10 `rayes` 62:27021 of `pic_decor_1` WITHOUT its stars (1830 × 1770 render box), its burst centre
+         * kept where theme_light_6's rays had it (530, 1149 in the frame)
+         */
+        glow: { x: -375, y: 281, width: 1830, height: 1770 },
         /** stars_full 28:48380: centres and sizes (the side stars' own 134.2 box) */
         stars: [
           { x: 369.44, y: 494.66, size: 134.2 },
@@ -429,7 +438,26 @@ export const READY_UI_STYLE_2 = {
         /** btn_green 28:48392; the label in REFILL NOW's box (28:48393: 305.88 wide, 60) centred on the face (y 107) */
         next: { button: { x: 120, y: 1481, width: 354, height: 214 }, label: { x: 24, y: 54.5, width: 305.88, height: 105, fontSize: 60 } },
         /** btn_yellow (I28:48398;28:45433, 458 wide) at its component's 214; the label on the face */
-        retry: { button: { x: 507, y: 1481, width: 458, height: 214 }, label: { x: 24, y: 54.5, width: 410, height: 105, fontSize: 60 }, highlight: null }
+        retry: { button: { x: 507, y: 1481, width: 458, height: 214 }, label: { x: 24, y: 54.5, width: 410, height: 105, fontSize: 60 }, highlight: null },
+        /** The rays turn around their burst centre (904.5, 868: the 8-fold symmetry centre); the 13 STARs of `stars` 62:27022 (#4B7FC7, fill 0.2 / 0.5) twinkle. */
+        burst: {
+          pivot: { x: 904.5, y: 868 },
+          stars: [
+            { cell: [4, 4, 109, 109], x: 615.47, y: 702.47, rotation: 17.67, alpha: 0.2 },
+            { cell: [123, 4, 78.58, 78.58], x: 1231.78, y: 760.14, rotation: -21.22, alpha: 0.5 },
+            { cell: [123, 4, 78.58, 78.58], x: 634.85, y: 922.85, rotation: 8.18, alpha: 0.5 },
+            { cell: [123, 4, 78.58, 78.58], x: 1031.48, y: 722.48, rotation: 8.18, alpha: 0.5 },
+            { cell: [212, 4, 65.06, 65.06], x: 1160.16, y: 979.61, rotation: -32.16, alpha: 0.5 },
+            { cell: [212, 4, 65.06, 65.06], x: 1249.86, y: 934.86, rotation: 20.09, alpha: 0.2 },
+            { cell: [288, 4, 77.28, 77.28], x: 1400.37, y: 822.89, rotation: -28.01, alpha: 0.5 },
+            { cell: [288, 4, 77.28, 77.28], x: 462.26, y: 807.26, rotation: -61.73, alpha: 0.5 },
+            { cell: [376, 4, 46.17, 46.17], x: 506.33, y: 863.34, rotation: -61.73, alpha: 0.2 },
+            { cell: [376, 4, 46.17, 46.17], x: 493.27, y: 1033.27, rotation: -61.73, alpha: 0.5 },
+            { cell: [376, 4, 46.17, 46.17], x: 443.27, y: 624.27, rotation: -90.16, alpha: 0.5 },
+            { cell: [376, 4, 46.17, 46.17], x: 1177.15, y: 624.16, rotation: -90.16, alpha: 0.2 },
+            { cell: [376, 4, 46.17, 46.17], x: 1361.15, y: 980.16, rotation: -90.16, alpha: 0.5 }
+          ]
+        }
       },
       fail: {
         ribbon: { x: 30, y: 619, width: 1020, height: 226 },
@@ -473,7 +501,18 @@ export const READY_UI_STYLE_2 = {
       button: { x: 235, y: 1590, width: 530, height: 200 },
       /** txt_coins 28:48054 */
       price: { y: 37.38, height: 124.3, gap: 1, fontSize: 70 },
-      coin: { width: 84, height: 84, y: 57.53 }
+      coin: { width: 84, height: 84, y: 57.53 },
+      burst: NO_ADS_DECOR_BURST,
+      /**
+       * theme_light_10 `pic_spark_1` 62:29927 / 62:29928 (= Hazar_UI 1:4273 / 1:4272): the left one 123.5 at (86, 337)
+       * of the frame, the right one 95 turned 45° around (765.18, 600.18) — centres window-local
+       */
+      sparks: [
+        { x: 107.75, y: 196.75, size: 123.5, rotation: 0 },
+        { x: 725.18, y: 398.18, size: 95, rotation: 45 }
+      ],
+      /** `title_coin_keeper` without its sparks: PoetsenOne (no Cyrillic outside Figma) with its stroke and shadow, render box */
+      titleArt: { box: { x: 91.33, y: 130, width: 819.27, height: 342 }, lines: ['ОТКЛЮЧЕНИЕ', 'РЕКЛАМЫ'] }
     }
   },
   hud: {

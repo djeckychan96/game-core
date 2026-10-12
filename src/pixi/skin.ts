@@ -31,9 +31,9 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
   ],
   result: [
     'resultGlowWin', 'resultGlowFail', 'rewardCoin', 'lifeLostArt', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'buttonExit',
-    'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail', 'resultStar'
+    'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail', 'resultStar', 'resultStarsWin'
   ],
-  noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon']
+  noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon', 'noAdsStars', 'noAdsSpark', 'noAdsTitle']
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 /**
@@ -502,6 +502,29 @@ export interface ReadyUiSkinShopScreenLayout {
 }
 
 /**
+ * One star of a decor burst, drawn from the burst's star atlas: `cell` = its box in the atlas (units = texels of a 1×
+ * atlas: Figma's STAR node box, unrotated), `x` / `y` = its centre in the burst's render box, `rotation` = Figma's
+ * rotation (degrees, counter-clockwise), `alpha` = its own opacity (node × fill).
+ */
+export interface ReadyUiSkinDecorStar {
+  readonly cell: readonly [x: number, y: number, width: number, height: number];
+  readonly x: number;
+  readonly y: number;
+  readonly rotation: number;
+  readonly alpha: number;
+}
+
+/**
+ * The motion of a decor burst (rays behind a window's hero): `pivot` = the rays' centre of rotation inside their render
+ * box (units); `stars` = the separate stars over the rays (Figma's `stars` group), drawn from the window's star-atlas
+ * role and twinkling on their own. Absent: the decor stays a still picture.
+ */
+export interface ReadyUiSkinDecorBurst {
+  readonly pivot: { readonly x: number; readonly y: number };
+  readonly stars?: readonly ReadyUiSkinDecorStar[];
+}
+
+/**
  * No Ads. Boxes are WINDOW-LOCAL (x / y from the window box's top-left; the panel origin is the window centre); the
  * price row is button-local. `noAdsPanel` is the window shell, a 9-slice over the window box (its bleed in the caps' `pad`);
  * the art boxes are render boxes: `noAdsClose` (the ×),
@@ -521,6 +544,18 @@ export interface ReadyUiSkinNoAdsLayout {
   /** Button-local: the price text, `gap`, the coin (`priceIcon`, only for a coin price), one row centred on the button; `y` = the row's top. */
   readonly price: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number; readonly fill?: number; readonly stroke?: { readonly width: number; readonly color: number } };
   readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+  /**
+   * The rays (`noAdsDecor`) fade in growing, then turn slowly; `burst.stars` twinkle from `noAdsStars` (the star atlas).
+   * Absent: the decor is a still picture.
+   */
+  readonly burst?: ReadyUiSkinDecorBurst;
+  /** The title's sparkles (`noAdsSpark`, centre / size / Figma rotation in degrees), flashing in turn. Absent: none. */
+  readonly sparks?: readonly { readonly x: number; readonly y: number; readonly size: number; readonly rotation: number }[];
+  /**
+   * The title as the style's own picture (`noAdsTitle`, render box) for exactly these two lines — drawn instead of the
+   * runtime lines only when `wordNo` / `wordAds` are `lines` (one language's art; any other copy stays runtime text).
+   */
+  readonly titleArt?: { readonly box: ReadyUiSkinBox; readonly lines: readonly [string, string] };
 }
 
 /** A Result button: its box in the frame, its label box button-local (from the button box's top-left). */
@@ -566,6 +601,8 @@ export interface ReadyUiSkinResultLayout {
      * this style's rewarded surface has no highlight layer (no `buttonHighlight` art).
      */
     readonly retry: ReadyUiSkinResultButtonLayout & { readonly highlight: ReadyUiSkinBox | null };
+    /** The WIN glow's motion (`resultGlowWin` = the rays; `burst.stars` from `resultStarsWin`). Absent: a still glow. */
+    readonly burst?: ReadyUiSkinDecorBurst;
   };
   readonly fail: ReadyUiSkinResultOutcomeLayout & {
     /** `lifeLostArt` (render box) and its runtime delta (`-1`, LEFT / CENTER). */
@@ -714,7 +751,17 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     if (layout?.win.retry.highlight === null) without.push('buttonHighlight');
     if (layout?.win.glow === null) without.push('resultGlowWin');
     if (layout?.fail.glow === null) without.push('resultGlowFail');
+    if (!layout?.win.glow || !layout.win.burst?.stars?.length) without.push('resultStarsWin');
     return READY_UI_SKIN_WINDOW_ROLES.result.filter((role) => !without.includes(role));
+  }
+  if (view === 'noAds') {
+    // the decor's motion parts only when the layout draws them
+    const layout = skin.windows.noAds;
+    const without: ReadyUiSkinRole[] = [];
+    if (!layout?.burst?.stars?.length) without.push('noAdsStars');
+    if (!layout?.sparks?.length) without.push('noAdsSpark');
+    if (!layout?.titleArt) without.push('noAdsTitle');
+    return READY_UI_SKIN_WINDOW_ROLES.noAds.filter((role) => !without.includes(role));
   }
   return READY_UI_SKIN_VIEW_ROLES[view];
 }

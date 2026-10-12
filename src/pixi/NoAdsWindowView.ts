@@ -1,4 +1,7 @@
 import { Container, Rectangle, Sprite, type Text, type Texture } from 'pixi.js';
+import type { MotionHandle, WindowHiddenReason } from '../index';
+import { DecorBurst } from './fx/DecorBurst';
+import { SparkleView, playSparkleLoop } from './fx/Sparkle';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -69,7 +72,14 @@ interface StyledNoAds {
   priceRow: Container;
   priceText: Text;
   coin: Sprite;
+  /** The rays turning behind the hero and the twinkling stars (a style with `burst`), else null (a still decor). */
+  burst: DecorBurst | null;
+  /** The title's sparkles flashing in turn (a style with `sparks`). */
+  sparks: SparkleView[];
 }
+
+/** The title sparkles' loop: the left one flashes, then the right one, then a pause (one cycle 3.4 s). */
+export const NO_ADS_SPARKS_LOOP = Object.freeze({ loopMs: 3400, gapMs: 850, delayMs: 400 });
 
 /**
  * "No Ads" offer. No purchase logic inside: the price is data, BUY is a close() continuation, × / the backdrop only
@@ -92,6 +102,7 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
   private readonly onBuy: (params: NoAdsWindowParams) => void;
   private readonly styled: StyledNoAds | null;
   private params: NoAdsWindowParams | null = null;
+  private sparksLoop: MotionHandle | null = null;
 
   constructor(options: NoAdsWindowViewOptions) {
     const look = noAdsLook(options);
@@ -149,12 +160,38 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
     // the window shell: a 9-slice over the window box (its ring in the caps' pad), centred on the panel origin
     const panelArt = createNineSlice(A.noAdsPanel, skinNineSlice(skin, 'noAdsPanel', 'noAds'), L.window.width, L.window.height);
     panelArt.eventMode = 'none';
-    const decor = art(A.noAdsDecor, L.decor);
+    // the rays: a still picture, or (a style with `burst`) turning behind the hero, clipped to the window, the stars twinkling
+    const windowBox = { x: -L.window.width / 2, y: -L.window.height / 2, width: L.window.width, height: L.window.height };
+    const burst = L.burst
+      ? new DecorBurst({
+          motion: this.motion,
+          scope: `${this.id}:decor`,
+          rays: A.noAdsDecor,
+          box: box(L.decor),
+          burst: L.burst,
+          stars: (A.noAdsStars as Texture | undefined) ?? null,
+          look: 'lively',
+          clip: windowBox
+        })
+      : null;
+    const decor = burst ?? art(A.noAdsDecor, L.decor);
     // the rays reach outside the window: never part of the fit, the centring or the tap area
     decor.measurable = false;
     const hero = art(A.noAdsArt, L.hero);
-    const titleTop = label(wordNo, L.title[0]);
-    const titleBottom = label(wordAds, L.title[1]);
+    // the title: the style's own picture of exactly these lines (one language's art), else the runtime lines
+    const titleArtTexture = A.noAdsTitle as Texture | undefined;
+    const titleArt = L.titleArt && titleArtTexture && wordNo === L.titleArt.lines[0] && wordAds === L.titleArt.lines[1] ? art(titleArtTexture, L.titleArt.box) : null;
+    const titleTop = titleArt ?? label(wordNo, L.title[0]);
+    const titleBottom = titleArt ? null : label(wordAds, L.title[1]);
+    // the title's sparkles (over the title), flashing in turn while the window is open
+    const sparkTexture = A.noAdsSpark as Texture | undefined;
+    const sparks = sparkTexture
+      ? (L.sparks ?? []).map((spark) => {
+          const view = new SparkleView({ texture: sparkTexture, width: spark.size, rotation: (-spark.rotation * Math.PI) / 180, glow: this.textures.fxGlowSoft ?? null });
+          view.position.set(spark.x - L.window.width / 2, spark.y - L.window.height / 2);
+          return view;
+        })
+      : [];
     this.description = createFigmaLabel(this.theme, '', L.description.fontSize, skinTextBoxLook(text, L.description));
     this.description.eventMode = 'none';
     const note = label('', L.note);
@@ -189,14 +226,53 @@ export class NoAdsWindowView extends ModalWindow<NoAdsWindowParams> {
       this.closeButton.background.width = L.close.width;
       this.closeButton.background.height = L.close.height;
     }
-    this.styled = { skin, layout: L, text, note, priceRow, priceText, coin };
-    // Figma bottom → top: the window, the rays, the hero, the title, the copy, the button; the × on top (placeClose)
-    this.panel.addChild(panelArt, decor, hero, titleTop, titleBottom, this.description, note, this.buyButton);
+    this.styled = { skin, layout: L, text, note, priceRow, priceText, coin, burst, sparks };
+    // Figma bottom → top: the window, the rays, the hero, the title (its sparkles over it), the copy, the button; the ×
+    // on top (placeClose)
+    this.panel.addChild(panelArt, decor, hero, titleTop);
+    if (titleBottom) this.panel.addChild(titleBottom);
+    for (const spark of sparks) this.panel.addChild(spark);
+    this.panel.addChild(this.description, note, this.buyButton);
     this.placeClose();
+  }
+
+  /** The decor's motion runs while the window is up: from the show (the rays grow in with the entrance) to hidden. */
+  private startDecor(): void {
+    const styled = this.styled;
+    if (!styled) return;
+    styled.burst?.play();
+    this.sparksLoop?.cancel();
+    this.sparksLoop = null;
+    if (styled.sparks.length) {
+      const L = NO_ADS_SPARKS_LOOP;
+      this.sparksLoop = playSparkleLoop(this.motion, styled.sparks, {
+        loopMs: L.loopMs,
+        delayMs: L.delayMs,
+        flashes: styled.sparks.map((_, i) => ({ sparkle: i, atMs: i * L.gapMs })),
+        scope: `${this.id}:decor`
+      });
+    }
+  }
+
+  private stopDecor(): void {
+    this.styled?.burst?.stop();
+    const loop = this.sparksLoop;
+    this.sparksLoop = null;
+    loop?.cancel();
+  }
+
+  protected override onHiddenView(_reason: WindowHiddenReason): void {
+    this.stopDecor();
+  }
+
+  override destroy(options?: Parameters<Container['destroy']>[0]): void {
+    this.stopDecor();
+    super.destroy(options);
   }
 
   protected applyParams(params: NoAdsWindowParams): void {
     this.params = params;
+    this.startDecor();
     const enabled = params.enabled !== false;
     this.buyButton.setEnabled(enabled);
     if (!enabled && params.dimDisabled === false) this.buyButton.alpha = 1;

@@ -86,9 +86,9 @@ function texts(view: ResultWindowView): string[] {
 describe('Style 1 Result — the package (Figma screen/result-win 1:3854, screen/result-fail 1:4029)', () => {
   it('covers result with every role it draws; the files are the Figma exports (no text baked in), shared art reused', () => {
     expect(S1.covers).toContain('result');
-    // theme_light_6's dark WIN has no glow: every role but resultGlowWin (the FAIL keeps its glow)
+    // theme_light_6's dark WIN has no glow: every role but resultGlowWin and its stars (the FAIL keeps its glow)
     expect(S1.windows.result.win.glow).toBeNull();
-    expect(requiredSkinRoles(S1, 'result')).toEqual(READY_UI_SKIN_WINDOW_ROLES.result.filter((role) => role !== 'resultGlowWin'));
+    expect(requiredSkinRoles(S1, 'result')).toEqual(READY_UI_SKIN_WINDOW_ROLES.result.filter((role) => role !== 'resultGlowWin' && role !== 'resultStarsWin'));
     for (const role of requiredSkinRoles(S1, 'result')) expect((S1.assets as Record<string, { file: string } | undefined>)[role]?.file, role).toBeTruthy();
     expect('resultGlowWin' in S1.assets).toBe(false);
     // the stars are the kit's gold star file; the WIN × is theme_light_6's black 45 % glyph

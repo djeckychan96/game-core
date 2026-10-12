@@ -29,29 +29,6 @@
    ]
   },
   {
-   "key": "style2-result-rays",
-   "file": "style2/result_rays@0.5x.webp",
-   "scale": 0.5,
-   "size": [
-    1834,
-    1786
-   ],
-   "note": "rayes 28:48361 (8-ray radial burst at 0.5, blur 40, 13 translucent stars): Figma's 0.5x render of its 1833 x 1785 render box",
-   "layers": [
-    {
-     "image": "png/style2-result-rays-28-48361@0.5x.png",
-     "at": [
-      0,
-      0
-     ],
-     "size": [
-      1834,
-      1786
-     ]
-    }
-   ]
-  },
-  {
    "key": "style1-result-close",
    "file": "result/style1_close_dark@2x.webp",
    "scale": 2,
@@ -228,29 +205,6 @@
     "right": 6,
     "bottom": 6
    }
-  },
-  {
-   "key": "noads-rays",
-   "file": "offer/noads_rays@0.5x.webp",
-   "scale": 0.5,
-   "size": [
-    1046,
-    1046
-   ],
-   "note": "pic_decor_2 28:48987 (rays + 17 stars, blurred) via 28:48058 / 28:48073 (byte-identical): render 1045.75 square, drawn at 0.5",
-   "layers": [
-    {
-     "image": "png/noads-rays-28-48058.png",
-     "at": [
-      0,
-      0
-     ],
-     "size": [
-      1046,
-      1046
-     ]
-    }
-   ]
   },
   {
    "key": "style2-noads-hero",

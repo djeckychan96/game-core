@@ -47,6 +47,8 @@ export type {
 } from './LevelMapScreen';
 export { UiButton, UI_BUTTON_BREATHING } from './UiButton';
 export type { UiButtonOptions, UiButtonBreathing } from './UiButton';
+export { SparkleView, SPARKLE_FLASH, playSparkleLoop } from './fx/Sparkle';
+export type { SparkleViewOptions, SparkleLoopOptions } from './fx/Sparkle';
 export { ModalWindow, backOut, POP_ENTRANCE, VICTORY_ENTRANCE, CLOSE_SIZE } from './ModalWindow';
 export type { ModalWindowOptions, ModalInsets, ModalResizeOptions, ModalFit, ModalEntrance } from './ModalWindow';
 export { ResultWindowView, WIN_CONFETTI_TEXTURES } from './ResultWindowView';
@@ -105,6 +107,8 @@ export type {
   ReadyUiSkinMovesLayout,
   ReadyUiSkinShopScreenLayout,
   ReadyUiSkinIconBox,
+  ReadyUiSkinDecorBurst,
+  ReadyUiSkinDecorStar,
   ReadyUiSkinFont,
   ReadyUiSkinLayouts,
   ReadyUiSkinTextures

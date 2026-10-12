@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { advance, createKit, pointer } from './setup';
 import { LocalizationRuntime } from '../../src/localization';
 import { READY_UI_CATALOGS } from '../../src/pixi';
+import { DecorBurst } from '../../src/pixi/fx/DecorBurst';
 import { NoAdsWindowView, type NoAdsWindowParams } from '../../src/pixi/NoAdsWindowView';
 import { ResultWindowView, WIN_CONFETTI_TEXTURES, type ResultWindowParams, type ResultWindowViewOptions } from '../../src/pixi/ResultWindowView';
 import { READY_UI_OPTIONAL_ASSET_FILES, type ReadyUiOptionalTextureName, type ReadyUiTextures } from '../../src/pixi/assets';
@@ -43,6 +44,7 @@ function drawn(view: object): string[] {
   for (const child of panel(view).children as Container[]) {
     if (!child.visible) continue;
     if (child instanceof Sprite || child instanceof NineSliceSprite) out.push(texture(child));
+    else if (child instanceof DecorBurst) out.push(texture(child.rays)); // the decor's rays (its stars are an atlas)
     else if ('background' in child) out.push(texture(child));
   }
   return out;
@@ -148,7 +150,8 @@ describe('Style 2 Result — theme_light_6 28:48352 (P0-A)', () => {
     const confetti = field<Container>(view, 'confetti');
     const starsFx = field<Container>(view, 'starsFx');
     const stars = field<Sprite[]>(view, 'stars');
-    const rays = children.find((c) => texture(c) === 'style-2:resultGlowWin')!;
+    const rays = children.find((c) => c instanceof DecorBurst) as DecorBurst;
+    expect(texture(rays.rays)).toBe('style-2:resultGlowWin');
     const ribbon = children.find((c) => texture(c) === 'style-2:resultRibbonWin')!;
     // bottom → top: the rays, …, the ribbon, the stars' landing layer, the stars, the confetti; the × on top
     expect(children.indexOf(rays)).toBe(0);
@@ -287,7 +290,10 @@ describe('No Ads — theme_light_6 screen_ads_off (P1-D)', () => {
     const kit2 = createKit();
     const explicit = new NoAdsWindowView({ ui: kit2.ui, motion: kit2.motion, textures: styled(kit2, S2), theme: { skin: S2 }, wordNo: 'ОТКЛЮЧЕНИЕ', wordAds: 'РЕКЛАМЫ', onBuy: () => {} });
     open(kit2, explicit, { price: '900', description: 'Убирает Видео Рекламу\nОставляет награждаемую рекламу!' });
-    expect(texts(panel(explicit))).toEqual(expect.arrayContaining(['ОТКЛЮЧЕНИЕ', 'Убирает Видео Рекламу', 'Оставляет награждаемую рекламу!']));
+    // exactly the lines of Style 2's title picture (theme_light_10): the picture, not runtime lines
+    expect(texts(panel(explicit))).toEqual(expect.arrayContaining(['Убирает Видео Рекламу', 'Оставляет награждаемую рекламу!']));
+    expect(texts(panel(explicit))).not.toContain('ОТКЛЮЧЕНИЕ');
+    expect(drawn(explicit)).toContain('style-2:noAdsTitle');
     explicit.destroy();
   });
 

@@ -1,0 +1,201 @@
+{
+ "about": "theme_light_10 (section 62:26750, the owner's asset-export copy of Hazar_UI GxeOt526TDg4ed59ApAlTd) motion slice: the No Ads / WIN decor split into its own layers (rays only + the star atlas), the RU No Ads title. Figma's own transparent renders (get_screenshot contentsOnly) and fillGeometry SVGs; see README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "62:26750",
+  "design": "GxeOt526TDg4ed59ApAlTd 1:1461"
+ },
+ "assets": [
+  {
+   "key": "noads-rays",
+   "file": "offer/noads_rays_only@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1046,
+    1046
+   ],
+   "note": "rayes 62:30878 of pic_decor_2 62:30877 (radial gradient at 0.5, layer blur 22.87), WITHOUT the stars group: render 1045.75 square, drawn at 0.5",
+   "layers": [
+    {
+     "image": "png/noads-rays-62-30878.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1046,
+      1046
+     ]
+    }
+   ]
+  },
+  {
+   "key": "noads-stars",
+   "file": "offer/noads_stars.webp",
+   "scale": 1,
+   "size": [
+    731,
+    118
+   ],
+   "note": "stars 62:30879 of pic_decor_2: its 9 distinct STAR shapes (fillGeometry, node-local, unrotated, fill #496AFF at full opacity; the node opacity 0.3 is the sprite alpha) in a row, 10 units apart",
+   "layers": [
+    {
+     "svg": "svg/noads-star-a.svg",
+     "at": [
+      4,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-b.svg",
+     "at": [
+      122,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-c.svg",
+     "at": [
+      210,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-d.svg",
+     "at": [
+      298,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-e.svg",
+     "at": [
+      373,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-f.svg",
+     "at": [
+      448,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-g.svg",
+     "at": [
+      535,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-h.svg",
+     "at": [
+      623,
+      4
+     ]
+    },
+    {
+     "svg": "svg/noads-star-i.svg",
+     "at": [
+      680,
+      4
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-result-rays",
+   "file": "style2/result_rays_only@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1830,
+    1770
+   ],
+   "note": "rayes 62:27021 of pic_decor_1 62:27020 (radial gradient at 0.5, layer blur 40), WITHOUT the stars group: Figma's 0.5x render of its 1830 x 1770 render box",
+   "layers": [
+    {
+     "image": "png/style2-result-rays-62-27021@0.5x.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1830,
+      1770
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-result-stars",
+   "file": "style2/result_stars.webp",
+   "scale": 1,
+   "size": [
+    427,
+    117
+   ],
+   "note": "stars 62:27022 of pic_decor_1: its 5 distinct STAR shapes (fillGeometry, fill #4B7FC7 at full opacity; the fill opacity 0.2 / 0.5 is the sprite alpha) in a row, 10 units apart",
+   "layers": [
+    {
+     "svg": "svg/style2-win-star-p0.svg",
+     "at": [
+      4,
+      4
+     ]
+    },
+    {
+     "svg": "svg/style2-win-star-p1.svg",
+     "at": [
+      123,
+      4
+     ]
+    },
+    {
+     "svg": "svg/style2-win-star-p2.svg",
+     "at": [
+      212,
+      4
+     ]
+    },
+    {
+     "svg": "svg/style2-win-star-p3.svg",
+     "at": [
+      288,
+      4
+     ]
+    },
+    {
+     "svg": "svg/style2-win-star-p4.svg",
+     "at": [
+      376,
+      4
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-noads-title-ru",
+   "file": "style2/noads_title_ru.webp",
+   "scale": 1,
+   "size": [
+    820,
+    342
+   ],
+   "note": "title_coin_keeper 62:29924 without its two pic_spark_1 (a throw-away clone, removed after the render): ОТКЛЮЧЕНИЕ / РЕКЛАМЫ PoetsenOne 120 / 90, white, #EC3D40 20 OUTSIDE stroke, the group's drop shadow 0 / 6 / 4 at 40 %; render box 819.27 x 342",
+   "layers": [
+    {
+     "image": "png/style2-noads-title-ru-62-29924.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      820,
+      342
+     ]
+    }
+   ]
+  }
+ ]
+}

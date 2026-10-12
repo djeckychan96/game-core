@@ -1,5 +1,33 @@
 import type { ReadyUiOptionalTextureName } from '../assets';
-import type { ReadyUiSkin, ReadyUiSkinRole } from '../skin';
+import type { ReadyUiSkin, ReadyUiSkinDecorBurst, ReadyUiSkinRole } from '../skin';
+
+/**
+ * No Ads decor motion, both styles (the same `pic_decor_2`): theme_light_10 62:30877 — `rayes` 62:30878 turns around its
+ * burst centre (516, 513 in the 1045.75 render box: the 8-fold symmetry centre of Figma's render), the 17 STARs of
+ * `stars` 62:30879 (#496AFF, node opacity 0.3) over it from the atlas `offer/noads_stars.webp` (docs/figma/theme-light-10).
+ */
+export const NO_ADS_DECOR_BURST: ReadyUiSkinDecorBurst = {
+  pivot: { x: 516, y: 513 },
+  stars: [
+    { cell: [4, 4, 107.3, 109.76], x: 221.23, y: 356.31, rotation: 18.13, alpha: 0.3 },
+    { cell: [122, 4, 77.44, 79.04], x: 826.35, y: 414.52, rotation: -21.76, alpha: 0.3 },
+    { cell: [122, 4, 77.44, 79.04], x: 242.79, y: 193.2, rotation: -21.76, alpha: 0.3 },
+    { cell: [210, 4, 77.2, 79.28], x: 288.54, y: 745.77, rotation: 8.41, alpha: 0.3 },
+    { cell: [210, 4, 77.2, 79.28], x: 897.54, y: 226.77, rotation: 8.41, alpha: 0.3 },
+    { cell: [210, 4, 77.2, 79.28], x: 629.68, y: 376.5, rotation: 8.41, alpha: 0.3 },
+    { cell: [298, 4, 64.4, 65.18], x: 831.91, y: 761.15, rotation: -32.88, alpha: 0.3 },
+    { cell: [373, 4, 64.1, 65.47], x: 844.09, y: 590.9, rotation: 20.6, alpha: 0.3 },
+    { cell: [448, 4, 76.36, 77.55], x: 570.18, y: 832.63, rotation: -28.67, alpha: 0.3 },
+    { cell: [535, 4, 77.54, 76.37], x: 70.8, y: 462.09, rotation: -62.39, alpha: 0.3 },
+    { cell: [535, 4, 77.54, 76.37], x: 584.25, y: 213.7, rotation: -62.39, alpha: 0.3 },
+    { cell: [623, 4, 46.33, 45.62], x: 114.07, y: 518.69, rotation: -62.39, alpha: 0.3 },
+    { cell: [623, 4, 46.33, 45.62], x: 492.57, y: 832.43, rotation: -62.39, alpha: 0.3 },
+    { cell: [623, 4, 46.33, 45.62], x: 152.57, y: 691.43, rotation: -62.39, alpha: 0.3 },
+    { cell: [623, 4, 46.33, 45.62], x: 502.57, y: 192.43, rotation: -62.39, alpha: 0.3 },
+    { cell: [680, 4, 46.61, 45.34], x: 772.71, y: 277.24, rotation: -90.15, alpha: 0.3 },
+    { cell: [680, 4, 46.61, 45.34], x: 953.37, y: 636.62, rotation: -90.15, alpha: 0.3 }
+  ]
+};
 
 /**
  * Style 1 — the Figma "HAMSTER PIXEL FLOW" Ready UI.
@@ -163,7 +191,9 @@ export const READY_UI_STYLE_1 = {
      * close `icon_close_dark` 28:48068 and the dark hero 28:48074.
      */
     noAdsPanel: { file: 'offer/promo_panel.webp', nineSlice: { left: 52, top: 52, right: 52, bottom: 58, pad: { left: 6, top: 6, right: 6, bottom: 6 } } },
-    noAdsDecor: { file: 'offer/noads_rays@0.5x.webp' },
+    noAdsDecor: { file: 'offer/noads_rays_only@0.5x.webp' },
+    /** theme_light_10 `stars` 62:30879: the decor's STAR shapes (the stars twinkle over the turning rays). */
+    noAdsStars: { file: 'offer/noads_stars.webp' },
     noAdsClose: { file: 'offer/style1_noads_close.webp' },
     noAdsArt: { file: 'offer/style1_noads_hero.webp' },
     /**
@@ -571,7 +601,8 @@ export const READY_UI_STYLE_1 = {
       /** Btn_green_dark_2 28:48077 (530 × 200) */
       button: { x: 235, y: 1590, width: 530, height: 200 },
       price: { y: 36, height: 128, gap: 0, fontSize: 80 },
-      coin: { width: 100, height: 100, y: 50 }
+      coin: { width: 100, height: 100, y: 50 },
+      burst: NO_ADS_DECOR_BURST
     }
   }
 } as const satisfies ReadyUiSkin;
