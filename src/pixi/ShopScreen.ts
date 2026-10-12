@@ -141,7 +141,9 @@ function stretch(p: number, from: number, to: number): number {
  * Layout: the style's 1080 × 2344 frame, its top edge on the viewport's top edge and its centre on the safe area's centre,
  * in one of Figma's two compositions. MOBILE (the phone frame): scaled to the safe width — the three cards span the
  * width like Figma's phone — while the designed rows (`grid.rows`) fit above the navigation at that scale; the awning
- * reaches up under the status bar, the × keeps its distance from the safe area's right edge (never above the safe top).
+ * reaches up under the status bar: the frame rises by the part of the style's status-bar band (`statusBar`) the safe top
+ * inset does not cover, so in a browser the stripes are as long as Figma shows them below its status bar; the × keeps its
+ * distance from the safe area's right edge (never above the safe top).
  * DESKTOP (Figma PC, every viewport where the mobile one does not fit — wide or short): the contain-fit design scale
  * (the column compact in the centre), the awning raised to `desktop.awningY` and the × beside the title tape. In both
  * the background and the awning tiles span the whole viewport and the navigation sits at the bottom edge above the
@@ -451,9 +453,12 @@ export class ShopScreen extends Container {
     // the navigation first (its own design scale): the composition depends on where its panel starts
     this.nav.resize(w, h, { insets: { bottom, left, right }, pixelRatio: this.pixelRatio });
     const mobileScale = (w - left - right) / this.skin.frame.width;
+    // the phone frame rises by the part of Figma's status-bar band its safe top inset does not cover (frame units)
+    const rise = Math.max(0, (layout.statusBar ?? 0) - top / mobileScale);
     const designedBottom = layout.grid.top + (layout.grid.rows - 1) * layout.grid.pitchY + layout.card.box.height + layout.scroll.bottomGap;
-    const mobile = designedBottom * mobileScale <= this.nav.top;
+    const mobile = (designedBottom - rise) * mobileScale <= this.nav.top;
     const s = mobile ? mobileScale : Math.min(w / this.theme.designWidth, h / this.theme.designHeight);
+    const lift = mobile ? rise : 0;
     this.scale_ = s;
     const centerX = left + (w - left - right) / 2;
 
@@ -467,7 +472,7 @@ export class ShopScreen extends Container {
       this.backgroundArt.position.set(w / 2, h / 2);
     }
 
-    this.body.position.set(centerX, 0);
+    this.body.position.set(centerX, lift > 0 ? -lift * s : 0);
     this.body.scale.set(s);
     // the viewport's left / right edges in body units
     const edgeL = -centerX / s;
@@ -492,20 +497,20 @@ export class ShopScreen extends Container {
       sprite.position.set((kMin + i) * tile.width - tile.width / 2, 0);
     });
 
-    this.chromeTravel = this.awning.y + tile.height;
+    this.chromeTravel = this.awning.y + tile.height - lift;
     if (this.closeButton) {
       const close = layout.close;
       const safeRight = (w - right - centerX) / s;
-      const safeTop = top / s;
+      const safeTop = top / s + lift;
       this.closeButton.setIdleScale(1);
       if (mobile) this.closeButton.position.set(safeRight - close.right - close.width / 2, Math.max(close.y, safeTop) + close.height / 2);
       else this.closeButton.position.set(Math.min(this.frameX(layout.desktop.close.x), safeRight - close.width / 2), Math.max(layout.desktop.close.y, safeTop + close.height / 2));
-      this.chromeTravel = Math.max(this.chromeTravel, this.closeButton.y + Math.max(close.height, close.minHitSize) / 2);
+      this.chromeTravel = Math.max(this.chromeTravel, this.closeButton.y + Math.max(close.height, close.minHitSize) / 2 - lift);
     }
 
     // the scrolled column: from `scroll.top` down to `bottomGap` above the navigation panel
     const areaTop = layout.scroll.top;
-    const areaBottom = Math.max(areaTop + 1, this.nav.top / s - layout.scroll.bottomGap);
+    const areaBottom = Math.max(areaTop + 1, this.nav.top / s + lift - layout.scroll.bottomGap);
     this.scrollArea.hitArea = new Rectangle(edgeL, areaTop, edgeR - edgeL, areaBottom - areaTop);
     this.contentMask.clear().rect(edgeL, areaTop, edgeR - edgeL, areaBottom - areaTop).fill(0xffffff);
     this.scrollMin = -Math.max(0, this.contentBottom() - areaBottom);

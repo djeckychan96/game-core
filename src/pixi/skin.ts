@@ -455,11 +455,18 @@ export interface ReadyUiSkinMovesLayout {
 export interface ReadyUiSkinShopScreenLayout {
   /** The screen fill under everything; `art` = the `shopBackground` picture cover-fits the viewport over it. */
   readonly background: { readonly color: number; readonly art: boolean };
-  /** `shopAwning`: one tile's render box (its top on the viewport's top edge, tiles `width` apart, one centred on the frame). */
+  /** `shopAwning`: one tile's render box (its top on the frame's top edge, tiles `width` apart, one centred on the frame). */
   readonly awning: { readonly width: number; readonly height: number };
   /**
+   * MOBILE: the top `statusBar` units of Figma's phone frame lie under the device's status bar (the frame's `iPhone` band:
+   * the awning reaches up under it). A viewport whose safe top inset covers less of it (a browser or an iframe: nothing
+   * over the top) raises the frame by the rest, so what Figma shows below the status bar starts at the safe top and the
+   * awning keeps its top edge above the viewport's. Absent = 0: the frame top on the viewport top.
+   */
+  readonly statusBar?: number;
+  /**
    * `shopClose` render box (shown only when the host gives `onClose`): `right` units from the safe area's right edge, its
-   * top `y` units under the viewport's top edge (never above the safe top); `minHitSize` = its tap square.
+   * top `y` units under the frame's top edge (never above the safe top); `minHitSize` = its tap square.
    */
   readonly close: { readonly y: number; readonly right: number; readonly width: number; readonly height: number; readonly minHitSize: number };
   /** `shopTitle` (9-slice) at `ribbon` with the runtime title in `label` (its own fill / OUTSIDE stroke over the style's look). */

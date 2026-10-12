@@ -290,11 +290,14 @@ export const READY_UI_STYLE_1 = {
    * 318 × 418); the amount 60 at 9.76, 31, 290 × 72, the pack box 25, 86, 260 × 220, the price 56 centred on the card's
    * inner face; the scroll frame ends 64 above the navigation panel (the light screen's `Frame 615`). Desktop: the light
    * PC tab's rule (theme_light_7 43:25602; the dark PC 43:23091 is the legacy modal over gameplay, not the tab): the
-   * awning at y −110, the × 21 right of this tape (51 + 978) on its centre line: centre 1110, 551.
+   * awning at y −110, the × 21 right of this tape (51 + 978) on its centre line: centre 1110, 551. Mobile: the phone
+   * frame's top 159 lie under the device's status bar (Hazar_UI `market_screen_dark` 1:2224 / `_2` 1:2281: `frame iPhone
+   * 15` 412 × 159 over the awning — the iPhone's top safe band) — a browser without that inset raises the frame by it.
    */
   shopScreen: {
     background: { color: 0x451262, art: true },
     awning: { width: 1080, height: 539 },
+    statusBar: 159,
     close: { y: 301, right: 39, width: 120, height: 120, minHitSize: 160 },
     title: {
       ribbon: { x: 51, y: 493, width: 978, height: 116 },

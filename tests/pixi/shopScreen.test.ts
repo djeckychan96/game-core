@@ -117,7 +117,7 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     expect(kit.uiErrors).toEqual([]);
   });
 
-  it('lays the cards out on the Figma grid of the frame (3 per row, the phone frame at the width, frame top on the viewport top)', () => {
+  it('lays the cards out on the Figma grid of the frame (3 per row, the phone frame at the width, frame top at the status-bar band)', () => {
     const kit = createKit();
     const { shop } = createShop(kit, style);
     const layout = style.skin.shopScreen!;
@@ -125,7 +125,8 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     const body = field<Container>(shop, 'body');
     expect(body.scale.x).toBeCloseTo(s, 6);
     expect(body.position.x).toBeCloseTo(195, 6);
-    expect(body.position.y).toBe(0);
+    // no safe top inset here: the frame rises by the style's status-bar band (none — the frame top on the viewport top)
+    expect(body.position.y).toBeCloseTo(-(layout.statusBar ?? 0) * s, 6);
     ITEMS.forEach((item, i) => {
       const c = card(shop, item.id);
       const art = layout.card.art;
@@ -185,6 +186,40 @@ describe.each(STYLES)('ShopScreen — the SHOP tab ($name)', (style) => {
     // the desktop x never leaves the safe area
     shop.resize(400, 520, { insets: { right: 40 } });
     expect(close.x + layout.close.width / 2).toBeLessThanOrEqual((400 - 40 - 180) / body.scale.x + 1e-6);
+    shop.destroy();
+  });
+
+  it('MOBILE in a browser: the frame rises by the part of the status-bar band the safe top does not cover — shorter stripes, same art, top edge kept', () => {
+    const kit = createKit();
+    const { shop } = createShop(kit, style, { onClose: () => {} });
+    const layout = style.skin.shopScreen!;
+    const band = layout.statusBar ?? 0;
+    const body = field<Container>(shop, 'body');
+    const close = field<UiButton>(shop, 'closeButton');
+    const tiles = (): Sprite[] => descendants(field<Container>(shop, 'awning'), Sprite).filter((t) => t.visible);
+    for (const [w, h, insetTop] of [[390, 844, 0], [320, 568, 0], [390, 844, 47], [390, 844, 80]] as const) {
+      shop.resize(w, h, { insets: { top: insetTop } });
+      const s = w / 1080;
+      const rise = Math.max(0, band - insetTop / s);
+      expect(body.scale.x, `${w}x${h}`).toBeCloseTo(s, 6);
+      expect(body.position.y, `${w}x${h} inset ${insetTop}`).toBeCloseTo(-rise * s, 6);
+      // the awning: the same tiles (art, width, count), its top edge never below the viewport's, its stripes `rise` shorter
+      for (const tile of tiles()) {
+        const b = tile.getBounds();
+        expect([tile.width, tile.height]).toEqual([layout.awning.width, layout.awning.height]);
+        expect(b.top).toBeLessThanOrEqual(1e-6);
+        expect(b.bottom).toBeCloseTo((layout.awning.height - rise) * s, 6);
+      }
+      // the title tape and the × keep their place on the frame (below the awning's stripes / on them), the × under the safe top
+      const ribbon = field<Container>(shop, 'ribbon').getBounds();
+      expect(ribbon.top).toBeCloseTo((layout.title.ribbon.y - rise) * s, 4);
+      const x = close.getBounds();
+      expect(x.top).toBeGreaterThanOrEqual(insetTop - 1e-6);
+      expect(x.top).toBeCloseTo((Math.max(layout.close.y, insetTop / s + rise) - rise) * s, 4);
+    }
+    // the desktop composition does not rise (no status bar under the PC awning)
+    shop.resize(1280, 800);
+    expect(body.position.y).toBe(0);
     shop.destroy();
   });
 
