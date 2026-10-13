@@ -64,6 +64,8 @@ export { ShopScreen } from './ShopScreen';
 export type { ShopScreenItem, ShopScreenOptions, ShopPackRole, ShopScreenState, ShopScreenShowOptions, ShopScreenHideOptions } from './ShopScreen';
 export { SettingsWindowView } from './SettingsWindowView';
 export type { SettingsLanguage, SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
+export { SettingsLanguagePicker, createSettingsLanguagePicker } from './SettingsLanguagePicker';
+export type { SettingsLanguagePickerOptions } from './SettingsLanguagePicker';
 export { NoAdsWindowView } from './NoAdsWindowView';
 export type { NoAdsWindowParams, NoAdsWindowViewOptions } from './NoAdsWindowView';
 export { DailyQuestsWindowView, questProgressText, DAILY_QUESTS_SPARKS_LOOP } from './DailyQuestsWindowView';

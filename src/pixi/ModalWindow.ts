@@ -104,7 +104,8 @@ export abstract class ModalWindow<TParams = void> extends Container {
   protected readonly ui: UiRuntime;
   protected readonly motion: MotionRuntime;
   protected readonly textures: ReadyUiTextures;
-  protected readonly i18n: LocalizationTextProvider | undefined;
+  /** The copy's provider; a view that can change language in place (`SettingsWindowView.relocalize`) replaces it. */
+  protected i18n: LocalizationTextProvider | undefined;
   protected readonly backdrop: Graphics;
   protected readonly panel: Container;
   protected readonly closeButton: UiButton | null;

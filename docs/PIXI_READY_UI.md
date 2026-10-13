@@ -388,6 +388,18 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   `onLanguage(locale)`, the current one by `show({ …, locale })` / `currentLocale`; the row shows the current
   language's name and a tap moves to the next (wrapping) in place, like a toggle; applying the locale is the host's.
   Every row a show does not draw (HOME / RESTART without its continuation, no languages) closes up.
+  `relocalize(i18n)` turns the window — open or not — to another language in place (provider copy re-read, explicit
+  copy and state kept, no close / second entrance); `selectLanguage(locale)` shows + reports a language as a row tap
+  would; `languageButton` / `languageOptions` expose the row for a picker.
+- **SettingsLanguagePicker** (`createSettingsLanguagePicker({ settings, canvas, screen?, container?, optionLabel? })`) —
+  the device's own language list over that row: ONE transparent native `<select>` (`position: fixed`, 16 px text so
+  iOS does not zoom) laid over `settings.languageButton` while the window is entering / shown, `display: none`
+  otherwise. iOS Safari opens a select only for a real tap on it (never a scripted `click()`), so the player taps the
+  select itself and gets the iOS wheel / the Android dialog / the desktop drop-down; the options are the window's
+  `languages` (the host lists only locales with copy); a choice goes to `selectLanguage` → `onLanguage`. Host-driven:
+  `update()` from the host's frame (or after each layout) maps the button's stage bounds onto the canvas' page box
+  (`screen` = `app.screen`) and writes the DOM only on a change; it owns that element and its `change` listener — no
+  timer, observer or window / document listener; `destroy()` removes both. Saving / restoring the choice is the host's.
 - **NoAdsWindowView** — 975 × 1355 blue panel with the crossed clapperboard, `NO` / `ADS`
   rotated −32° over the corner, description band at y 248, green price button at y 517;
   `onBuy(params)` continuation, no purchase logic inside. Styled (a style covering `noAds`, theme_light_6

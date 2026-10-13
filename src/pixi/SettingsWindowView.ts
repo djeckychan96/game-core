@@ -1,4 +1,5 @@
 import { Container, Rectangle, Sprite, type NineSliceSprite, type Text, type Texture } from 'pixi.js';
+import type { LocalizationTextProvider } from '../index';
 import { ModalWindow, type ModalWindowOptions } from './ModalWindow';
 import { createNineSlice } from './nineSlice';
 import { localizedText } from './localization';
@@ -63,7 +64,9 @@ export interface SettingsWindowViewOptions extends Omit<ModalWindowOptions, 'id'
    * Styled only (a style whose Settings layout has a language row): the languages the row switches between, in order.
    * The row shows the current one's name; a tap moves to the next (wrapping) and reports it through `onLanguage` while
    * the window stays open (like a toggle). Drawn with two or more languages and `onLanguage`; otherwise no row — the
-   * window closes up. Applying the locale (catalogs, rebuilt views) is the host's.
+   * window closes up. Applying the locale (catalogs, rebuilt views) is the host's; `relocalize` turns this open window
+   * to the new language in place. A host with a page can put the device's own list over the row instead of the
+   * cycling tap: `createSettingsLanguagePicker` (a native `<select>`; the choice comes back through `selectLanguage`).
    */
   languages?: readonly SettingsLanguage[];
   onLanguage?: (locale: string) => void;
@@ -230,6 +233,10 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
   private readonly onHome: (() => void) | null;
   private readonly onRestart: (() => void) | null;
   private settings: SettingsState = { sound: true, music: true, haptic: true };
+  /** The copy the host gave explicitly (kept by `relocalize`; the rest comes from the provider). */
+  private readonly copy: Record<'title' | 'soundLabel' | 'musicLabel' | 'hapticLabel' | 'homeLabel' | 'restartLabel', string | undefined>;
+  /** The in-level buttons of the current show (`relocalize` lays the same controls out again). */
+  private gameButtons = false;
 
   constructor(options: SettingsWindowViewOptions) {
     const look = settingsLook(options);
@@ -244,6 +251,10 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     this.languages = options.languages ?? [];
     this.onLanguage = options.onLanguage ?? null;
     this.hapticVisible = options.haptic ?? false;
+    this.copy = {
+      title: options.title, soundLabel: options.soundLabel, musicLabel: options.musicLabel, hapticLabel: options.hapticLabel,
+      homeLabel: options.homeLabel, restartLabel: options.restartLabel
+    };
     const t = this.textures;
 
     if (!look) {
@@ -391,8 +402,63 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
     this.version.text = params.version ?? '';
     this.version.visible = Boolean(params.version);
     if (!this.look) fitLabelWidth(this.version, 800);
-    this.layoutButtons(params.gameButtons ?? false);
+    this.gameButtons = params.gameButtons ?? false;
+    this.layoutButtons(this.gameButtons);
     this.syncState();
+  }
+
+  /**
+   * The window in another language, in place — open or not: the copy that came from the provider (title, toggle and
+   * action captions) is read again from `i18n` and laid out again in the current layout; explicit copy, the version
+   * caption, the languages' own names, the state and the window itself stay. Use it when the host switches the locale
+   * while Settings is up (no close, no second entrance).
+   */
+  relocalize(i18n: LocalizationTextProvider): void {
+    this.i18n = i18n;
+    const c = this.copy;
+    const S = READY_UI_LEGACY_TEXT.settings;
+    this.title.text = localizedText(c.title, i18n, 'core.settings.title', S.title);
+    this.toggles.sound.label.text = localizedText(c.soundLabel, i18n, 'core.settings.sound', S.sound);
+    this.toggles.music.label.text = localizedText(c.musicLabel, i18n, 'core.settings.music', S.music);
+    if (this.toggles.haptic) this.toggles.haptic.label.text = localizedText(c.hapticLabel, i18n, 'core.settings.haptic', S.haptic);
+    const home = localizedText(c.homeLabel, i18n, 'core.settings.exit', S.exit);
+    const restart = localizedText(c.restartLabel, i18n, 'core.settings.restart', S.restart);
+    if (this.look) {
+      if (this.homeLabel) this.homeLabel.text = home;
+      if (this.restartLabel) this.restartLabel.text = restart;
+    } else {
+      fitLabelWidth(this.title, 760);
+      for (const toggle of this.toggleViews()) fitLabelWidth(toggle.label, 280);
+      this.homeButton.setLabel(home);
+      this.restartButton.setLabel(restart);
+    }
+    this.layoutButtons(this.gameButtons);
+    applyTextResolution(this.panel, this.fitScale * this.pixelRatio);
+  }
+
+  /** The languages the row offers (the host's list, in order). */
+  get languageOptions(): readonly SettingsLanguage[] {
+    return this.languages;
+  }
+
+  /**
+   * The language row's button while the row is drawn (styled, two or more languages, `onLanguage`), else null: what a
+   * native picker covers (`createSettingsLanguagePicker`).
+   */
+  get languageButton(): UiButton | null {
+    const button = this.languageRow?.button;
+    return button && button.visible ? button : null;
+  }
+
+  /**
+   * Shows `locale` in the row and reports it through `onLanguage`, as a tap on the row would (the native picker's
+   * choice). False — nothing changed: no row, an id not in `languages`, or the language already shown.
+   */
+  selectLanguage(locale: string): boolean {
+    const index = this.languages.findIndex((language) => language.id === locale);
+    if (index < 0 || index === this.languageIndex || !this.languageButton) return false;
+    this.showLanguage(index);
+    return true;
   }
 
   /** Reflect a state change made elsewhere (e.g. a hardware mute) while the window is open. */
@@ -507,11 +573,17 @@ export class SettingsWindowView extends ModalWindow<SettingsWindowParams> {
 
   /** The language row: the next language (wrapping), shown at once and reported; the window stays open. */
   private nextLanguage(): void {
+    if (this.languages.length < 2) return;
+    this.showLanguage((this.languageIndex + 1) % this.languages.length);
+  }
+
+  /** Shows the language at `index` in the row and reports it; the window stays open. */
+  private showLanguage(index: number): void {
     const L = this.activeLayout;
     const row = this.languageRow;
-    if (!row || !L?.language || this.languages.length < 2) return;
-    this.languageIndex = (this.languageIndex + 1) % this.languages.length;
-    const language = this.languages[this.languageIndex] as SettingsLanguage;
+    if (!row || !L?.language) return;
+    this.languageIndex = index;
+    const language = this.languages[index] as SettingsLanguage;
     row.label.text = language.label;
     this.placeAction(L, row.button, row.label, row.icon, L.language);
     applyTextResolution(row.label, this.fitScale * this.pixelRatio);
