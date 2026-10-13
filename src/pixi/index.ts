@@ -70,6 +70,8 @@ export { NoAdsWindowView } from './NoAdsWindowView';
 export type { NoAdsWindowParams, NoAdsWindowViewOptions } from './NoAdsWindowView';
 export { DailyQuestsWindowView, questProgressText, DAILY_QUESTS_SPARKS_LOOP } from './DailyQuestsWindowView';
 export type { DailyQuestsSource, DailyQuestsWindowViewOptions } from './DailyQuestsWindowView';
+export { PiggyBankWindowView, PIGGY_BANK_SPARKS_LOOP } from './PiggyBankWindowView';
+export type { PiggyBankSource, PiggyBankWindowParams, PiggyBankWindowViewOptions } from './PiggyBankWindowView';
 export { StarterPackWindowView } from './StarterPackWindowView';
 export type { StarterPackRewards, StarterPackWindowParams, StarterPackWindowViewOptions } from './StarterPackWindowView';
 export {

@@ -1,5 +1,5 @@
 import type { ReadyUiSkin } from '../skin';
-import { NO_ADS_DECOR_BURST, READY_UI_STYLE_1 } from './style1';
+import { NO_ADS_DECOR_BURST, PIGGY_BANK_PANEL, READY_UI_STYLE_1, scaledDecorBurst } from './style1';
 
 /** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
 const POPUP = {
@@ -53,7 +53,7 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests'],
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests', 'piggyBank'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
@@ -239,7 +239,37 @@ export const READY_UI_STYLE_2 = {
     questGlow: { file: BLUE_GLOW.file },
     questSpark: { file: 'style2/spark.webp' },
     /** `icon_tasks` 67:27943 (250): the main screen's daily-quests entry (feature column, host art like `iconNoAds`). */
-    iconQuests: { file: 'style2/icon_quests.webp' }
+    iconQuests: { file: 'style2/icon_quests.webp' },
+    /**
+     * theme_light_11 Piggy Bank, the LIGHT row (docs/figma/theme-light-11-piggy): `screen_pig_bank` 67:30376 /
+     * `screen_pig_bank_learning` 67:30416 — the blue shell, the popups' red ×, `btn_green` + `icon_info`, No Ads' rays and
+     * stars (`pic_decor_2`, the same component), `pic_pig_1`, `bubble_1`, the gold bar pair and its threshold ticks, the
+     * HUD coin (`icon_coin_1` 67:27705 is the same art) at the bar, on the counters, in the bubble and on the button,
+     * `btn_green` at 530 × 200 (No Ads' caps) and `btn_grey` for a bank that cannot be bought yet, the tutorial's hand /
+     * coins / arrow; the stars are `pic_spark_1` (featureSpark's art).
+     */
+    piggyPanel: PIGGY_BANK_PANEL,
+    piggyClose: CLOSE,
+    piggyInfo: { file: 'style2/piggy_info.webp' },
+    piggyDecor: READY_UI_STYLE_1.assets.piggyDecor,
+    piggyStars: READY_UI_STYLE_1.assets.piggyStars,
+    piggyArt: { file: 'style2/piggy_pig.webp' },
+    piggySpark: { file: 'style2/spark.webp' },
+    piggyTitle: { file: 'style2/piggy_title_ru.webp' },
+    piggyBubble: { file: 'style2/piggy_bubble.webp' },
+    'piggyBank:priceIcon': { file: 'style2/icon_coin.webp' },
+    piggyBarBack: { file: 'style2/piggy_bar_back.webp' },
+    piggyBarFill: { file: 'style2/piggy_bar_fill.webp', nineSlice: { left: 30, top: 61, right: 30, bottom: 61 } },
+    piggyBarMarker: { file: 'style2/piggy_bar_marker.webp' },
+    piggyCoin: { file: 'style2/icon_coin.webp' },
+    'piggyBank:buttonPrimary': { file: 'style2/button_primary.webp', nineSlice: { left: 48, top: 96, right: 48, bottom: 96 } },
+    piggyButtonOff: { file: 'style2/piggy_button_grey.webp' },
+    piggyHand: { file: 'style2/piggy_hand.webp' },
+    piggyCoins: { file: 'style2/piggy_coins.webp' },
+    piggyArrow: { file: 'style2/piggy_arrow.webp' },
+    /** `icon_pig_bank` 67:27988 (250) and `btn_green` at 220 × 100 under it (`icon_pig_bank_preview` 67:31249): the piggy-bank entry (host art). */
+    iconPiggyBank: { file: 'style2/icon_piggy.webp' },
+    featurePill: { file: 'style2/feature_pill.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
@@ -589,6 +619,87 @@ export const READY_UI_STYLE_2 = {
         timerIcon: { x: 129.8, y: 1524.8, width: 230.4, height: 230.4 },
         nextLabel: { x: 370.2, y: 1540, width: 500, height: 100, fontSize: 50, fill: 0x3f598c },
         timer: { x: 370.2, y: 1640, width: 500, height: 100, fontSize: 100, fill: 0x1a97fe }
+      }
+    },
+    /**
+     * theme_light_11 `screen_pig_bank` 67:30376 / `screen_pig_bank_learning` 67:30416: the window `Rectangle 66112` at 40,
+     * 202 of the frame (1000 × 1860). Calibri Bold (Carlito) white; the title is PoetsenOne in Figma (no Cyrillic outside
+     * it: the RU picture, other copy as runtime lines in the style font with the #4644ee 20 OUTSIDE stroke).
+     */
+    piggyBank: {
+      window: { width: 1000, height: 1860 },
+      /** btn_close 67:30384: the popups' red × (its 158 render minus 5 empty columns) */
+      close: { x: 827, y: 15, width: 153, height: 158 },
+      /** Group 1365 67:30385: btn_green 136 + icon_info 158 */
+      info: { x: 15, y: 15, width: 158, height: 158 },
+      /** pic_decor_2 67:30380 (1000 at -2, 192): No Ads' render box (its blur reaches 22.87 out) */
+      decor: { x: -24.87, y: 169.13, width: 1045.75, height: 1045.75 },
+      burst: NO_ADS_DECOR_BURST,
+      /** pic_pig_1 67:30381 (856 at 72, 252): its image's opaque rows 86..769 */
+      hero: { x: 72, y: 338, width: 856, height: 684 },
+      /** title pic_spark_1 67:30415 / 67:30414 (turned 45°) and the pig's 67:30382: centres window-local */
+      sparks: [
+        { x: 306.75, y: 84.75, size: 123.5 },
+        { x: 773.18, y: 173.18, size: 95, rotation: 45 },
+        { x: 541, y: 438, size: 110 }
+      ],
+      /** СВИНКА 90 (its yellow → orange gradient as one fill) over КОПИЛКА 120 */
+      title: [
+        { x: 100, y: 0, width: 800, height: 240, fontSize: 90, fill: 0xffb83f, stroke: { width: 20, color: 0x4644ee } },
+        { x: 100, y: 102, width: 800, height: 240, fontSize: 120, stroke: { width: 20, color: 0x4644ee } }
+      ],
+      /** `title_pig_bank` 67:30411 (with its group shadow): the opaque 592 × 230 */
+      titleArt: { box: { x: 206, y: 71, width: 592, height: 230 }, lines: ['СВИНКА', 'КОПИЛКА'] },
+      /** bubble_1 67:30383 (its shadow 16 out): "9500" Calibri Bold 70 #3f598c + 1 + icon_coin_1 84 */
+      bubble: { box: { x: 222, y: 760, width: 332, height: 216 }, centerX: 388, y: 843, height: 85, gap: 1, amount: { fontSize: 70, fill: 0x3f598c }, coin: { width: 84, height: 84, y: 843 } },
+      bar: {
+        /** bar_orange_1 67:30393 (the ring) and bar_orange_2 67:30394 (the fill) */
+        back: { x: 116, y: 1112, width: 850, height: 150 },
+        fill: { x: 130, y: 1126, width: 822, height: 122, fillMin: 60 },
+        /** bar_orange_3 / bar_orange_4: the ticks over and under the bar */
+        marker: { y: 1100, width: 40, height: 152 },
+        /** icon_coin_1 67:30403 at 228 */
+        coin: { x: 26, y: 1073, width: 228, height: 228 },
+        /** coin_counter_1 / coin_counter_2: icon_coin_1 84 over Calibri Bold 50 white */
+        threshold: { coin: { x: 0, y: 965, width: 84, height: 84 }, amount: { x: 0, y: 1047, width: 130, height: 60, fontSize: 50 } },
+        capacity: { coin: { x: 859, y: 965, width: 84, height: 84 }, amount: { x: 836, y: 1047, width: 130, height: 60, fontSize: 50 } }
+      },
+      /** txt 67:30404: Calibri Bold 70, «не полная» in #f9c32a */
+      message: [
+        { x: 35, y: 1367, width: 930, height: 90, fontSize: 70, highlight: 0xf9c32a },
+        { x: 35, y: 1457, width: 930, height: 90, fontSize: 70 }
+      ],
+      /** btn_green 67:30408 530 × 200: КУПИТЬ (Calibri Bold 60) over `900_coins` ("900" 78.26 + 14 + the 73 coin) */
+      button: { x: 235, y: 1590, width: 530, height: 200 },
+      buttonLabel: { x: 25, y: 30, width: 480, height: 70, fontSize: 60 },
+      price: { y: 90, height: 96, gap: 14, fontSize: 78.26 },
+      priceCoin: { width: 73, height: 73, y: 97 },
+      /** `pics` 67:30422 (clips at 0, 40, 1000 × 1455): the hand, the coins, the arrows, the pig over the still rays */
+      tutorial: {
+        clip: { x: 0, y: 40, width: 1000, height: 1455 },
+        hand: { x: 316, y: 40, width: 368, height: 358 },
+        coins: { x: 223.07, y: 441.43, width: 513, height: 377 },
+        arrows: [
+          { x: 467, y: 392, width: 66, height: 73 },
+          { x: 467, y: 792, width: 66, height: 73 }
+        ],
+        /** pic_decor_2 67:30425 resized to 1041.86 × 913 at -41.86, 725.5 */
+        decor: { x: -65.69, y: 704.62, width: 1089.53, height: 954.77, burst: scaledDecorBurst(NO_ADS_DECOR_BURST, 1.04186, 0.913) },
+        /** pic_pig_1 67:30426 at 919.11 (21.89, 726.09): the window pig's art at that scale */
+        hero: { x: 21.89, y: 818.43, width: 919.11, height: 734.43 },
+        /** the pig's six pic_spark_1 (67:30427…32) and the coins' two (67:30435 / 67:30436), squeezed as in Figma */
+        sparks: [
+          { x: 498.93, y: 936.59, size: 146.23, height: 128.14 },
+          { x: 755.13, y: 1281.84, size: 91.39, height: 80.09 },
+          { x: 415.95, y: 1289.95, size: 91.39, height: 80.09 },
+          { x: 180.95, y: 1335.09, size: 91.39, height: 80.09 },
+          { x: 644.24, y: 1261.2, size: 54.83, height: 48.05 },
+          { x: 266.86, y: 1182.48, size: 54.83, height: 48.05 },
+          { x: 444.84, y: 562.21, size: 167.54, height: 91.43 },
+          { x: 623.9, y: 641.79, size: 125.65, height: 68.57 }
+        ],
+        body: { x: 33, y: 1454, width: 929, height: 240, fontSize: 70 },
+        tap: { x: 38, y: 1707, width: 929, height: 120, fontSize: 70 }
       }
     }
   },

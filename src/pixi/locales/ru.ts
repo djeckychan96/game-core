@@ -43,5 +43,19 @@ export const READY_UI_RU = Object.freeze({
   'core.quests.claim': 'Забрать награду',
   'core.quests.done_title': 'Все задания на сегодня выполнены!',
   'core.quests.done_body': 'Возвращайтесь завтра за новыми заданиями!',
-  'core.quests.next_in': 'Новые задания через:'
+  'core.quests.next_in': 'Новые задания через:',
+  'core.piggy.title_1': 'СВИНКА',
+  'core.piggy.title_2': 'КОПИЛКА',
+  'core.piggy.buy': 'КУПИТЬ',
+  'core.piggy.full_label': 'МАКС',
+  'core.piggy.empty_1': 'Копилка [пуста]!',
+  'core.piggy.empty_2': 'Проходите уровни, чтобы её наполнить!',
+  'core.piggy.partial_1': 'Копилка еще [не полная]!',
+  'core.piggy.partial_2': 'Продолжайте копить монеты!',
+  'core.piggy.purchasable_1': 'Копилку [можно купить]!',
+  'core.piggy.purchasable_2': 'Или копите дальше — получите больше!',
+  'core.piggy.full_1': 'Копилка [полная]!',
+  'core.piggy.full_2': 'Купите её, чтобы забрать монеты!',
+  'core.piggy.tutorial': 'Купите КОПИЛКУ, когда в ней будет {threshold} монет!',
+  'core.piggy.tap_to_continue': 'Нажмите, чтобы продолжить'
 }) satisfies TranslationCatalog;

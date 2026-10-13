@@ -409,6 +409,16 @@ Every window below is laid out from the donor's generated prefab + its runtime a
   params, callbacks and copy keys. `show({ …, enabled: false })` (every look) = shown but not for sale: the buy button
   stays, a tap neither closes the window nor calls `onBuy`, × / the backdrop still dismiss; `dimDisabled: false` keeps
   its full colours (the OFFER panel's rule).
+- **PiggyBankWindowView** (styled only: a style covering `piggyBank`; theme_light_11 `screen_pig_bank` +
+  `screen_pig_bank_learning`) — one window, two screens over a `PiggyBankSource` (a Core `PiggyBankService`): the
+  bank (the pig over the turning rays, the balance in the bubble, the fill bar with the purchase-threshold tick and the
+  capacity, the state copy `core.piggy.<state>_1/_2` with its `[marked]` highlight, BUY with the level's price — the
+  style's coin for a wallet price, `productPrice(id)` for a platform SKU) and the tutorial (the illustration, the rule
+  with `{threshold}`, "tap to continue"; the info button opens it, `show({ tutorial: true })` opens on it, a tap anywhere
+  returns to the bank). It renders `snapshot()` and follows `onChange` while it is up; BUY is enabled only when the
+  bank can be bought (threshold reached, a price, writable) and is then a close() continuation `onBuy(snapshot)` — the
+  purchase itself (`buyFromWallet()`, the shop route on `insufficient_funds`) is the host's. Below the threshold BUY is
+  the style's grey button, inert; × / the backdrop dismiss.
 - **StarterPackWindowView** — 975 × 1355 warm panel, the chest hero, `STARTER PACK` rotated
   −14° (a longer tier title shrinks to the donor's 430-unit cap), rewards row (coins, ∞-lives
   duration), red booster bar with the bulb, price button at y 542; configurable `rewards` /
@@ -549,6 +559,7 @@ new ResultWindowView({ ...readyUi, id: 'result', onNext, onRetry, onExit });
 | SettingsButtonView | covered — theme_light_6 28:48211: blue `btn` 214 + the outlined gear 10 above the centre, 90 / 90 | covered — theme_light_6 28:48119: `btn_blue` 214 + `icon_settings`, 90 / 90 |
 | NoAdsWindowView | covered — theme_light_6 28:48065: purple promo window, round red ×, rays, dark hero, Fira titles (line 1 pink) | covered — theme_light_6 28:48041 (= theme_light_9 50:29087, box for box): the same window and rays, the red ×, the light hero, Carlito titles with the red outline |
 | ShopScreen (the SHOP tab) | covered — theme_light_6 `market_screen_dark` 28:46015: the purple gradient + bears, the dark awning, the stretched dark tape, the dark cards and pack art, the round × (docs/figma/theme-light-6-shop) | covered — theme_light_6 `market_screen_light` 28:46095: #0f172c, the light awning, the blue tape, the blue / white cards and pack art, the popups' red × (docs/figma/theme-light-6-shop) |
+| PiggyBankWindowView | covered — theme_light_11 67:30801 / 67:30442: the blue shell, the grey ×, `btn_green_dark` info, the rays + `pic_pig_1_dark`, the dark bar under its orange frame, Fira copy with the yellow highlight; BUY green / `btn_grey_dark`, centred; the tutorial's glowing pig (docs/figma/theme-light-11-piggy) | covered — theme_light_11 67:30376 / 67:30416: the same shell, the red ×, the rays + `pic_pig_1`, the gold bar ring, Carlito copy, `btn_green` КУПИТЬ + 900 coin / `btn_grey`; the tutorial clipped to its `pics` frame over the still rays (docs/figma/theme-light-11-piggy) |
 | Shop (modal ShopWindowView), StarterPack | not covered — donor look (the styled shop is the ShopScreen tab) | not covered — donor look |
 
 - The catalog is `READY_UI_SKINS` (by id); there is no runtime registration — a new style is a new

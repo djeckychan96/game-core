@@ -30,6 +30,21 @@ export const NO_ADS_DECOR_BURST: ReadyUiSkinDecorBurst = {
 };
 
 /**
+ * Piggy Bank window shell, both styles: theme_light_11 `Rectangle 66112` 67:30378 (= `bg_pig_bank` 67:30803, the same
+ * fills in both rows) — #1f2975, radius 41, the No Ads promo panel's shape and ring (docs/figma/theme-light-11-piggy).
+ */
+export const PIGGY_BANK_PANEL = { file: 'piggy/panel.webp', nineSlice: { left: 52, top: 52, right: 52, bottom: 58, pad: { left: 6, top: 6, right: 6, bottom: 6 } } } as const;
+
+/** A decor burst drawn in a box squeezed by `sx` / `sy` (an instance resized out of square): its centre and stars move with it. */
+export function scaledDecorBurst(burst: ReadyUiSkinDecorBurst, sx: number, sy: number): ReadyUiSkinDecorBurst {
+  const round = (value: number): number => Math.round(value * 100) / 100;
+  return {
+    pivot: { x: round(burst.pivot.x * sx), y: round(burst.pivot.y * sy) },
+    stars: (burst.stars ?? []).map((star) => ({ ...star, x: round(star.x * sx), y: round(star.y * sy) }))
+  };
+}
+
+/**
  * Style 1 — the Figma "HAMSTER PIXEL FLOW" Ready UI.
  *
  * theme_light_4 (file 5FWFwdO4QGeDfeQtloLNOS, section 22:26884, the purple row; docs/figma/style1-theme-light-4) is the
@@ -58,7 +73,7 @@ export const NO_ADS_DECOR_BURST: ReadyUiSkinDecorBurst = {
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests', 'piggyBank'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -231,7 +246,37 @@ export const READY_UI_STYLE_1 = {
     questTimer: { file: 'quests/style1_timer.webp' },
     questRays: { file: 'quests/style1_rays@0.5x.webp' },
     /** `icon_tasks` 67:31369 of the dark main screen (250): the daily-quests entry (feature column, host art like `iconNoAds`). */
-    iconQuests: { file: 'level/style1_icon_quests.webp' }
+    iconQuests: { file: 'level/style1_icon_quests.webp' },
+    /**
+     * theme_light_11 Piggy Bank, the DARK row (docs/figma/theme-light-11-piggy): `screen_pig_bank` 67:30801 /
+     * `screen_pig_bank_learning` 67:30442 — the blue shell (both rows), the grey × `icon_close_dark_2`, `btn_green_dark` +
+     * `icon_info_dark`, No Ads' rays and stars (`pic_decor_2`), `pic_pig_1_dark`, `bubble_2_dark`, the dark bar pair
+     * (trough + fill under the orange frame, its ticks), `icon_coin_1_dark`, `btn_grey_dark` for a bank that cannot be bought
+     * yet, the tutorial's hand / coins / arrow and its own glowing pig; the stars are `pic_spark_1` (the light row's art, its
+     * own file).
+     */
+    piggyPanel: PIGGY_BANK_PANEL,
+    piggyClose: { file: 'piggy/style1_close.webp' },
+    piggyInfo: { file: 'piggy/style1_info.webp' },
+    piggyDecor: { file: 'offer/noads_rays_only@0.5x.webp' },
+    piggyStars: { file: 'offer/noads_stars.webp' },
+    piggyArt: { file: 'piggy/style1_pig.webp' },
+    piggySpark: { file: 'piggy/spark.webp' },
+    piggyTitle: { file: 'piggy/style1_title_ru.webp' },
+    piggyBubble: { file: 'piggy/style1_bubble.webp' },
+    piggyBarBack: { file: 'piggy/style1_bar_back.webp' },
+    piggyBarFill: { file: 'piggy/style1_bar_fill.webp', nineSlice: { left: 45, top: 44, right: 51, bottom: 45 } },
+    piggyBarFrame: { file: 'piggy/style1_bar_frame.webp' },
+    piggyBarMarker: { file: 'piggy/style1_bar_marker.webp' },
+    piggyCoin: { file: 'piggy/style1_coin.webp' },
+    piggyButtonOff: { file: 'piggy/style1_button_grey.webp' },
+    piggyHand: { file: 'piggy/style1_hand.webp' },
+    piggyCoins: { file: 'piggy/style1_coins.webp' },
+    piggyArrow: { file: 'piggy/style1_arrow.webp' },
+    piggyTutorialArt: { file: 'piggy/style1_tutorial_pig.webp' },
+    /** `icon_pig_bank_dark` 67:32200 (250) and `btn_green_dark` at 220 × 100 under it (67:31366): the piggy-bank entry (host art). */
+    iconPiggyBank: { file: 'level/style1_icon_piggy.webp' },
+    featurePill: { file: 'level/style1_feature_pill.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -677,6 +722,82 @@ export const READY_UI_STYLE_1 = {
         timerIcon: { x: 109.8, y: 1574.8, width: 230.4, height: 230.4 },
         nextLabel: { x: 350.2, y: 1590, width: 500, height: 100, fontSize: 50, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 },
         timer: { x: 350.2, y: 1690, width: 500, height: 100, fontSize: 100 }
+      }
+    },
+    /**
+     * theme_light_11 `screen_pig_bank` 67:30801 / `screen_pig_bank_learning` 67:30442: the window `bg_pig_bank` at 40, 202
+     * of the frame (1000 × 1860). The copy is Fira Sans Black with the kit stroke and shadow (Figma: 4 OUTSIDE + 0, 4);
+     * the bar's counters are plain white (Figma: Calibri Bold 50, no stroke). Figma draws the bank's button greyed
+     * (`btn_grey_dark` 505 × 214 with РАЗБИТЬ, 12.5 left of the window's centre): here it is centred, green
+     * (`buttonPrimary`) when the bank can be bought, with the label over the price row as in the light row.
+     */
+    piggyBank: {
+      window: { width: 1000, height: 1860 },
+      /** icon_close_dark_2 67:30813 */
+      close: { x: 870, y: 80, width: 50, height: 50 },
+      /** Group 1365 67:30804: btn_green_dark 158 + icon_info_dark */
+      info: { x: 25, y: 25, width: 158, height: 158 },
+      /** pic_decor_2 67:30809 (1000 at -2, 172): No Ads' render box (its blur reaches 22.87 out) */
+      decor: { x: -24.87, y: 149.13, width: 1045.75, height: 1045.75 },
+      burst: NO_ADS_DECOR_BURST,
+      /** pic_pig_1_dark 67:30810: its render (26 above the 700 box) */
+      hero: { x: 150, y: 284, width: 700, height: 700 },
+      /** title pic_spark_1 67:30829 / 67:30828 (turned 45°) and the pig's 67:30811: centres window-local */
+      sparks: [
+        { x: 279.75, y: 76.75, size: 123.5 },
+        { x: 740.18, y: 187.17, size: 95, rotation: 45 },
+        { x: 508, y: 458, size: 190 }
+      ],
+      /** СВИНКА (its yellow → orange gradient as one fill) over КОПИЛКА: Fira Sans Black 100, 4 OUTSIDE */
+      title: [
+        { x: 100, y: 0, width: 800, height: 240, fontSize: 100, fill: 0xffc21a },
+        { x: 100, y: 92, width: 800, height: 240, fontSize: 100 }
+      ],
+      titleArt: { box: { x: 274, y: 78, width: 459, height: 178 }, lines: ['СВИНКА', 'КОПИЛКА'] },
+      /** bubble_2_dark 67:30812: "900" Fira Sans Black 80 + icon_coin_128 100 (no gap), centred on the bubble */
+      bubble: { box: { x: 233, y: 786, width: 300, height: 200 }, centerX: 383, y: 863, height: 96, gap: 0, amount: { fontSize: 80 }, coin: { width: 100, height: 100, y: 861 } },
+      bar: {
+        /** progress_bar_2_dark 67:30817: the #261a30 trough and the #3cc31f fill under progress_bar_1_dark 67:30818's frame */
+        back: { x: 98, y: 1124, width: 866, height: 134 },
+        fill: { x: 120, y: 1139, width: 821, height: 89, fillMin: 96 },
+        frame: { x: 101, y: 1121, width: 864, height: 151 },
+        marker: { y: 1100, width: 49, height: 138 },
+        /** icon_coin_1_dark 228 (the 288 component's render box) */
+        coin: { x: 26, y: 1073, width: 228, height: 228 },
+        threshold: { coin: { x: 0, y: 965, width: 84, height: 84 }, amount: { x: 0, y: 1047, width: 130, height: 60, fontSize: 50, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 } },
+        capacity: { coin: { x: 859, y: 965, width: 84, height: 84 }, amount: { x: 836, y: 1047, width: 130, height: 60, fontSize: 50, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 } }
+      },
+      /** txt 67:30819: Fira Sans Black 60, «не полная» in #ffe100 */
+      message: [
+        { x: 35, y: 1367, width: 930, height: 90, fontSize: 60, highlight: 0xffe100 },
+        { x: 35, y: 1457, width: 930, height: 90, fontSize: 60 }
+      ],
+      button: { x: 247.5, y: 1590, width: 505, height: 214 },
+      buttonLabel: { x: 12.5, y: 22, width: 480, height: 70, fontSize: 60 },
+      price: { y: 84, height: 96, gap: 10, fontSize: 70 },
+      priceCoin: { width: 73, height: 73, y: 96 },
+      /** `pics` 67:30467 (no clip): the hand, the coins, the arrows between them and the glowing pig (its own render) */
+      tutorial: {
+        hand: { x: 316, y: 29.55, width: 368, height: 365 },
+        coins: { x: 244, y: 384.43, width: 513, height: 377 },
+        arrows: [
+          { x: 471, y: 394, width: 58, height: 65 },
+          { x: 471, y: 764, width: 58, height: 65 }
+        ],
+        hero: { x: 70.47, y: 688.03, width: 859.65, height: 859.65, ownArt: true },
+        /** the pig's six pic_spark_1 (67:30471…76) and the coins' two (67:30479 / 67:30480), squeezed as in Figma */
+        sparks: [
+          { x: 500.68, y: 933.37, size: 130.99, height: 114.79 },
+          { x: 740.57, y: 1126.51, size: 81.87, height: 71.75 },
+          { x: 435.68, y: 1312.15, size: 81.87, height: 71.75 },
+          { x: 245.9, y: 1230.22, size: 81.87, height: 71.75 },
+          { x: 645.73, y: 1248.51, size: 49.12, height: 43.05 },
+          { x: 295.9, y: 1068.61, size: 49.12, height: 43.05 },
+          { x: 445.55, y: 510.78, size: 167.54, height: 91.43 },
+          { x: 656.83, y: 651.79, size: 125.65, height: 68.57 }
+        ],
+        body: { x: 33, y: 1454, width: 929, height: 240, fontSize: 60 },
+        tap: { x: 38, y: 1707, width: 929, height: 120, fontSize: 60 }
       }
     }
   }

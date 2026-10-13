@@ -13,7 +13,7 @@ import { READY_UI_STYLE_2 } from './skins/style2';
  */
 
 /** The modal windows a style can cover. */
-export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds' | 'dailyQuests';
+export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds' | 'dailyQuests' | 'piggyBank';
 
 /** Non-modal Core views whose visuals may come from the same selected skin. */
 export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton' | 'shopScreen';
@@ -34,7 +34,11 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
     'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail', 'resultStar', 'resultStarsWin'
   ],
   noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon', 'noAdsStars', 'noAdsSpark', 'noAdsTitle'],
-  dailyQuests: ['windowSurface', 'windowClose', 'questSlot', 'questCup', 'questBarEmpty', 'questBarFull', 'questButton', 'rewardCoin', 'questTimer', 'questGlow', 'questSpark', 'questRays']
+  dailyQuests: ['windowSurface', 'windowClose', 'questSlot', 'questCup', 'questBarEmpty', 'questBarFull', 'questButton', 'rewardCoin', 'questTimer', 'questGlow', 'questSpark', 'questRays'],
+  piggyBank: [
+    'piggyPanel', 'piggyClose', 'piggyInfo', 'piggyDecor', 'piggyStars', 'piggyArt', 'piggySpark', 'piggyTitle', 'piggyBubble', 'priceIcon', 'piggyBarBack',
+    'piggyBarFill', 'piggyBarFrame', 'piggyBarMarker', 'piggyCoin', 'buttonPrimary', 'piggyButtonOff', 'piggyHand', 'piggyCoins', 'piggyArrow', 'piggyTutorialArt'
+  ]
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 /**
@@ -45,8 +49,9 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
  * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons; its
  * other roles are the main screen's feature column a host composes beside the map (no Core view draws them, never
- * required): `iconNoAds` (the No Ads entry), `iconQuests` (the daily-quests entry), `featureGlow` (the soft glow behind
- * a feature icon) and `featureSpark`.
+ * required): `iconNoAds` (the No Ads entry), `iconQuests` (the daily-quests entry), `iconPiggyBank` (the piggy-bank
+ * entry), `featureGlow` (the soft glow behind a feature icon), `featureSpark` and `featurePill` (the small button under
+ * an entry carrying its count — the piggy bank's amount / FULL).
  * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
  * its layout has a background picture (`background.art`). MovesView draws `movesPanel` alone; the other `moves` roles
  * are the gameplay row's art around the MOVES box that a host composes itself (no Core view draws them, never
@@ -58,7 +63,7 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'featureGlow', 'featureSpark'],
+  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill'],
   moves: ['movesPanel', 'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'],
   settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
   shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
@@ -77,7 +82,7 @@ export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typ
 export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel', 'shopTitle', 'questSlot', 'questBarEmpty', 'questBarFull'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel', 'shopTitle', 'questSlot', 'questBarEmpty', 'questBarFull', 'piggyPanel', 'piggyBarFill'];
 
 /** The roles of the OFFER panel (`windows.offer`) that Lives and Confirm draw under themselves; required only with that layout. */
 const OFFER_ROLES: readonly ReadyUiSkinRole[] = ['offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'buttonPrimary', 'priceIcon'];
@@ -641,6 +646,98 @@ export interface ReadyUiSkinDailyQuestsLayout {
   };
 }
 
+/** A sparkle of a window: its centre, its size (width; `height` for a squeezed one) and its Figma rotation in degrees. */
+export interface ReadyUiSkinSparkBox {
+  readonly x: number;
+  readonly y: number;
+  readonly size: number;
+  readonly height?: number;
+  readonly rotation?: number;
+}
+
+/** A coin + amount counter over the piggy bank's bar: the coin (render box) above the amount (one line, centred). */
+export interface ReadyUiSkinPiggyCounterLayout {
+  readonly coin: ReadyUiSkinBox;
+  readonly amount: ReadyUiSkinLivesTextBox;
+}
+
+/**
+ * Piggy Bank (theme_light_11 `screen_pig_bank` / `screen_pig_bank_learning`): one window, two screens — the bank (the
+ * pig over the rays, the balance bubble, the fill bar with the purchase threshold and the capacity, the state copy, the
+ * buy button) and the tutorial (the illustration, the rule, "tap to continue"). Boxes are WINDOW-LOCAL (x / y from the
+ * window box's top-left; the panel origin is the window centre); the button's label and price row are button-local.
+ * `piggyPanel` (9-slice) is the window shell, `piggyClose` its ×, the art boxes are render boxes. Every copy and number
+ * is runtime.
+ */
+export interface ReadyUiSkinPiggyBankLayout {
+  readonly window: { readonly width: number; readonly height: number };
+  readonly close: ReadyUiSkinBox;
+  /** `piggyInfo`: the round button opening the tutorial. */
+  readonly info: ReadyUiSkinBox;
+  /** `piggyDecor`: the rays behind the pig (render box, decoration); `burst` turns them and twinkles `piggyStars`. */
+  readonly decor: ReadyUiSkinBox;
+  readonly burst?: ReadyUiSkinDecorBurst;
+  /** `piggyArt`: the pig (render box). */
+  readonly hero: ReadyUiSkinBox;
+  /** `piggySpark`s over the pig and the title, flashing in turn. */
+  readonly sparks: readonly ReadyUiSkinSparkBox[];
+  /** The title's two runtime lines (absent `titleArt` or another language). */
+  readonly title: readonly [ReadyUiSkinLivesTextBox, ReadyUiSkinLivesTextBox];
+  /** `piggyTitle`: the style's own picture of exactly these two lines (one language's art; other copy stays runtime text). */
+  readonly titleArt?: { readonly box: ReadyUiSkinBox; readonly lines: readonly [string, string] };
+  /** `piggyBubble` (render box) with the balance: the amount, `gap`, the coin (`priceIcon`), one row centred on `centerX`. */
+  readonly bubble: {
+    readonly box: ReadyUiSkinBox;
+    readonly centerX: number;
+    readonly y: number;
+    readonly height: number;
+    readonly gap: number;
+    readonly amount: { readonly fontSize: number; readonly fill?: number; readonly stroke?: { readonly width: number; readonly color: number } };
+    readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+  };
+  readonly bar: {
+    /** `piggyBarBack`: the empty bar (render box). */
+    readonly back: ReadyUiSkinBox;
+    /** `piggyBarFill` (9-slice) resized to the bank's fill share of this box (never narrower than `fillMin`; none at 0). */
+    readonly fill: ReadyUiSkinBox & { readonly fillMin: number };
+    /** `piggyBarFrame` over the fill (render box); absent: none (its role is not needed). */
+    readonly frame?: ReadyUiSkinBox;
+    /** `piggyBarMarker` (its render top and size), centred on the purchase threshold's share of the fill box. */
+    readonly marker: { readonly y: number; readonly width: number; readonly height: number };
+    /** `piggyCoin` at the bar's start (render box). */
+    readonly coin: ReadyUiSkinBox;
+    /** The threshold counter, centred on the marker (its boxes' x are ignored: centred there). */
+    readonly threshold: ReadyUiSkinPiggyCounterLayout;
+    /** The capacity counter (`piggyCoin` + the capacity) at the bar's end. */
+    readonly capacity: ReadyUiSkinPiggyCounterLayout;
+  };
+  /** The state copy: two centred lines; the first one's `[marked]` part in `highlight`. */
+  readonly message: readonly [ReadyUiSkinLivesTextBox & { readonly highlight: number }, ReadyUiSkinLivesTextBox];
+  /** BUY: `buttonPrimary` (9-slice) when it can be bought, `piggyButtonOff` (drawn at the box) when not. */
+  readonly button: ReadyUiSkinBox;
+  readonly buttonLabel: ReadyUiSkinLivesTextBox;
+  /** Button-local: the price, `gap`, the coin (`priceIcon`, a wallet price only), one row centred on the button; `y` = its top. */
+  readonly price: { readonly y: number; readonly height: number; readonly gap: number; readonly fontSize: number; readonly fill?: number; readonly stroke?: { readonly width: number; readonly color: number } };
+  readonly priceCoin: { readonly width: number; readonly height: number; readonly y: number };
+  /** The tutorial screen: no × and no info; a tap anywhere returns to the bank. */
+  readonly tutorial: {
+    /** The illustration's frame: its art is clipped to it (Figma `pics` clips); absent: no clip. */
+    readonly clip?: ReadyUiSkinBox;
+    /** `piggyHand`, `piggyCoins`, the two `piggyArrow`s between them (render boxes). */
+    readonly hand: ReadyUiSkinBox;
+    readonly coins: ReadyUiSkinBox;
+    readonly arrows: readonly ReadyUiSkinBox[];
+    /** `piggyDecor` behind the pig, still (render box; its stars from `piggyStars` placed by `burst`); absent: none. */
+    readonly decor?: ReadyUiSkinBox & { readonly burst: ReadyUiSkinDecorBurst };
+    /** The pig: `piggyTutorialArt` when `ownArt` (a style whose tutorial pig carries its own glow), else `piggyArt`. */
+    readonly hero: ReadyUiSkinBox & { readonly ownArt?: boolean };
+    readonly sparks: readonly ReadyUiSkinSparkBox[];
+    /** The rule (`{threshold}` in its copy) and "tap to continue": wrapped, centred. */
+    readonly body: ReadyUiSkinWrappedTextBox;
+    readonly tap: ReadyUiSkinWrappedTextBox;
+  };
+}
+
 /** A Result button: its box in the frame, its label box button-local (from the button box's top-left). */
 export interface ReadyUiSkinResultButtonLayout {
   readonly button: ReadyUiSkinBox;
@@ -710,6 +807,7 @@ export interface ReadyUiSkinLayouts {
   readonly result?: ReadyUiSkinResultLayout;
   readonly noAds?: ReadyUiSkinNoAdsLayout;
   readonly dailyQuests?: ReadyUiSkinDailyQuestsLayout;
+  readonly piggyBank?: ReadyUiSkinPiggyBankLayout;
 }
 
 /** A style's own font file (under `assets/pixi-ui/`), registered under `family` by `loadReadyUiAssets({ skin })`. */
@@ -851,6 +949,17 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     // the rays behind the cup only when the all-claimed layout turns them
     const layout = skin.windows.dailyQuests;
     return READY_UI_SKIN_WINDOW_ROLES.dailyQuests.filter((role) => role !== 'questRays' || layout?.done.rays !== undefined);
+  }
+  if (view === 'piggyBank') {
+    // the optional parts only when the layout draws them
+    const layout = skin.windows.piggyBank;
+    const without: ReadyUiSkinRole[] = [];
+    if (!layout?.burst?.stars?.length && !layout?.tutorial.decor?.burst.stars?.length) without.push('piggyStars');
+    if (!layout?.sparks.length && !layout?.tutorial.sparks.length) without.push('piggySpark');
+    if (!layout?.titleArt) without.push('piggyTitle');
+    if (!layout?.bar.frame) without.push('piggyBarFrame');
+    if (!layout?.tutorial.hero.ownArt) without.push('piggyTutorialArt');
+    return READY_UI_SKIN_WINDOW_ROLES.piggyBank.filter((role) => !without.includes(role));
   }
   return READY_UI_SKIN_VIEW_ROLES[view];
 }

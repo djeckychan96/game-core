@@ -1,0 +1,809 @@
+{
+ "about": "theme_light_11 (section 67:27577): the Piggy Bank window screen_pig_bank 67:30376 / 67:30801 and its tutorial screen_pig_bank_learning 67:30416 / 67:30442 (Style 2 = the LIGHT row, Style 1 = the DARK row), and the main screen's piggy-bank entry. Figma's own transparent renders (get_screenshot contentsOnly; instance sublayers through a throw-away detached clone, removed right after), 1 px / unit, no text inside. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "67:27577"
+ },
+ "assets": [
+  {
+   "key": "piggy-spark",
+   "file": "piggy/spark.webp",
+   "scale": 1,
+   "size": [
+    190,
+    190
+   ],
+   "note": "pic_spark_1 67:27874 (190): the piggy windows' star in both rows (Style 2's featureSpark is the same art; its own file so Style 1 loads no style2/ file)",
+   "layers": [
+    {
+     "image": "png/spark-67-27874.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      190,
+      190
+     ]
+    }
+   ]
+  },
+  {
+   "key": "piggy-panel",
+   "file": "piggy/panel.webp",
+   "scale": 1,
+   "size": [
+    1012,
+    1872
+   ],
+   "note": "Rectangle 66112 67:30378 (= bg_pig_bank 67:30803, the same fills in both rows): #1f2975, radius 41, the 4-unit #306bbe top highlight, the -10 bottom band, a 6-unit 20 % ring. Render 1012 x 1872 = the 1000 x 1860 box + 6 on every side; the No Ads promo panel's shape in blue",
+   "nineSlice": {
+    "figma": {
+     "left": 46,
+     "top": 46,
+     "right": 46,
+     "bottom": 52
+    },
+    "gutter": 2,
+    "strip": 8,
+    "tolerance": 3
+   },
+   "pad": {
+    "left": 6,
+    "top": 6,
+    "right": 6,
+    "bottom": 6
+   },
+   "layers": [
+    {
+     "image": "png/panel-67-30378.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1012,
+      1872
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-pig",
+   "file": "style2/piggy_pig.webp",
+   "scale": 1,
+   "size": [
+    856,
+    684
+   ],
+   "note": "pic_pig_1 67:30381 (856 box; its image 856 x 682 at 0, 87): the opaque rows 86..769 of the 856 render",
+   "layers": [
+    {
+     "image": "png/style2-pig-67-30381.png",
+     "at": [
+      0,
+      -86
+     ],
+     "size": [
+      856,
+      856
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-pig",
+   "file": "piggy/style1_pig.webp",
+   "scale": 1,
+   "size": [
+    700,
+    700
+   ],
+   "note": "pic_pig_1_dark 67:30810 (700 box): the render starts 26 above the box (the image's top); its opaque 700 x 700",
+   "layers": [
+    {
+     "image": "png/style1-pig-67-30810.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      700,
+      726
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-tutorial-pig",
+   "file": "piggy/style1_tutorial_pig.webp",
+   "scale": 1,
+   "size": [
+    860,
+    860
+   ],
+   "note": "pic_pig_1_dark 67:30470 of the tutorial (613 box): the instance carries the pink glow; render 859.65 at -122.82, -154.76 of the box",
+   "layers": [
+    {
+     "image": "png/style1-tutorial-pig-67-30470.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      860,
+      860
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-bubble",
+   "file": "style2/piggy_bubble.webp",
+   "scale": 1,
+   "size": [
+    332,
+    216
+   ],
+   "note": "bubble_1 67:30383 without txt_coins (a detached throw-away clone): base 300 x 150 + arrow 80 x 50, the drop shadow bleeds 16 left / right and 16 down",
+   "layers": [
+    {
+     "image": "png/style2-bubble-67-30383.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      332,
+      216
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-bubble",
+   "file": "piggy/style1_bubble.webp",
+   "scale": 1,
+   "size": [
+    300,
+    200
+   ],
+   "note": "bubble_2_dark 67:30812 without txt_2 (a detached throw-away clone)",
+   "layers": [
+    {
+     "image": "png/style1-bubble-67-30812.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      300,
+      200
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-info",
+   "file": "style2/piggy_info.webp",
+   "scale": 1,
+   "size": [
+    158,
+    158
+   ],
+   "note": "Group 1365 67:30385: btn_green 136 + icon_info 158 (its text layer is hidden)",
+   "layers": [
+    {
+     "image": "png/style2-info-67-30385.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      158,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-info",
+   "file": "piggy/style1_info.webp",
+   "scale": 1,
+   "size": [
+    158,
+    158
+   ],
+   "note": "Group 1365 67:30804: btn_green_dark 158 + icon_info_dark 158",
+   "layers": [
+    {
+     "image": "png/style1-info-67-30804.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      158,
+      158
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-close",
+   "file": "piggy/style1_close.webp",
+   "scale": 1,
+   "size": [
+    50,
+    50
+   ],
+   "note": "icon_close_dark_2 67:30813: the grey × of the dark row (the kit's Style 1 windowClose is the violet one)",
+   "layers": [
+    {
+     "image": "png/style1-close-67-30813.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      50,
+      50
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-bar-back",
+   "file": "style2/piggy_bar_back.webp",
+   "scale": 1,
+   "size": [
+    850,
+    150
+   ],
+   "note": "bar_orange_1 67:30393: the #f6b703 ring Subtract 850 x 150 at 5, 28 of the 860 x 210 instance (its inner shadows; the drop shadow renders empty)",
+   "layers": [
+    {
+     "image": "png/style2-bar-back-67-30393.png",
+     "at": [
+      -5,
+      -28
+     ],
+     "size": [
+      860,
+      210
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-bar-fill",
+   "file": "style2/piggy_bar_fill.webp",
+   "scale": 1,
+   "size": [
+    822,
+    122
+   ],
+   "note": "bar_orange_2 67:30394: the #36b841 fill 822 x 122 (radius 30) at 19, 42 of the instance; RESIZED to the bank's fill share (axis x)",
+   "nineSlice": {
+    "figma": {
+     "left": 30,
+     "top": 0,
+     "right": 30,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x",
+    "tolerance": 3
+   },
+   "layers": [
+    {
+     "image": "png/style2-bar-fill-67-30394.png",
+     "at": [
+      -19,
+      -42
+     ],
+     "size": [
+      860,
+      210
+     ]
+    }
+   ],
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   }
+  },
+  {
+   "key": "style2-piggy-bar-marker",
+   "file": "style2/piggy_bar_marker.webp",
+   "scale": 1,
+   "size": [
+    40,
+    152
+   ],
+   "note": "bar_orange_3 67:30399 (the top tick, 40 x 44 at 90, 16 of the 220 x 210 instance) over bar_orange_4 67:30395 (the bottom tick, 40 x 24 at 90, 144): one picture, the threshold mark",
+   "layers": [
+    {
+     "image": "png/style2-marker-bottom-67-30395.png",
+     "at": [
+      -90,
+      -16
+     ],
+     "size": [
+      220,
+      210
+     ]
+    },
+    {
+     "image": "png/style2-marker-top-67-30399.png",
+     "at": [
+      -90,
+      -16
+     ],
+     "size": [
+      220,
+      210
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-bar-back",
+   "file": "piggy/style1_bar_back.webp",
+   "scale": 1,
+   "size": [
+    866,
+    134
+   ],
+   "note": "progress_bar_2_dark 67:30817 without its green: header_back 866 x 134 (#261a30, radius 60) at 73, 44 of the 950 x 214 instance",
+   "layers": [
+    {
+     "image": "png/style1-bar-trough-67-30817.png",
+     "at": [
+      -73,
+      -44
+     ],
+     "size": [
+      950,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-bar-fill",
+   "file": "piggy/style1_bar_fill.webp",
+   "scale": 1,
+   "size": [
+    821,
+    89
+   ],
+   "note": "progress_bar_2_dark 67:30817 without header_back: the #3cc31f Intersect 820 x 89 at 95, 59; RESIZED to the fill share (axis x)",
+   "nineSlice": {
+    "figma": {
+     "left": 45,
+     "top": 0,
+     "right": 45,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x",
+    "tolerance": 3
+   },
+   "layers": [
+    {
+     "image": "png/style1-bar-fill-67-30817.png",
+     "at": [
+      -95,
+      -59
+     ],
+     "size": [
+      950,
+      214
+     ]
+    }
+   ],
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   }
+  },
+  {
+   "key": "style1-piggy-bar-frame",
+   "file": "piggy/style1_bar_frame.webp",
+   "scale": 1,
+   "size": [
+    864,
+    151
+   ],
+   "note": "progress_bar_1_dark 67:30818, Group 1363 alone (the ring mask over the #dd5c17 / #ffa217 rects, the #261a30 4-unit outline and 6-unit shadow): over the fill",
+   "layers": [
+    {
+     "image": "png/style1-bar-ring-67-30818.png",
+     "at": [
+      -76,
+      -41
+     ],
+     "size": [
+      950,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-bar-marker",
+   "file": "piggy/style1_bar_marker.webp",
+   "scale": 1,
+   "size": [
+    49,
+    138
+   ],
+   "note": "progress_bar_1_dark 67:30818, Group 1362 alone (the two #ffa217 ticks with their #261a30 outlines)",
+   "layers": [
+    {
+     "image": "png/style1-marker-67-30818.png",
+     "at": [
+      -686,
+      -20
+     ],
+     "size": [
+      950,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-coin",
+   "file": "piggy/style1_coin.webp",
+   "scale": 1,
+   "size": [
+    288,
+    288
+   ],
+   "note": "icon_coin_1_dark 67:31833 (288): the bar's coin (228) and the counters' coins (84)",
+   "layers": [
+    {
+     "image": "png/style1-coin-67-31833.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      288,
+      288
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-button-grey",
+   "file": "style2/piggy_button_grey.webp",
+   "scale": 1,
+   "size": [
+    530,
+    200
+   ],
+   "note": "btn_grey 67:27666 as a 530 x 200 instance (the size of the window's btn_green 67:30408): the disabled buy button",
+   "layers": [
+    {
+     "image": "png/style2-button-grey-67-27666.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      530,
+      200
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-button-grey",
+   "file": "piggy/style1_button_grey.webp",
+   "scale": 1,
+   "size": [
+    505,
+    214
+   ],
+   "note": "btn_grey_dark 67:30823 (505 x 214): the disabled buy button",
+   "layers": [
+    {
+     "image": "png/style1-button-grey-67-30823.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      505,
+      214
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-title",
+   "file": "style2/piggy_title_ru.webp",
+   "scale": 1,
+   "size": [
+    592,
+    230
+   ],
+   "note": "title_pig_bank 67:30411 (СВИНКА PoetsenOne 90 with its gradient, КОПИЛКА 120 white): the opaque 592 x 230 at 106, 71 of the 800 x 342 group",
+   "layers": [
+    {
+     "image": "png/style2-title-ru-67-30411.png",
+     "at": [
+      -106,
+      -71
+     ],
+     "size": [
+      800,
+      342
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-title",
+   "file": "piggy/style1_title_ru.webp",
+   "scale": 1,
+   "size": [
+    459,
+    178
+   ],
+   "note": "title_pig_bank 67:30825 without its two pic_spark_1 (a throw-away clone): Fira Sans Black 100 with the 4-unit stroke; the opaque 459 x 178 at 174, 78",
+   "layers": [
+    {
+     "image": "png/style1-title-ru-67-30825.png",
+     "at": [
+      -174,
+      -78
+     ],
+     "size": [
+      800,
+      332
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-hand",
+   "file": "style2/piggy_hand.webp",
+   "scale": 1,
+   "size": [
+    368,
+    358
+   ],
+   "note": "pic_hand_play_1 67:30423 (800 x 350 box; its image 368 x 365 at 216, -7, the render clipped at the top): the opaque 368 x 358",
+   "layers": [
+    {
+     "image": "png/style2-hand-67-30423.png",
+     "at": [
+      -216,
+      0
+     ],
+     "size": [
+      800,
+      358
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-hand",
+   "file": "piggy/style1_hand.webp",
+   "scale": 1,
+   "size": [
+    368,
+    365
+   ],
+   "note": "pic_hand_play_dark 67:30468: render 800 x 364.91 at 0, -7.45 of the box; the opaque 368 x 365",
+   "layers": [
+    {
+     "image": "png/style1-hand-67-30468.png",
+     "at": [
+      -216,
+      0
+     ],
+     "size": [
+      800,
+      365
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-coins",
+   "file": "style2/piggy_coins.webp",
+   "scale": 1,
+   "size": [
+    513,
+    377
+   ],
+   "note": "pic_coins_bank 67:30434 (800 x 320 box): render 800 x 376.14 at 0, -28.07; the opaque 513 x 377",
+   "layers": [
+    {
+     "image": "png/style2-coins-67-30434.png",
+     "at": [
+      -144,
+      0
+     ],
+     "size": [
+      800,
+      377
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-coins",
+   "file": "piggy/style1_coins.webp",
+   "scale": 1,
+   "size": [
+    513,
+    377
+   ],
+   "note": "pic_coins_bank_dark 67:30478: render 800 x 376.14 at 0, -28.07; the opaque 513 x 377",
+   "layers": [
+    {
+     "image": "png/style1-coins-67-30478.png",
+     "at": [
+      -144,
+      0
+     ],
+     "size": [
+      800,
+      377
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-piggy-arrow",
+   "file": "style2/piggy_arrow.webp",
+   "scale": 1,
+   "size": [
+    66,
+    73
+   ],
+   "note": "icon_arrow 67:30437 (900 x 80 box): the opaque 66 x 73 at 417, 2",
+   "layers": [
+    {
+     "image": "png/style2-arrow-67-30437.png",
+     "at": [
+      -417,
+      -2
+     ],
+     "size": [
+      900,
+      80
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-piggy-arrow",
+   "file": "piggy/style1_arrow.webp",
+   "scale": 1,
+   "size": [
+    58,
+    65
+   ],
+   "note": "icon_arrow_dark 67:30481: the opaque 58 x 65 at 421, 7",
+   "layers": [
+    {
+     "image": "png/style1-arrow-67-30481.png",
+     "at": [
+      -421,
+      -7
+     ],
+     "size": [
+      900,
+      80
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-icon-piggy",
+   "file": "style2/icon_piggy.webp",
+   "scale": 1,
+   "size": [
+    250,
+    250
+   ],
+   "note": "icon_pig_bank 67:27988 (250): the main screen's piggy-bank entry (feature column, host art like iconQuests)",
+   "layers": [
+    {
+     "image": "png/style2-icon-piggy-67-27988.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      250,
+      250
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-icon-piggy",
+   "file": "level/style1_icon_piggy.webp",
+   "scale": 1,
+   "size": [
+    250,
+    250
+   ],
+   "note": "icon_pig_bank_dark 67:32200 (250)",
+   "layers": [
+    {
+     "image": "png/style1-icon-piggy-67-32200.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      250,
+      250
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-feature-pill",
+   "file": "style2/feature_pill.webp",
+   "scale": 1,
+   "size": [
+    220,
+    100
+   ],
+   "note": "btn_green 67:27662 as a 220 x 100 instance (icon_pig_bank_preview 67:31249: the pill under the icon carrying FULL / the amount)",
+   "layers": [
+    {
+     "image": "png/style2-pill-67-27662.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      220,
+      100
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-feature-pill",
+   "file": "level/style1_feature_pill.webp",
+   "scale": 1,
+   "size": [
+    220,
+    100
+   ],
+   "note": "btn_green_dark 67:32180 as a 220 x 100 instance (icon_pig_bank_dark_preview 67:31366)",
+   "layers": [
+    {
+     "image": "png/style1-pill-67-32180.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      220,
+      100
+     ]
+    }
+   ]
+  }
+ ]
+}

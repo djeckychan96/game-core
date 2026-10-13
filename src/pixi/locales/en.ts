@@ -43,5 +43,19 @@ export const READY_UI_EN = Object.freeze({
   'core.quests.claim': 'Claim reward',
   'core.quests.done_title': 'All daily quests completed!',
   'core.quests.done_body': 'You have completed all quests for today. Come back tomorrow for new quests!',
-  'core.quests.next_in': 'New quests in:'
+  'core.quests.next_in': 'New quests in:',
+  'core.piggy.title_1': 'PIGGY',
+  'core.piggy.title_2': 'BANK',
+  'core.piggy.buy': 'BUY',
+  'core.piggy.full_label': 'FULL',
+  'core.piggy.empty_1': 'The piggy bank is [empty]!',
+  'core.piggy.empty_2': 'Complete levels to fill it up!',
+  'core.piggy.partial_1': 'The piggy bank is [not full] yet!',
+  'core.piggy.partial_2': 'Keep collecting coins!',
+  'core.piggy.purchasable_1': 'The piggy bank [can be bought]!',
+  'core.piggy.purchasable_2': 'Or keep saving to get even more!',
+  'core.piggy.full_1': 'The piggy bank is [full]!',
+  'core.piggy.full_2': 'Buy it to collect your coins!',
+  'core.piggy.tutorial': 'Buy the PIG BANK when you have {threshold} coins!',
+  'core.piggy.tap_to_continue': 'Tap to continue'
 }) satisfies TranslationCatalog;

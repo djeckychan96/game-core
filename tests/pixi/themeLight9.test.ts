@@ -119,7 +119,7 @@ describe('theme_light_9 gameplay row and feature column — host art', () => {
   });
 
   it('the feature column roles are optional levelMapScreen roles: LevelMapScreen requires PLAY + its icons only', () => {
-    expect(READY_UI_SKIN_VIEW_ROLES.levelMapScreen).toEqual(['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'featureGlow', 'featureSpark']);
+    expect(READY_UI_SKIN_VIEW_ROLES.levelMapScreen).toEqual(['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill']);
     for (const skin of [S1, S2]) expect(requiredSkinRoles(skin, 'levelMapScreen')).toEqual(['playButton', 'iconShop', 'iconHome']);
     const assets = Object.fromEntries(Object.entries(S2.assets).filter(([key]) => !(FEATURE_ROLES as readonly string[]).includes(key)));
     const bare = { ...S2, id: 'style-2-bare', assets } as ReadyUiSkin;

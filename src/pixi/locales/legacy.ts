@@ -57,6 +57,18 @@ export const READY_UI_LEGACY_TEXT = Object.freeze({
     doneBody: READY_UI_EN['core.quests.done_body'],
     nextIn: READY_UI_EN['core.quests.next_in']
   }),
+  piggy: Object.freeze({
+    title1: READY_UI_EN['core.piggy.title_1'],
+    title2: READY_UI_EN['core.piggy.title_2'],
+    buy: READY_UI_EN['core.piggy.buy'],
+    fullLabel: READY_UI_EN['core.piggy.full_label'],
+    empty: [READY_UI_EN['core.piggy.empty_1'], READY_UI_EN['core.piggy.empty_2']] as const,
+    partial: [READY_UI_EN['core.piggy.partial_1'], READY_UI_EN['core.piggy.partial_2']] as const,
+    purchasable: [READY_UI_EN['core.piggy.purchasable_1'], READY_UI_EN['core.piggy.purchasable_2']] as const,
+    full: [READY_UI_EN['core.piggy.full_1'], READY_UI_EN['core.piggy.full_2']] as const,
+    tutorial: READY_UI_EN['core.piggy.tutorial'],
+    tapToContinue: READY_UI_EN['core.piggy.tap_to_continue']
+  }),
   // OrientationGuard shipped with Russian copy before LocalizationRuntime existed.
   orientation: READY_UI_RU['core.orientation.rotate_device']
 });
