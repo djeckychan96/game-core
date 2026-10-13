@@ -285,6 +285,9 @@ export type { PlatformAnalyticsSource, PlatformAnalyticsFields, PlatformAnalytic
 export { createWalletQuestRewards, trackWalletForQuests } from './composition/walletQuests';
 export type { QuestRewardWallet, QuestTrackedWallet, QuestEventSink, WalletQuestTrackingOptions } from './composition/walletQuests';
 export { purchaseEventToQuestEvent } from './composition/purchaseQuests';
+export { createPiggyBankLedger } from './composition/piggyPurchases';
+export type { PiggyBankLedgerTarget } from './composition/piggyPurchases';
+export * from './piggy';
 export { validateGameProductionProfile, PROGRESSION_MODES, PRODUCTION_OWNERS } from './production';
 export type {
   ProductionOwner,

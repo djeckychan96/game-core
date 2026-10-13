@@ -18,6 +18,8 @@ export type { NetworkFaultKind, NetworkFaultProfileOptions } from './NetworkFaul
 export { toQaJson } from './redact';
 export { setQaLives, createLivesQaCapability, QA_LIVES_SOURCE } from './livesSeam';
 export type { QaLivesTarget, QaLivesSetResult } from './livesSeam';
+export { fillQaPiggyBank, buyQaPiggyBank, createPiggyBankQaCapabilities, QA_PIGGY_BANK_SOURCE } from './piggySeam';
+export type { QaPiggyBankTarget } from './piggySeam';
 export type * from './types';
 
 /** The default global an automation / a tester's console reads. */
