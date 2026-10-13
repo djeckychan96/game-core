@@ -77,6 +77,8 @@ function fakeStorage(initial: Record<string, unknown> = {}) {
     /** Every written patch, as it reached the storage. */
     patches: [] as Record<string, any>[],
     failRead: false,
+    /** ok; false = refused; reject; lost = never applied, never answered (the tab died mid-write). */
+    setMode: 'ok' as 'ok' | 'false' | 'reject' | 'lost',
     storage: null as unknown as PlatformStorage
   };
   fake.storage = {
@@ -91,6 +93,9 @@ function fakeStorage(initial: Record<string, unknown> = {}) {
     },
     set: (patch) => {
       fake.calls.push(`set:${Object.keys(patch).join(',')}`);
+      if (fake.setMode === 'false') return Promise.resolve(false);
+      if (fake.setMode === 'reject') return Promise.reject(new Error('quota'));
+      if (fake.setMode === 'lost') return new Promise<boolean>(() => {});
       fake.patches.push(JSON.parse(JSON.stringify(patch)));
       Object.assign(fake.data, JSON.parse(JSON.stringify(patch)));
       return Promise.resolve(true);
@@ -318,21 +323,19 @@ describe('QuestService — progress, claims, durability', () => {
     expect(second.wallet.balance).toBe(10);
   });
 
-  test('the claim is written before the coins, and every later write carries both — a lost write can lose, never double, a reward', async () => {
+  test('a claim and its coins are ONE storage write (the earn-coins progress it causes rides with it)', async () => {
     const fake = fakeStorage();
     const { quests } = await session(fake);
     quests.track({ type: 'login' });
     const from = fake.patches.length;
-    quests.claim('daily_login');
-    const states = fake.patches.slice(from).map((patch) => ({
-      claimed: patch[CORE_KEY].quests.quests.find((quest: any) => quest.id === 'daily_login').claimed,
-      balance: patch[CORE_KEY].wallet?.balance ?? 0
-    }));
-    expect(states.length).toBeGreaterThanOrEqual(2);
-    expect(states[0]).toEqual({ claimed: true, balance: 0 }); // the claim lands first
-    expect(states.some((state) => state.balance === 10 && !state.claimed)).toBe(false); // never coins without the claim
-    expect(states.at(-1)).toEqual({ claimed: true, balance: 10 });
-    expect(storedBalance(fake)).toBe(10);
+    const claimed = quests.claim('daily_login');
+    expect(fake.patches.length - from).toBe(1);
+    const core = fake.patches[from]![CORE_KEY];
+    expect(core.wallet.balance).toBe(10);
+    expect(core.quests.quests.find((quest: any) => quest.id === 'daily_login').claimed).toBe(true);
+    expect(core.quests.quests.find((quest: any) => quest.id === 'daily_gold_100').progress).toBe(10);
+    expect(await claimed.saved).toEqual({ ok: true, reason: null });
+    expect(await claimed.grant!.saved).toEqual({ ok: true, reason: null }); // the wallet's write is the same one
   });
 
   test('coins of a claimed reward count toward the earn-coins quest (any source counts)', async () => {
@@ -413,6 +416,106 @@ describe('QuestService — progress, claims, durability', () => {
     expect(again.snapshot().quests.map((quest) => quest.id)).toEqual(quests.snapshot().quests.map((quest) => quest.id));
     expect(again.claim('daily_login').reason).toBe('already_claimed');
     expect(wallet.balance).toBe(10);
+  });
+});
+
+describe('QuestService — write failures and restarts (a reward is never lost, never paid twice)', () => {
+  /** Stored claim and stored coins agree (the wallet starts at 0, the only income is daily_login's 10): claimed ⇔ coins stored. */
+  const consistent = (fake: Fake) => {
+    const login = questsRecord(fake)?.quests.find((quest: any) => quest.id === 'daily_login');
+    return (login?.claimed === true) === ((storedBalance(fake) ?? 0) > 0);
+  };
+
+  for (const mode of ['false', 'reject', 'lost'] as const) {
+    test(`the claim write fails (${mode}): after a restart the quest is claimable again and pays once`, async () => {
+      const fake = fakeStorage();
+      const a = await session(fake);
+      a.quests.track({ type: 'login' });
+      fake.setMode = mode;
+      expect(a.quests.claim('daily_login').ok).toBe(true); // in memory: claimed, 10 coins
+      expect(a.wallet.balance).toBe(10);
+      expect(consistent(fake)).toBe(true);
+      expect(storedBalance(fake) ?? 0).toBe(0);
+
+      fake.setMode = 'ok'; // restart
+      const b = await session(fake);
+      expect(b.wallet.balance).toBe(0);
+      expect(view(b.quests, 'daily_login')!.state).toBe('completed');
+      expect(b.quests.claim('daily_login').ok).toBe(true);
+      expect(b.wallet.balance).toBe(10);
+      const c = await session(fake);
+      expect(c.quests.claim('daily_login').reason).toBe('already_claimed');
+      expect(c.wallet.balance).toBe(10);
+    });
+  }
+
+  test('a crash after any number of landed writes around a claim leaves a consistent save, and the restart pays once', async () => {
+    for (let landed = 0; landed <= 3; landed++) {
+      const fake = fakeStorage();
+      const a = await session(fake);
+      a.quests.track({ type: 'login' });
+      let budget = landed;
+      const set = fake.storage.set;
+      fake.storage.set = (patch) => (budget-- > 0 ? set(patch) : new Promise<boolean>(() => {})); // then the tab dies
+      a.quests.claim('daily_login');
+      a.quests.track({ type: 'level_complete' });
+      a.wallet.trySpend(3, { source: 'shop' });
+      a.quests.save();
+      expect(consistent(fake), `landed ${landed}`).toBe(true);
+
+      fake.storage.set = set; // restart
+      const b = await session(fake);
+      b.quests.claim('daily_login');
+      expect(view(b.quests, 'daily_login')!.state).toBe('claimed');
+      const spent = b.wallet.balance === 7 ? 3 : 0; // the spend landed only when its write did
+      expect(b.wallet.balance, `landed ${landed}`).toBe(10 - spent);
+      expect(b.quests.claim('daily_login').reason).toBe('already_claimed');
+    }
+  });
+
+  test('a session that goes on after a failed claim write: the next Core write stores the claim and the coins together', async () => {
+    const fake = fakeStorage();
+    const a = await session(fake);
+    a.quests.track({ type: 'login' });
+    fake.setMode = 'false';
+    a.quests.claim('daily_login');
+    fake.setMode = 'ok';
+    a.quests.track({ type: 'level_complete' });
+    expect(storedBalance(fake)).toBe(10);
+    expect(questsRecord(fake).quests.find((quest: any) => quest.id === 'daily_login').claimed).toBe(true);
+    const b = await session(fake);
+    expect(b.quests.claim('daily_login').reason).toBe('already_claimed');
+    expect(b.wallet.balance).toBe(10);
+  });
+
+  test('the day-change payout: a crash after any number of landed writes, then a restart — the carried reward is paid once', async () => {
+    for (let landed = 0; landed <= 2; landed++) {
+      const fake = fakeStorage();
+      const a = await session(fake);
+      const day0 = a.quests.snapshot().day!;
+      a.quests.track({ type: 'rewarded_ad' });
+      a.quests.track({ type: 'rewarded_ad' }); // 15, not claimed
+
+      let budget = landed;
+      const set = fake.storage.set;
+      fake.storage.set = (patch) => (budget-- > 0 ? set(patch) : new Promise<boolean>(() => {}));
+      const b = await session(fake, { c: clock(T0 + DAY) });
+      b.quests.tick();
+      b.quests.track({ type: 'level_complete' });
+      expect(b.wallet.balance).toBe(15); // in memory
+      const stored = questsRecord(fake);
+      // the new day and its paid carry are stored together with the coins, or nothing of it is
+      expect(stored.day === day0 + 1 ? storedBalance(fake) === 15 && stored.carry.length === 0 : (storedBalance(fake) ?? 0) === 0, `landed ${landed}`).toBe(true);
+
+      fake.storage.set = set; // restart
+      const c = await session(fake, { c: clock(T0 + DAY + HOUR) });
+      c.quests.tick();
+      expect(c.wallet.balance, `landed ${landed}`).toBe(15);
+      expect(questsRecord(fake)).toMatchObject({ day: day0 + 1, carry: [] });
+      const d = await session(fake, { c: clock(T0 + DAY + 2 * HOUR) });
+      d.quests.tick();
+      expect(d.wallet.balance).toBe(15);
+    }
   });
 });
 

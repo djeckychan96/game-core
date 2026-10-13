@@ -263,6 +263,52 @@ describe('SaveGate — storage write errors', () => {
   });
 });
 
+describe('SaveGate — batchCore (several Core records in one write)', () => {
+  test('Core writes inside a batch change memory only; ONE storage.set carries them all and every write answers its result', async () => {
+    const fake = fakeStorage();
+    const gate = new SaveGate({ storage: fake.storage, profile: SOLIPIX });
+    await gate.load();
+    gate.open();
+    const answers: Array<Promise<unknown>> = [];
+    const batch = gate.batchCore(() => {
+      answers.push(gate.writeCore('quests', { claimed: true }));
+      answers.push(gate.writeCore('wallet', { balance: 10 }));
+      answers.push(gate.batchCore(() => void answers.push(gate.writeCore('quests', { claimed: true, progress: 1 })))); // joins
+      expect(fake.calls.filter((call) => call.startsWith('set:'))).toEqual([]);
+      expect(gate.readCore('wallet')).toEqual({ balance: 10 });
+    });
+    expect(fake.calls.filter((call) => call.startsWith('set:'))).toEqual(['set:solipix.core']);
+    expect(fake.data['solipix.core']).toEqual({ quests: { claimed: true, progress: 1 }, wallet: { balance: 10 } });
+    expect(await batch).toEqual({ ok: true, reason: null });
+    expect(await Promise.all(answers)).toEqual(Array(4).fill({ ok: true, reason: null }));
+    expect(await gate.batchCore(() => {})).toEqual({ ok: true, reason: null }); // no Core write: nothing written
+    expect(fake.calls.filter((call) => call.startsWith('set:'))).toHaveLength(1);
+  });
+
+  test('a failed batch write stores none of its records; a throwing change still commits once; refusals stay refusals', async () => {
+    const fake = fakeStorage();
+    const gate = new SaveGate({ storage: fake.storage, profile: SOLIPIX });
+    await gate.load();
+    expect(await gate.batchCore(() => void gate.writeCore('quests', {}))).toEqual({ ok: true, reason: null }); // not open: nothing to commit
+    expect(fake.calls.filter((call) => call.startsWith('set:'))).toEqual([]);
+    gate.open();
+    fake.setMode = 'false';
+    const failed = gate.batchCore(() => {
+      gate.writeCore('quests', { claimed: true });
+      gate.writeCore('wallet', { balance: 10 });
+    });
+    expect(await failed).toEqual({ ok: false, reason: 'storage_refused' });
+    expect(fake.data['solipix.core']).toBeUndefined(); // neither record landed
+    fake.setMode = 'ok';
+    expect(() => gate.batchCore(() => {
+      gate.writeCore('ads', { n: 1 });
+      throw new Error('boom');
+    })).toThrow('boom');
+    expect(fake.data['solipix.core']).toEqual({ quests: { claimed: true }, wallet: { balance: 10 }, ads: { n: 1 } }); // memory carried, one write
+    expect(() => gate.batchCore(undefined as never)).toThrow(TypeError);
+  });
+});
+
 describe('SaveGate — root-module hygiene', () => {
   test('10. no timers: a whole session (load, open, writes, failures) leaves no timer behind', async () => {
     vi.useFakeTimers();

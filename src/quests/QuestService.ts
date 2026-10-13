@@ -157,8 +157,10 @@ function parseEvent(event: QuestEvent): ParsedEvent | null {
  * after any absence, ONE new set and no reward for the missed days. A clock behind the stored day keeps the stored
  * set (no new set, no new rewards) until the clock passes it. A change is synchronous in memory, then ONE
  * `gate.writeCore('quests', record)` of the whole record; a failed write is carried by the next one (or `save()`).
- * Exactly-once reward: the claim is written BEFORE the sink pays, and the sink's own Core write (the wallet's)
- * carries that claim too — so a reload can lose a reward whose wallet write never landed, never pay it twice.
+ * Exactly-once reward: the claim (or the carried reward leaving the record) and the sink's payment run in ONE
+ * `gate.batchCore()`, so the claim and the wallet's coins are a single storage write — stored together or not at
+ * all. A failed or lost write leaves the quest claimable (or the reward carried) after a restart: never lost,
+ * never paid twice. This holds for a sink that writes through the same SaveGate (`createWalletQuestRewards`).
  */
 export class QuestService {
   private readonly gate: QuestSaveGate;
@@ -187,7 +189,7 @@ export class QuestService {
 
   constructor(options: QuestServiceOptions) {
     const { gate, config, rewards, clock, random, resolveGroup, isPayer, available, onListenerError, onError } = options ?? ({} as QuestServiceOptions);
-    if (!gate || typeof gate.load !== 'function' || typeof gate.readCore !== 'function' || typeof gate.writeCore !== 'function' || typeof gate.snapshot !== 'function') {
+    if (!gate || typeof gate.load !== 'function' || typeof gate.readCore !== 'function' || typeof gate.writeCore !== 'function' || typeof gate.snapshot !== 'function' || typeof gate.batchCore !== 'function') {
       throw new TypeError('QuestService: the game SaveGate is required');
     }
     const issues = validateQuestConfig(config);
@@ -291,9 +293,9 @@ export class QuestService {
   }
 
   /**
-   * Pays a completed quest of today's set once. The claim is written first, then the sink pays; a sink that
-   * refuses (or cannot pay now — `canGrant`) leaves the quest completed and claimable. A repeated claim →
-   * `already_claimed`, nothing paid.
+   * Pays a completed quest of today's set once: the claim and the sink's payment are one batched Core write.
+   * A sink that refuses (or cannot pay now — `canGrant`) leaves the quest completed and claimable. A repeated
+   * claim → `already_claimed`, nothing paid.
    */
   claim(questId: string): QuestClaimResult {
     const refuse = (reason: QuestRefusal, grant?: QuestGrantAnswer): QuestClaimResult => ({ ok: false, reason, questId, reward: null, saved: null, ...(grant ? { grant } : {}) });
@@ -306,14 +308,17 @@ export class QuestService {
     if (quest.claimed) return refuse('already_claimed');
     if (quest.progress < quest.target) return refuse('not_completed');
     if (!this.canGrant(quest.reward)) return refuse('reward_refused');
-    quest.claimed = true;
-    const saved = this.write();
-    const grant = this.deliver('claim', quest.reward, { questId: quest.id, day: record.day, auto: false });
-    if (!grant.ok) {
-      quest.claimed = false;
+    let grant: QuestGrantAnswer = { ok: false };
+    const saved = this.gate.batchCore(() => {
+      quest.claimed = true;
       void this.write();
-      return refuse('reward_refused', grant);
-    }
+      grant = this.deliver('claim', quest.reward, { questId: quest.id, day: record.day, auto: false });
+      if (!grant.ok) {
+        quest.claimed = false;
+        void this.write();
+      }
+    });
+    if (!grant.ok) return refuse('reward_refused', grant);
     this.emit({ kind: 'claimed', day: record.day, questId: quest.id, reward: copyReward(quest.reward) });
     return { ok: true, reason: null, questId: quest.id, reward: copyReward(quest.reward), saved, grant };
   }
@@ -441,24 +446,35 @@ export class QuestService {
     for (const questId of moved.completed) this.emit({ kind: 'completed', day, questId });
   }
 
-  /** Pays carried rewards in order while the sink accepts them; each leaves the record (written) BEFORE it is paid. */
+  /**
+   * Pays carried rewards in order while the sink accepts them. The new day's record, every reward leaving the
+   * carry and its payment are ONE batched Core write: after a lost write a restart still finds them carried.
+   */
   private flush(): void {
     const record = this.record;
     if (this.delivering || !record) return;
-    while (record.carry.length > 0) {
-      const item = record.carry[0]!;
-      if (!this.canGrant(item.reward)) break;
-      record.carry.shift();
-      void this.write();
-      const grant = this.deliver('carry', item.reward, { questId: item.questId, day: item.day, auto: true });
-      if (!grant.ok) {
-        record.carry.unshift(item);
-        void this.write();
-        break;
-      }
-      this.emit({ kind: 'auto_claimed', day: item.day, questId: item.questId, reward: copyReward(item.reward) });
+    if (record.carry.length === 0 || !this.canGrant(record.carry[0]!.reward)) {
+      if (this.unsaved) void this.write();
+      return;
     }
-    if (this.unsaved) void this.write();
+    const paid: CarriedReward[] = [];
+    void this.gate.batchCore(() => {
+      while (record.carry.length > 0) {
+        const item = record.carry[0]!;
+        if (!this.canGrant(item.reward)) break;
+        record.carry.shift();
+        void this.write();
+        const grant = this.deliver('carry', item.reward, { questId: item.questId, day: item.day, auto: true });
+        if (!grant.ok) {
+          record.carry.unshift(item);
+          void this.write();
+          break;
+        }
+        paid.push(item);
+      }
+      if (this.unsaved) void this.write();
+    });
+    for (const item of paid) this.emit({ kind: 'auto_claimed', day: item.day, questId: item.questId, reward: copyReward(item.reward) });
   }
 
   private canGrant(reward: QuestReward): boolean {

@@ -84,6 +84,8 @@ export class SaveGate {
   private coreStatus: SaveReadStatus = 'pending';
   private core: Record<string, unknown> = {};
   private loading: Promise<SaveLoadResult> | null = null;
+  /** An open batchCore(): Core writes change memory only and share its one commit. */
+  private batch: { result: Promise<SaveWriteResult>; settle: (write: Promise<SaveWriteResult>) => void; dirty: boolean } | null = null;
 
   constructor(options: SaveGateOptions) {
     const { storage, profile } = options ?? ({} as SaveGateOptions);
@@ -147,7 +149,39 @@ export class SaveGate {
     if (this.phase !== 'open') return refused('not_open');
     if (this.coreStatus === 'failed') return refused('read_failed');
     this.core = { ...this.core, [record]: value };
+    if (this.batch) {
+      this.batch.dirty = true;
+      return this.batch.result;
+    }
     return this.commit({ [this.coreKey]: this.core });
+  }
+
+  /**
+   * Runs `change` synchronously with Core writes batched: every writeCore() inside it (by any runtime on this
+   * gate — the wallet's included) changes the Core object in memory only and answers the batch's result; when
+   * `change` returns (or throws), ONE `storage.set` carries them all. So changes of several Core records land
+   * together or not at all — a reward's claim and its coins can never be stored apart. A batch inside a batch
+   * joins the outer one; a batch without a Core write writes nothing. Game-key writes are not batched.
+   */
+  batchCore(change: () => void): Promise<SaveWriteResult> {
+    if (typeof change !== 'function') throw new TypeError('SaveGate.batchCore(): a change function is required');
+    if (this.batch) {
+      change();
+      return this.batch.result;
+    }
+    let settle: (write: Promise<SaveWriteResult>) => void = () => {};
+    const result = new Promise<SaveWriteResult>((resolve) => {
+      settle = resolve;
+    });
+    const batch = { result, settle, dirty: false };
+    this.batch = batch;
+    try {
+      change();
+    } finally {
+      this.batch = null;
+      batch.settle(batch.dirty ? this.commit({ [this.coreKey]: this.core }) : Promise.resolve({ ok: true, reason: null }));
+    }
+    return result;
   }
 
   snapshot(): SaveGateSnapshot {

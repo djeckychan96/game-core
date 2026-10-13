@@ -268,8 +268,8 @@ export interface QuestChange {
 
 export type QuestListener = (change: QuestChange) => void;
 
-/** The SaveGate methods the service uses — pass the game's SaveGate. */
-export type QuestSaveGate = Pick<SaveGate, 'load' | 'snapshot' | 'readCore' | 'writeCore'>;
+/** The SaveGate methods the service uses — pass the game's SaveGate (the wallet's, so a claim and its coins are one write). */
+export type QuestSaveGate = Pick<SaveGate, 'load' | 'snapshot' | 'readCore' | 'writeCore' | 'batchCore'>;
 
 export interface QuestServiceOptions {
   gate: QuestSaveGate;
