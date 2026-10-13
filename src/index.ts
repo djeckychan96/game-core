@@ -282,6 +282,9 @@ export { createPurchaseAdsHandler, isConfirmedPayment } from './composition/purc
 export type { PurchaseAdsSink } from './composition/purchaseAds';
 export { createPlatformAnalyticsContext, readPlatformAnalyticsFields } from './composition/platformAnalytics';
 export type { PlatformAnalyticsSource, PlatformAnalyticsFields, PlatformAnalyticsHostContext } from './composition/platformAnalytics';
+export { createWalletQuestRewards, trackWalletForQuests } from './composition/walletQuests';
+export type { QuestRewardWallet, QuestTrackedWallet, QuestEventSink, WalletQuestTrackingOptions } from './composition/walletQuests';
+export { purchaseEventToQuestEvent } from './composition/purchaseQuests';
 export { validateGameProductionProfile, PROGRESSION_MODES, PRODUCTION_OWNERS } from './production';
 export type {
   ProductionOwner,
@@ -372,6 +375,56 @@ export type {
   ContinueOfferSaveGate,
   ContinueOfferRuntimeOptions
 } from './continue';
+export {
+  QuestService,
+  validateQuestConfig,
+  pickDailyQuests,
+  createQuestGroupResolver,
+  questLocalDay,
+  questDayStart,
+  QUEST_CATEGORIES,
+  QUEST_EVENT_TYPES,
+  QUEST_AMOUNT_EVENTS,
+  DAILY_QUESTS_GDD_V1_VERSION,
+  DAILY_QUEST_GROUPS_GDD_V1,
+  DAILY_QUESTS_GDD_V1_ROWS,
+  DAILY_QUESTS_GDD_V1_CATALOGS,
+  dailyQuestsGddV1
+} from './quests';
+export type {
+  QuestPickInput,
+  QuestCategory,
+  QuestEventType,
+  QuestReward,
+  QuestObjective,
+  QuestDef,
+  QuestGroupDef,
+  QuestSetRules,
+  QuestConfig,
+  QuestGroupFacts,
+  QuestGroupResolver,
+  QuestGroupRule,
+  QuestClock,
+  QuestRewardContext,
+  QuestGrantAnswer,
+  QuestRewardSink,
+  QuestEvent,
+  QuestStatus,
+  QuestProblem,
+  QuestRefusal,
+  QuestState,
+  QuestView,
+  QuestSnapshot,
+  QuestTrackResult,
+  QuestClaimResult,
+  QuestSaveResult,
+  QuestChangeKind,
+  QuestChange,
+  QuestListener,
+  QuestSaveGate,
+  QuestServiceOptions,
+  DailyQuestBalanceRow
+} from './quests';
 export { MoveRuntime, createStaticLevelBalanceSource, validateLevelBalance, validateLevelBalanceTable, starsForMovesLeft } from './moves';
 export type {
   LevelBalance,
