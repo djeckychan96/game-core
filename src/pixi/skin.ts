@@ -13,7 +13,7 @@ import { READY_UI_STYLE_2 } from './skins/style2';
  */
 
 /** The modal windows a style can cover. */
-export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds';
+export type ReadyUiSkinWindow = 'confirm' | 'lives' | 'settings' | 'result' | 'noAds' | 'dailyQuests';
 
 /** Non-modal Core views whose visuals may come from the same selected skin. */
 export type ReadyUiSkinView = ReadyUiSkinWindow | 'hud' | 'levelMap' | 'bottomNav' | 'levelMapScreen' | 'moves' | 'settingsButton' | 'shopScreen';
@@ -33,7 +33,8 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
     'resultGlowWin', 'resultGlowFail', 'rewardCoin', 'lifeLostArt', 'buttonPrimary', 'buttonRewarded', 'buttonHighlight', 'buttonExit',
     'resultRibbonWin', 'resultRibbonFail', 'resultCloseWin', 'resultCloseFail', 'resultStar', 'resultStarsWin'
   ],
-  noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon', 'noAdsStars', 'noAdsSpark', 'noAdsTitle']
+  noAds: ['noAdsPanel', 'noAdsClose', 'noAdsDecor', 'noAdsArt', 'buttonPrimary', 'priceIcon', 'noAdsStars', 'noAdsSpark', 'noAdsTitle'],
+  dailyQuests: ['windowSurface', 'windowClose', 'questSlot', 'questCup', 'questBarEmpty', 'questBarFull', 'questButton', 'rewardCoin', 'questTimer', 'questGlow', 'questSpark', 'questRays']
 } as const satisfies Record<ReadyUiSkinWindow, readonly string[]>;
 
 /**
@@ -44,7 +45,8 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * (an item names its icon by role or passes a texture); the nav itself draws `navPanel`, `navSelected`, `navLock`.
  * LevelMapScreen draws PLAY and its fixed SHOP | HOME | LOCK slots, so a style covering it ships both item icons; its
  * other roles are the main screen's feature column a host composes beside the map (no Core view draws them, never
- * required): `iconNoAds` (the No Ads entry), `featureGlow` (the soft glow behind a feature icon) and `featureSpark`.
+ * required): `iconNoAds` (the No Ads entry), `iconQuests` (the daily-quests entry), `featureGlow` (the soft glow behind
+ * a feature icon) and `featureSpark`.
  * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
  * its layout has a background picture (`background.art`). MovesView draws `movesPanel` alone; the other `moves` roles
  * are the gameplay row's art around the MOVES box that a host composes itself (no Core view draws them, never
@@ -56,7 +58,7 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'featureGlow', 'featureSpark'],
+  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'featureGlow', 'featureSpark'],
   moves: ['movesPanel', 'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'],
   settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
   shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
@@ -75,7 +77,7 @@ export type ReadyUiSkinWindowAssetKey = { [W in ReadyUiSkinWindow]: `${W}:${(typ
 export type ReadyUiSkinAssetKey = ReadyUiSkinRole | ReadyUiSkinWindowAssetKey;
 
 /** The roles the views stretch as 9-slices: their asset must carry `nineSlice` caps. */
-const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel', 'shopTitle'];
+const NINE_SLICE_ROLES: readonly ReadyUiSkinRole[] = ['windowSurface', 'buttonPrimary', 'buttonRewarded', 'panelInset', 'settingsPanel', 'navPanel', 'navSelected', 'offerPanel', 'noAdsPanel', 'shopTitle', 'questSlot', 'questBarEmpty', 'questBarFull'];
 
 /** The roles of the OFFER panel (`windows.offer`) that Lives and Confirm draw under themselves; required only with that layout. */
 const OFFER_ROLES: readonly ReadyUiSkinRole[] = ['offerPanel', 'offerBadge', 'offerLivesArt', 'offerCoinArt', 'buttonPrimary', 'priceIcon'];
@@ -138,6 +140,8 @@ export interface ReadyUiSkinLivesTextBox extends ReadyUiSkinTextBox {
   readonly fill?: number;
   readonly stroke?: { readonly width: number; readonly color: number };
   readonly align?: 'left' | 'center';
+  /** Its own drop-shadow offset (0 = none) instead of the style's — a plain dark text in a style whose text is shadowed. */
+  readonly shadowY?: number;
 }
 
 /**
@@ -558,6 +562,85 @@ export interface ReadyUiSkinNoAdsLayout {
   readonly titleArt?: { readonly box: ReadyUiSkinBox; readonly lines: readonly [string, string] };
 }
 
+/** A wrapped, centred text block (Figma fixed width, AUTO height): the text wraps at the box width; a taller block shrinks into the box. */
+export interface ReadyUiSkinWrappedTextBox extends ReadyUiSkinLivesTextBox {
+  /** Figma's fixed line height (absent: the font's own). */
+  readonly lineHeight?: number;
+}
+
+/**
+ * Daily Quests (theme_light_11 `screen_daily_quests`): one window, two states chosen by the quest snapshot — the list of
+ * the day's quests, and the all-claimed screen. Boxes are WINDOW-LOCAL: x from the window box's left, y from its TOP
+ * (the window grows downwards with its rows; the panel origin is the window's top centre). Row boxes are row-local,
+ * button labels button-local. `windowSurface` (9-slice) is the popup with its title tape (in the caps' `pad`), the art
+ * boxes are render boxes. Every copy and number is runtime.
+ */
+export interface ReadyUiSkinDailyQuestsLayout {
+  readonly window: { readonly width: number };
+  /** This window's own text look (absent: the style's). */
+  readonly text?: ReadyUiSkinWindowText;
+  readonly title: ReadyUiSkinLivesTextBox;
+  readonly close: ReadyUiSkinBox;
+  /**
+   * The scrolled column of rows: the first row's top-left (`x`, `y`), the `gap` between rows, the space under the last
+   * row to the window bottom (`bottom`), and the visible band (`clip`: window-local insets) the rows scroll in.
+   */
+  readonly list: {
+    readonly x: number;
+    readonly y: number;
+    readonly gap: number;
+    readonly bottom: number;
+    readonly clip: { readonly left: number; readonly top: number; readonly right: number; readonly bottom: number };
+  };
+  /** The window never gets shorter than this on screen (a short landscape viewport): its rows scroll instead. */
+  readonly minHeight: number;
+  /** One quest row (`questSlot` as a 9-slice over `width × height`). */
+  readonly row: {
+    readonly width: number;
+    readonly height: number;
+    /** The quest's icon (`questCup` unless the host gives one). */
+    readonly icon: ReadyUiSkinBox;
+    readonly name: ReadyUiSkinLivesTextBox;
+    readonly description: ReadyUiSkinLivesTextBox;
+    /** `questBarEmpty` over the box; `questBarFull` resized to the progress share of it (never narrower than `fillMin`). */
+    readonly bar: ReadyUiSkinBox & { readonly fillMin: number };
+    /** `progress / target`, centred on its box. */
+    readonly progress: ReadyUiSkinLivesTextBox;
+    /** The reward: the amount, `gap`, the coin (`rewardCoin`), one row centred on `centerX`; `y` = the row's top. */
+    readonly reward: {
+      readonly centerX: number;
+      readonly y: number;
+      readonly height: number;
+      readonly gap: number;
+      readonly amount: { readonly fontSize: number; readonly fill?: number; readonly stroke?: { readonly width: number; readonly color: number } };
+      readonly coin: { readonly width: number; readonly height: number; readonly y: number };
+    };
+    /** GO / the claim on `questButton`; the label wraps inside its button-local box. */
+    readonly button: ReadyUiSkinBox;
+    readonly buttonLabel: ReadyUiSkinWrappedTextBox;
+  };
+  /** The all-claimed screen (a fixed window height). */
+  readonly done: {
+    readonly height: number;
+    /** `questGlow` (render box, decoration). */
+    readonly glow: ReadyUiSkinBox;
+    /** `questRays` turning behind the cup (render box); absent: none (its role is not needed). */
+    readonly rays?: ReadyUiSkinBox;
+    /** `questCup` (render box). */
+    readonly cup: ReadyUiSkinBox;
+    /** `questSpark` stars around the cup: centre and texture width, twinkling in turn. */
+    readonly sparks: readonly { readonly x: number; readonly y: number; readonly size: number }[];
+    readonly title: ReadyUiSkinWrappedTextBox;
+    readonly body: ReadyUiSkinWrappedTextBox;
+    /** `questSlot` as a 9-slice: the timer panel. */
+    readonly panel: ReadyUiSkinBox;
+    /** `questTimer` (render box). */
+    readonly timerIcon: ReadyUiSkinBox;
+    readonly nextLabel: ReadyUiSkinLivesTextBox;
+    readonly timer: ReadyUiSkinLivesTextBox;
+  };
+}
+
 /** A Result button: its box in the frame, its label box button-local (from the button box's top-left). */
 export interface ReadyUiSkinResultButtonLayout {
   readonly button: ReadyUiSkinBox;
@@ -626,6 +709,7 @@ export interface ReadyUiSkinLayouts {
   readonly settings?: ReadyUiSkinSettingsLayouts;
   readonly result?: ReadyUiSkinResultLayout;
   readonly noAds?: ReadyUiSkinNoAdsLayout;
+  readonly dailyQuests?: ReadyUiSkinDailyQuestsLayout;
 }
 
 /** A style's own font file (under `assets/pixi-ui/`), registered under `family` by `loadReadyUiAssets({ skin })`. */
@@ -762,6 +846,11 @@ export function requiredSkinRoles(skin: ReadyUiSkin, view: ReadyUiSkinView): rea
     if (!layout?.sparks?.length) without.push('noAdsSpark');
     if (!layout?.titleArt) without.push('noAdsTitle');
     return READY_UI_SKIN_WINDOW_ROLES.noAds.filter((role) => !without.includes(role));
+  }
+  if (view === 'dailyQuests') {
+    // the rays behind the cup only when the all-claimed layout turns them
+    const layout = skin.windows.dailyQuests;
+    return READY_UI_SKIN_WINDOW_ROLES.dailyQuests.filter((role) => role !== 'questRays' || layout?.done.rays !== undefined);
   }
   return READY_UI_SKIN_VIEW_ROLES[view];
 }
@@ -935,6 +1024,7 @@ export function skinTextBoxLook(look: FigmaTextLook, box: ReadyUiSkinLivesTextBo
     own.strokeOutside = box.stroke.width;
     own.strokeColor = box.stroke.color;
   }
+  if (box.shadowY !== undefined) own.shadowY = box.shadowY;
   return own;
 }
 

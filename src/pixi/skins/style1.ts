@@ -58,7 +58,7 @@ export const NO_ADS_DECOR_BURST: ReadyUiSkinDecorBurst = {
  */
 export const READY_UI_STYLE_1 = {
   id: 'style-1',
-  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen'],
+  covers: ['confirm', 'lives', 'settings', 'hud', 'levelMap', 'result', 'bottomNav', 'levelMapScreen', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `ui/window/base`: the window shell (surface/body + surface/header). @stretch 80 / 175 / 80 / 80 + bleed 4 / 4 / 4 / 8 (bottom: the −23 inner shadow reaches 14 more) + gutter 8. */
@@ -213,7 +213,25 @@ export const READY_UI_STYLE_1 = {
     shopPack4: { file: 'shop/style1_pack_4.webp' },
     shopPack5: { file: 'shop/style1_pack_5.webp' },
     shopPack6: { file: 'shop/style1_pack_6.webp' },
-    shopClose: { file: 'offer/style1_noads_close.webp' }
+    shopClose: { file: 'offer/style1_noads_close.webp' },
+    /**
+     * theme_light_11 Daily Quests, the DARK row (docs/figma/theme-light-11): the popup `popup_dark` 67:31430 is the
+     * window shell (`windowSurface`: the #c3c1ff body under the 175 #7453d5 header, the #261a30 ring) with its ×; the row
+     * back `daily_tasks_1_dark`, the bar pair, the 230 × 130 `btn_green_dark`, the dark cup and timer, the violet glow
+     * `frame_blur_bg_dark_2` and the rays `rays_1_dark` behind the cup are new; the coin is Result's `icon_coin_128`,
+     * the stars `pic_spark_2` (the feature column's star).
+     */
+    questGlow: { file: 'quests/style1_glow@0.5x.webp' },
+    questSpark: { file: 'level/style1_spark.webp' },
+    questSlot: { file: 'quests/style1_slot.webp', nineSlice: { left: 42, top: 42, right: 42, bottom: 42 } },
+    questBarEmpty: { file: 'quests/style1_bar_empty.webp', nineSlice: { left: 26, top: 25, right: 26, bottom: 25, pad: { left: 3, top: 0, right: 3, bottom: 0 } } },
+    questBarFull: { file: 'quests/style1_bar_full.webp', nineSlice: { left: 23, top: 25, right: 23, bottom: 25 } },
+    questButton: { file: 'quests/style1_button.webp' },
+    questCup: { file: 'quests/style1_cup.webp' },
+    questTimer: { file: 'quests/style1_timer.webp' },
+    questRays: { file: 'quests/style1_rays@0.5x.webp' },
+    /** `icon_tasks` 67:31369 of the dark main screen (250): the daily-quests entry (feature column, host art like `iconNoAds`). */
+    iconQuests: { file: 'level/style1_icon_quests.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },
@@ -603,6 +621,63 @@ export const READY_UI_STYLE_1 = {
       price: { y: 36, height: 128, gap: 0, fontSize: 80 },
       coin: { width: 100, height: 100, y: 50 },
       burst: NO_ADS_DECOR_BURST
+    },
+    /**
+     * theme_light_11 `screen_daily_quests` 67:30755 (list) / `screen_daily_quests_complete` 67:30769 (all claimed), the
+     * popup at 60, 200 of the frame: the Settings window's title box and × (the same shell); the rows
+     * `daily_tasks_slot_dark_1` 67:31876 in `Frame 1249` at 90, 405 (900 × 250, gap 30). The plain #261a30 texts carry
+     * neither the kit stroke nor its shadow; the white ones keep the kit look (the amount's and the label's in #261a30).
+     */
+    dailyQuests: {
+      window: { width: 960 },
+      title: { x: 120, y: 34, width: 720, height: 104, fontSize: 80 },
+      close: { x: 863, y: 61, width: 51, height: 51 },
+      list: { x: 30, y: 205, gap: 30, bottom: 45, clip: { left: 4, top: 179, right: 4, bottom: 8 } },
+      minHeight: 1100,
+      row: {
+        width: 900,
+        height: 250,
+        icon: { x: 7.5, y: 40, width: 170, height: 170 },
+        /** the `mid` text 450 × 72 at 185, 54 (Fira Sans Black 30, #261a30): the quest's name, then its task */
+        name: { x: 185, y: 50, width: 450, height: 40, fontSize: 30, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0, align: 'left' },
+        description: { x: 185, y: 90, width: 450, height: 36, fontSize: 26, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0, align: 'left' },
+        bar: { x: 184, y: 146, width: 450, height: 50, fillMin: 46 },
+        /** "0/30": Fira Sans Bold 30 #261a30 (the kit ships Black only) */
+        progress: { x: 184, y: 146, width: 450, height: 50, fontSize: 30, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 },
+        /** `txt_900_coins`: "900" Fira Sans Black 60 white, 4 #261a30 + its shadow, then icon_coin_128 100, no gap */
+        reward: { centerX: 773, y: 24.5, height: 72, gap: 0, amount: { fontSize: 60, stroke: { width: 4, color: 0x261a30 } }, coin: { width: 100, height: 100, y: 10.5 } },
+        button: { x: 656, y: 108, width: 230, height: 130 },
+        /** GO / Claim reward: Fira Sans Black 35 white, 4 #261a30, no shadow, in 196 × 83 */
+        buttonLabel: { x: 17, y: 11, width: 196, height: 83, fontSize: 35, stroke: { width: 4, color: 0x261a30 }, shadowY: 0 }
+      },
+      done: {
+        height: 1940,
+        /** `frame_blur_bg_dark_2` 67:30774 702 × 552 at 114, 371: its render box */
+        glow: { x: -60, y: 145.3, width: 1080, height: 1003.4 },
+        rays: { x: 66, y: 248, width: 798, height: 798 },
+        cup: { x: 225, y: 393, width: 510, height: 510 },
+        /** twelve `pic_spark_2` (60 / 40 instances of the 42 component = its whole render): centres window-local */
+        sparks: [
+          { x: 363, y: 445, size: 60 },
+          { x: 684, y: 423, size: 40 },
+          { x: 251, y: 368, size: 40 },
+          { x: 134, y: 668, size: 40 },
+          { x: 500, y: 274, size: 40 },
+          { x: 779, y: 373, size: 40 },
+          { x: 205, y: 610, size: 40 },
+          { x: 295, y: 780, size: 40 },
+          { x: 251, y: 817, size: 60 },
+          { x: 816, y: 526, size: 60 },
+          { x: 195, y: 341, size: 60 },
+          { x: 730, y: 787, size: 60 }
+        ],
+        title: { x: 80, y: 1020, width: 800, height: 240, fontSize: 100, lineHeight: 120 },
+        body: { x: 80, y: 1300, width: 800, height: 180, fontSize: 50, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 },
+        panel: { x: 30, y: 1540, width: 900, height: 300 },
+        timerIcon: { x: 109.8, y: 1574.8, width: 230.4, height: 230.4 },
+        nextLabel: { x: 350.2, y: 1590, width: 500, height: 100, fontSize: 50, fill: 0x261a30, stroke: { width: 0, color: 0x261a30 }, shadowY: 0 },
+        timer: { x: 350.2, y: 1690, width: 500, height: 100, fontSize: 100 }
+      }
     }
   }
 } as const satisfies ReadyUiSkin;

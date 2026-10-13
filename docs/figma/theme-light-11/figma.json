@@ -1,0 +1,446 @@
+{
+ "about": "theme_light_11 (section 67:27577): the Daily Quests window — the list screen_daily_quests 67:30483 and the all-claimed screen 67:30498 (Style 2, the LIGHT row) and 67:30755 / 67:30769 (Style 1, the DARK row) — and the main screen's daily-tasks entry icon in both styles. Figma's own SVG exports (exportAsync SVG_STRING of the row's leaf layers) and transparent renders (get_screenshot contentsOnly), 1 px / unit, no text inside. See README.md.",
+ "source": {
+  "file": "5FWFwdO4QGeDfeQtloLNOS",
+  "section": "67:27577"
+ },
+ "assets": [
+  {
+   "key": "style2-quest-slot",
+   "file": "style2/quest_slot.webp",
+   "scale": 1,
+   "size": [
+    900,
+    250
+   ],
+   "note": "daily_tasks_1 I67:30487;67:27883 (the row's own frame: #bddeff at 0.9, radius 40, inner shadow 0, -10 blur 3 15 %); the timer panel 67:30518 (instance of daily_tasks_1 67:27900, 900 x 300) is the same art taller: a 9-slice",
+   "nineSlice": {
+    "figma": {
+     "left": 40,
+     "top": 40,
+     "right": 40,
+     "bottom": 40
+    },
+    "gutter": 2,
+    "strip": 8
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style2-quest-slot-72-12965.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-quest-bar-empty",
+   "file": "style2/quest_bar_empty.webp",
+   "scale": 1,
+   "size": [
+    462,
+    84
+   ],
+   "note": "daily_tasks_bar_empty I67:30487;67:27887;67:28014 at the row's 462 x 84 (component 67:27876, 80 x 84): the white 448 x 70 radius-20 rect at 7, 7 with its 6-unit 20 % ring and inner shadow; the width stretches (axis x)",
+   "nineSlice": {
+    "figma": {
+     "left": 27,
+     "top": 0,
+     "right": 27,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x"
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style2-quest-bar-empty-72-12970.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-quest-bar-full",
+   "file": "style2/quest_bar_full.webp",
+   "scale": 1,
+   "size": [
+    462,
+    84
+   ],
+   "note": "daily_tasks_bar_full I67:30487;67:27887;67:28015 (component 67:27878): the #0eabff -> #218cfe fill; Figma's progress=daily_bar_half 67:28016 RESIZES it to the progress width (214 of 414), so it is a 9-slice along x",
+   "nineSlice": {
+    "figma": {
+     "left": 27,
+     "top": 0,
+     "right": 27,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x",
+    "tolerance": 3
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style2-quest-bar-full-72-12972.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-quest-button",
+   "file": "style2/quest_button.webp",
+   "scale": 1,
+   "size": [
+    230,
+    130
+   ],
+   "note": "btn_green I67:30487;67:27898 as the row draws it (230 x 130, component 67:27662 is 214 x 214): the #53cc3e -> #0d9d46 rect 216 x 116 radius 41 at 7, 7, its ring and inner shadows; no label (GO / Claim reward are runtime)",
+   "layers": [
+    {
+     "svg": "svg/style2-quest-button-72-12986.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-quest-cup",
+   "file": "style2/quest_cup.webp",
+   "scale": 1,
+   "size": [
+    510,
+    510
+   ],
+   "note": "icon_cup_gold_1 67:30503 (the all-claimed screen's 510 instance of 67:27880, an image fill); the rows draw the same art at 170",
+   "layers": [
+    {
+     "image": "png/style2-quest-cup-67-30503.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      510,
+      510
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-quest-timer",
+   "file": "style2/quest_timer.webp",
+   "scale": 1,
+   "size": [
+    230,
+    230
+   ],
+   "note": "icon_timer 67:30520 (230.4, the 264 image of 67:28022 clipped by its box)",
+   "layers": [
+    {
+     "image": "png/style2-quest-timer-67-30520.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      230,
+      230
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style2-icon-quests",
+   "file": "style2/icon_quests.webp",
+   "scale": 1,
+   "size": [
+    250,
+    250
+   ],
+   "note": "icon_tasks 67:27943 (component, 250): the daily-tasks entry of the main screen's feature column (screen_main_menu_pc 67:31148, icons 67:31248 -> icon_tasks 67:31250)",
+   "layers": [
+    {
+     "image": "png/style2-icon-tasks-67-27943.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      250,
+      250
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-slot",
+   "file": "quests/style1_slot.webp",
+   "scale": 1,
+   "size": [
+    900,
+    250
+   ],
+   "note": "daily_tasks_1_dark I67:30759;67:31877 (component 67:31890): #ac99f6, radius 40, no effect; the timer panel 67:30772 is the same art at 900 x 300",
+   "nineSlice": {
+    "figma": {
+     "left": 40,
+     "top": 40,
+     "right": 40,
+     "bottom": 40
+    },
+    "gutter": 2,
+    "strip": 8
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style1-quest-slot-67-31877.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-bar-empty",
+   "file": "quests/style1_bar_empty.webp",
+   "scale": 1,
+   "size": [
+    456,
+    50
+   ],
+   "note": "daily_tasks_bar_dark_empty I67:30759;67:31881;67:32350 at the row's 450 x 50 (component 67:31869): #7864c8 radius 22 with a 4-unit CENTRE #261a30 stroke that bleeds 3 left and right (render 456)",
+   "nineSlice": {
+    "figma": {
+     "left": 22,
+     "top": 0,
+     "right": 22,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x"
+   },
+   "pad": {
+    "left": 3,
+    "top": 0,
+    "right": 3,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style1-quest-bar-empty-67-32350.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-bar-full",
+   "file": "quests/style1_bar_full.webp",
+   "scale": 1,
+   "size": [
+    450,
+    50
+   ],
+   "note": "daily_tasks_bar_dark_full I67:30759;67:31881;67:32351 (component 67:31871): the #1564b9 band under the #2a90ff top, radius 20; resized to the progress share like Style 2's",
+   "nineSlice": {
+    "figma": {
+     "left": 21,
+     "top": 0,
+     "right": 21,
+     "bottom": 0
+    },
+    "gutter": 2,
+    "strip": 8,
+    "axis": "x"
+   },
+   "pad": {
+    "left": 0,
+    "top": 0,
+    "right": 0,
+    "bottom": 0
+   },
+   "layers": [
+    {
+     "svg": "svg/style1-quest-bar-full-67-32351.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-button",
+   "file": "quests/style1_button.webp",
+   "scale": 1,
+   "size": [
+    230,
+    130
+   ],
+   "note": "btn_green_dark I67:30759;67:31888 (230 x 130; component 67:32180 is 214): #029437 under #3cc31f, a 4-unit #261a30 stroke and its 6-unit drop; no label",
+   "layers": [
+    {
+     "svg": "svg/style1-quest-button-67-31888.svg",
+     "at": [
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-cup",
+   "file": "quests/style1_cup.webp",
+   "scale": 1,
+   "size": [
+    510,
+    510
+   ],
+   "note": "icon_cup_gold_1_dark 67:30776 (the all-claimed screen's 510 instance of 67:32285); the rows draw it at 170",
+   "layers": [
+    {
+     "image": "png/style1-quest-cup-67-30776.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      510,
+      510
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-timer",
+   "file": "quests/style1_timer.webp",
+   "scale": 1,
+   "size": [
+    230,
+    230
+   ],
+   "note": "icon_timer_dark 67:30794 (230.4; the 200 x 208 image of 67:32273 inside)",
+   "layers": [
+    {
+     "image": "png/style1-quest-timer-67-30794.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      230,
+      230
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-glow",
+   "file": "quests/style1_glow@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    1080,
+    1004
+   ],
+   "note": "frame_blur_bg_dark_2 67:30774 (702 x 552 of 67:32184, #7453d4 layer-blurred): its whole render box 1080 x 1003.4 (bleed 174 / 225.7 / 204 / 225.7), at half density like the Lives glow",
+   "layers": [
+    {
+     "image": "png/style1-quest-glow-67-30774.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      1080,
+      1004
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-quest-rays",
+   "file": "quests/style1_rays@0.5x.webp",
+   "scale": 0.5,
+   "size": [
+    798,
+    798
+   ],
+   "note": "rays_1_dark 67:30775 (798 instance of 67:32186): the white radial-faded rays behind the cup",
+   "layers": [
+    {
+     "image": "png/style1-quest-rays-67-30775.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      798,
+      798
+     ]
+    }
+   ]
+  },
+  {
+   "key": "style1-icon-quests",
+   "file": "level/style1_icon_quests.webp",
+   "scale": 1,
+   "size": [
+    250,
+    250
+   ],
+   "note": "icon_tasks 67:31369 of screen_main_menu_pc_dark (instance of 67:32230, 250): the dark daily-tasks entry",
+   "layers": [
+    {
+     "image": "png/style1-icon-tasks-67-31369.png",
+     "at": [
+      0,
+      0
+     ],
+     "size": [
+      250,
+      250
+     ]
+    }
+   ]
+  }
+ ]
+}

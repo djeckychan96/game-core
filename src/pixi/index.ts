@@ -66,6 +66,8 @@ export { SettingsWindowView } from './SettingsWindowView';
 export type { SettingsLanguage, SettingsState, SettingsWindowParams, SettingsWindowViewOptions } from './SettingsWindowView';
 export { NoAdsWindowView } from './NoAdsWindowView';
 export type { NoAdsWindowParams, NoAdsWindowViewOptions } from './NoAdsWindowView';
+export { DailyQuestsWindowView, questProgressText, DAILY_QUESTS_SPARKS_LOOP } from './DailyQuestsWindowView';
+export type { DailyQuestsSource, DailyQuestsWindowViewOptions } from './DailyQuestsWindowView';
 export { StarterPackWindowView } from './StarterPackWindowView';
 export type { StarterPackRewards, StarterPackWindowParams, StarterPackWindowViewOptions } from './StarterPackWindowView';
 export {

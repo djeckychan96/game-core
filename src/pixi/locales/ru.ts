@@ -37,5 +37,11 @@ export const READY_UI_RU = Object.freeze({
   'core.no_ads.word_ads': 'РЕКЛАМЫ',
   'core.no_ads.description': 'Убирает всплывающую рекламу.\nРеклама за награду остается',
   'core.starter_pack.title': 'СТАРТОВЫЙ\nНАБОР',
-  'core.orientation.rotate_device': 'Поверните устройство'
+  'core.orientation.rotate_device': 'Поверните устройство',
+  'core.quests.title': 'ЕЖЕДНЕВНЫЕ ЗАДАНИЯ',
+  'core.quests.go': 'GO',
+  'core.quests.claim': 'Забрать награду',
+  'core.quests.done_title': 'Все задания на сегодня выполнены!',
+  'core.quests.done_body': 'Возвращайтесь завтра за новыми заданиями!',
+  'core.quests.next_in': 'Новые задания через:'
 }) satisfies TranslationCatalog;

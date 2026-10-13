@@ -37,5 +37,11 @@ export const READY_UI_EN = Object.freeze({
   'core.no_ads.word_ads': 'ADS',
   'core.no_ads.description': 'Removes pop-up ads.\nRewarded ads still available',
   'core.starter_pack.title': 'STARTER\nPACK',
-  'core.orientation.rotate_device': 'Rotate your device'
+  'core.orientation.rotate_device': 'Rotate your device',
+  'core.quests.title': 'DAILY QUESTS',
+  'core.quests.go': 'GO',
+  'core.quests.claim': 'Claim reward',
+  'core.quests.done_title': 'All daily quests completed!',
+  'core.quests.done_body': 'You have completed all quests for today. Come back tomorrow for new quests!',
+  'core.quests.next_in': 'New quests in:'
 }) satisfies TranslationCatalog;

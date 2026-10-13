@@ -15,9 +15,10 @@
 // Demo data only; nothing is bought, no level is played. The booster icons of the OFFER (gallery/*.webp, the Figma
 // sample's lamp and wand) are game content a host passes as textures — not part of Core.
 import { Application, Assets, Container, type Texture } from 'pixi.js';
-import { CoreRuntime, MotionRuntime, UiRuntime } from 'game-core';
+import { CoreRuntime, DAILY_QUESTS_GDD_V1_CATALOGS, MotionRuntime, QuestService, SaveGate, SoftCurrencyWallet, UiRuntime, createWalletQuestRewards, dailyQuestsGddV1, trackWalletForQuests } from 'game-core';
 import {
   ConfirmWindowView,
+  DailyQuestsWindowView,
   HudView,
   LevelMapScreen,
   LivesWindowView,
@@ -63,6 +64,8 @@ const SCREENS = [
   { id: 'fail', label: 'Result FAIL' },
   { id: 'gameplay', label: 'Gameplay — Moves + Settings button' },
   { id: 'noads', label: 'No Ads' },
+  { id: 'quests', label: 'Daily Quests — list (a real QuestService day)' },
+  { id: 'quests-done', label: 'Daily Quests — all claimed (timer)' },
   { id: 'shop-screen', label: 'Shop — SHOP tab (ShopScreen; SHOP / HOME switch)' },
   { id: 'shop', label: 'Shop — legacy modal (ShopWindowView, donor look)' }
 ] as const;
@@ -324,16 +327,71 @@ switch (screenId) {
     view = noAds as unknown as ModalWindow<never>;
     break;
   }
+  case 'quests':
+  case 'quests-done': {
+    const quests = await demoQuests(screenId === 'quests-done');
+    const catalogs = DAILY_QUESTS_GDD_V1_CATALOGS as Readonly<Record<string, Readonly<Record<string, string>>>>;
+    const catalog = catalogs[i18n.locale] ?? catalogs.en!;
+    const daily = new DailyQuestsWindowView({
+      ...base, id: 'quests', quests, onDismiss,
+      text: (key) => catalog[key] ?? key,
+      // the gallery's routes: levels and boosters go to the map (GDD), the others have none here (GO disabled)
+      canGo: (quest) => quest.event === 'level_complete' || quest.event === 'booster_used',
+      onGo: (quest) => log(`go:${quest.id}`),
+      onClaimed: (quest) => log(`claim:${quest.id}:${quest.reward.amount}`)
+    });
+    open = () => daily.show();
+    view = daily as unknown as ModalWindow<never>;
+    break;
+  }
   default:
     break;
 }
 if (view) app.stage.addChild(view);
 
+/**
+ * A real QuestService day for the gallery over an in-page storage (nothing persists): Balance.xlsx's set for the payer
+ * group, a login, two levels and some coins — or (`done`) every quest completed and claimed.
+ */
+async function demoQuests(done: boolean): Promise<QuestService> {
+  const data: Record<string, unknown> = {};
+  const storage = {
+    isCloud: () => false,
+    ready: async () => {},
+    get: async (keys: string[]) => Object.fromEntries(keys.filter((key) => key in data).map((key) => [key, data[key]])),
+    set: async (patch: Record<string, unknown>) => (Object.assign(data, JSON.parse(JSON.stringify(patch))), true),
+    clear: async (keys: string[]) => { for (const key of keys) delete data[key]; }
+  };
+  const profile = { id: 'gallery', save: { keys: ['gallery_state'] }, economy: { softCurrency: { id: 'coins', owner: 'core' as const, startBalance: 0 } } };
+  const gate = new SaveGate({ storage, profile });
+  const wallet = new SoftCurrencyWallet({ gate, profile });
+  const quests = new QuestService({
+    gate, config: dailyQuestsGddV1('coins'), rewards: createWalletQuestRewards(wallet), random: Math.random,
+    clock: { now: () => Date.now(), timezoneOffsetMinutes: (at) => new Date(at).getTimezoneOffset() },
+    resolveGroup: () => 'payer'
+  });
+  await Promise.all([gate.load(), wallet.load(), quests.load()]);
+  gate.open();
+  trackWalletForQuests(wallet, quests);
+  quests.track({ type: 'login' });
+  if (!done) {
+    quests.track({ type: 'level_complete' });
+    quests.track({ type: 'level_complete' });
+    quests.track({ type: 'currency_earned', amount: 60 });
+    return quests;
+  }
+  for (const quest of quests.snapshot().quests) {
+    if (quest.event !== 'login') quests.track({ type: quest.event, amount: quest.target });
+  }
+  for (const quest of quests.snapshot().quests) quests.claim(quest.id);
+  return quests;
+}
+
 /** What this style draws for the screen: its own art, or the donor look where the style has no design. */
 function coverage(): string {
   const window = screenId.startsWith('settings') ? 'settings' : screenId.startsWith('lives') ? 'lives' : screenId.startsWith('win') || screenId === 'fail' ? 'result'
     : screenId.startsWith('map') ? 'levelMapScreen' : screenId === 'gameplay' ? 'moves' : screenId === 'noads' ? 'noAds' : screenId === 'shop' ? 'shop'
-    : screenId === 'shop-screen' ? 'shopScreen' : 'confirm';
+    : screenId === 'shop-screen' ? 'shopScreen' : screenId.startsWith('quests') ? 'dailyQuests' : 'confirm';
   const covered = skin.covers.includes(window as never);
   return `Style ${styleNo} · ${SCREENS.find((s) => s.id === screenId)?.label}: ${covered ? 'style art' : 'NOT in this style — donor look'}`;
 }

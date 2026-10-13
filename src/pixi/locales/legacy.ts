@@ -49,6 +49,14 @@ export const READY_UI_LEGACY_TEXT = Object.freeze({
     description: READY_UI_EN['core.no_ads.description']
   }),
   starterPackTitle: READY_UI_EN['core.starter_pack.title'],
+  quests: Object.freeze({
+    title: READY_UI_EN['core.quests.title'],
+    go: READY_UI_EN['core.quests.go'],
+    claim: READY_UI_EN['core.quests.claim'],
+    doneTitle: READY_UI_EN['core.quests.done_title'],
+    doneBody: READY_UI_EN['core.quests.done_body'],
+    nextIn: READY_UI_EN['core.quests.next_in']
+  }),
   // OrientationGuard shipped with Russian copy before LocalizationRuntime existed.
   orientation: READY_UI_RU['core.orientation.rotate_device']
 });

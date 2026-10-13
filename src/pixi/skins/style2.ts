@@ -38,7 +38,8 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  * derived), `settingsButton` (28:48119) and `noAds` (28:48041 — theme_light_9's `screen_ads_off` 50:29087 draws the same
  * boxes) from theme_light_6 (section 28:45250, the LIGHT row; docs/figma/theme-light-6); `moves` — the orange tab — from
  * theme_light_9 (section 50:25954; docs/figma/theme-light-9); `shopScreen` — the SHOP tab — from theme_light_6 `market_screen_light`
- * 28:46095 (docs/figma/theme-light-6-shop). NOT COVERED — donor look: the modal ShopWindowView, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
+ * 28:46095 (docs/figma/theme-light-6-shop); `dailyQuests` from theme_light_11 `screen_daily_quests` 67:30483 / 67:30498
+ * (docs/figma/theme-light-11). NOT COVERED — donor look: the modal ShopWindowView, StarterPack. The other screens and the older variants that still lie in `theme_light_3` are
  * not a source for this package; every covered screen is a provisional approved snapshot (the artist may still
  * change Style 2 — see each docs/figma folder).
  *
@@ -52,7 +53,7 @@ const CLOSE = { file: 'style2/settings_close.webp' } as const;
  */
 export const READY_UI_STYLE_2 = {
   id: 'style-2',
-  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds', 'shopScreen'],
+  covers: ['hud', 'levelMap', 'bottomNav', 'levelMapScreen', 'settings', 'confirm', 'lives', 'result', 'moves', 'settingsButton', 'noAds', 'shopScreen', 'dailyQuests'],
   frame: { width: 1080, height: 2344 },
   assets: {
     /** `header_back` 8:17609: render 515 × 182 at 67, 27 of the 582 × 236 bar (the bar clips its right shadow, as in Figma). */
@@ -220,7 +221,25 @@ export const READY_UI_STYLE_2 = {
     shopPack4: { file: 'style2/shop_pack_4.webp' },
     shopPack5: { file: 'style2/shop_pack_5.webp' },
     shopPack6: { file: 'style2/shop_pack_6.webp' },
-    shopClose: CLOSE
+    shopClose: CLOSE,
+    /**
+     * theme_light_11 Daily Quests (docs/figma/theme-light-11): the popup is the Settings popup (`popup` 67:27644 =
+     * popup_back + header_back) with its red × — `windowSurface` / `windowClose`; the row back `daily_tasks_1` (the timer
+     * panel draws it taller), the progress bar pair, the row's 230 × 130 `btn_green`, the cup `icon_cup_gold_1` (rows at
+     * 170, the all-claimed screen at 510) and `icon_timer` are new; the coin is the HUD coin (`icon_coin_1` 67:27705 is
+     * the same art), the glow `frame_blur_bg` (the Lives glow × 1.125) and the stars `pic_spark_1` (the feature column's).
+     */
+    questSlot: { file: 'style2/quest_slot.webp', nineSlice: { left: 42, top: 42, right: 42, bottom: 46 } },
+    questBarEmpty: { file: 'style2/quest_bar_empty.webp', nineSlice: { left: 29, top: 42, right: 29, bottom: 42 } },
+    questBarFull: { file: 'style2/quest_bar_full.webp', nineSlice: { left: 29, top: 42, right: 29, bottom: 42 } },
+    questButton: { file: 'style2/quest_button.webp' },
+    questCup: { file: 'style2/quest_cup.webp' },
+    questTimer: { file: 'style2/quest_timer.webp' },
+    /** `frame_blur_bg` (the Lives glow, drawn × 1.125) and `pic_spark_1` (the feature column's star). */
+    questGlow: { file: BLUE_GLOW.file },
+    questSpark: { file: 'style2/spark.webp' },
+    /** `icon_tasks` 67:27943 (250): the main screen's daily-quests entry (feature column, host art like `iconNoAds`). */
+    iconQuests: { file: 'style2/icon_quests.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },
@@ -513,6 +532,64 @@ export const READY_UI_STYLE_2 = {
       ],
       /** `title_coin_keeper` without its sparks: PoetsenOne (no Cyrillic outside Figma) with its stroke and shadow, render box */
       titleArt: { box: { x: 91.33, y: 130, width: 819.27, height: 342 }, lines: ['ОТКЛЮЧЕНИЕ', 'РЕКЛАМЫ'] }
+    },
+    /**
+     * theme_light_11 `screen_daily_quests` 67:30483 (list) / 67:30498 (all claimed): the popup at 40, 244 of the frame —
+     * the Settings popup's title box and × (the same component); the rows `daily_tasks_slot_1` 67:27882 in `Frame 1249`
+     * at 90, 384 (900 × 250, gap 15). Figma's popup runs on past the frame bottom (2340); here the window ends 86 under its
+     * last row (the white body's 46 + 40) and the rows scroll under the title tape when they do not fit.
+     */
+    dailyQuests: {
+      window: { width: 1000 },
+      title: { x: 166, y: -18, width: 668, height: 110, fontSize: 90 },
+      close: { x: 887, y: -37, width: 153, height: 158 },
+      list: { x: 50, y: 140, gap: 15, bottom: 86, clip: { left: 34, top: 120, right: 34, bottom: 46 } },
+      minHeight: 1100,
+      row: {
+        width: 900,
+        height: 250,
+        /** cup_slot → icon_cup_gold_1 170 at 9, 40 */
+        icon: { x: 9, y: 40, width: 170, height: 170 },
+        /** the `mid` text 462 × 70 at 188, 38 (Calibri Bold 35, #3f598c): the quest's name, then its task */
+        name: { x: 188, y: 36, width: 462, height: 36, fontSize: 35, fill: 0x3f598c, align: 'left' },
+        description: { x: 188, y: 74, width: 462, height: 34, fontSize: 30, fill: 0x3f598c, align: 'left' },
+        /** `bar` 462 × 84 at 188, 128; the fill never narrower than its two caps' rounded ends */
+        bar: { x: 188, y: 128, width: 462, height: 84, fillMin: 54 },
+        /** `numbers` "0/30": Calibri Bold 40 #3f598c, 5 OUTSIDE white */
+        progress: { x: 188, y: 125, width: 462, height: 84, fontSize: 40, fill: 0x3f598c, stroke: { width: 5, color: 0xffffff } },
+        /** `txt_coins` (gap 1) centred in the 250 `btn` column at 650 (row-local; frame 740): "900" Calibri Bold 70 #3f598c + icon_coin_1 84 */
+        reward: { centerX: 775, y: 12.5, height: 85, gap: 1, amount: { fontSize: 70, fill: 0x3f598c }, coin: { width: 84, height: 84, y: 13 } },
+        /** `btn_green` 230 × 130 at 660, 107.5; its label 196 × 100 (Calibri Bold 40, line 40, white) */
+        button: { x: 660, y: 107.5, width: 230, height: 130 },
+        buttonLabel: { x: 17, y: 15, width: 196, height: 100, fontSize: 40, lineHeight: 40 }
+      },
+      done: {
+        height: 1940,
+        /** `frame_blur_bg` 67:30502 900 × 585 at 50, 263.5 = the Lives glow × 1.125: its render box (bleed 157.5 / 225) */
+        glow: { x: -107.5, y: 38.5, width: 1215, height: 1035 },
+        cup: { x: 245, y: 301, width: 510, height: 510 },
+        /**
+         * `sparks` 67:30504: two pic_spark_1 (190, 110) and six bare spark_1 vectors — the same star, drawn with the
+         * 190 texture whose star is 137 wide (size = vector width × 190 / 137); centres window-local
+         */
+        sparks: [
+          { x: 361, y: 358, size: 190 },
+          { x: 767, y: 560, size: 110 },
+          { x: 240, y: 647, size: 69.3 },
+          { x: 216, y: 577, size: 111 },
+          { x: 705.65, y: 302.05, size: 110 },
+          { x: 627, y: 740, size: 111 },
+          { x: 186, y: 377, size: 55.5 },
+          { x: 696, y: 692, size: 55.5 }
+        ],
+        title: { x: 100, y: 917, width: 800, height: 240, fontSize: 120, lineHeight: 120, fill: 0x1a97fe },
+        body: { x: 100, y: 1197, width: 800, height: 183, fontSize: 50, fill: 0x3f598c },
+        /** `daily_tasks_1` 67:30518 900 × 300 */
+        panel: { x: 50, y: 1490, width: 900, height: 300 },
+        timerIcon: { x: 129.8, y: 1524.8, width: 230.4, height: 230.4 },
+        nextLabel: { x: 370.2, y: 1540, width: 500, height: 100, fontSize: 50, fill: 0x3f598c },
+        timer: { x: 370.2, y: 1640, width: 500, height: 100, fontSize: 100, fill: 0x1a97fe }
+      }
     }
   },
   hud: {
