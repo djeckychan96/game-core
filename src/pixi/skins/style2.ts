@@ -1,5 +1,5 @@
 import type { ReadyUiSkin } from '../skin';
-import { NO_ADS_DECOR_BURST, PIGGY_BANK_PANEL, READY_UI_STYLE_1, scaledDecorBurst } from './style1';
+import { NO_ADS_DECOR_BURST, PIGGY_BANK_PANEL, PIGGY_ICON_COIN, PIGGY_ICON_PIG, READY_UI_STYLE_1, scaledDecorBurst } from './style1';
 
 /** The popup of 8:17493 / 8:22838 (`popup_back` + `header_back`, no title, no close): Settings and Lives draw the same file. */
 const POPUP = {
@@ -269,7 +269,11 @@ export const READY_UI_STYLE_2 = {
     piggyArrow: { file: 'style2/piggy_arrow.webp' },
     /** `icon_pig_bank` 67:27988 (250) and `btn_green` at 220 × 100 under it (`icon_pig_bank_preview` 67:31249): the piggy-bank entry (host art). */
     iconPiggyBank: { file: 'style2/icon_piggy.webp' },
-    featurePill: { file: 'style2/feature_pill.webp' }
+    featurePill: { file: 'style2/feature_pill.webp' },
+    /** `pig_anima` 90:27944: the animated icon's layers, shared with Style 1 (the spark = `pic_spark_1`, featureSpark's file). */
+    iconPiggyBankCoin: PIGGY_ICON_COIN,
+    iconPiggyBankPig: PIGGY_ICON_PIG,
+    iconPiggyBankSpark: { file: 'style2/spark.webp' }
   },
   font: { family: 'Carlito', file: 'fonts/Carlito-Bold.woff' },
   text: { strokeOutside: 0, shadowY: 0, fill: 0xffffff },

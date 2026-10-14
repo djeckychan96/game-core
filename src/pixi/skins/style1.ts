@@ -35,6 +35,13 @@ export const NO_ADS_DECOR_BURST: ReadyUiSkinDecorBurst = {
  */
 export const PIGGY_BANK_PANEL = { file: 'piggy/panel.webp', nineSlice: { left: 52, top: 52, right: 52, bottom: 58, pad: { left: 6, top: 6, right: 6, bottom: 6 } } } as const;
 
+/**
+ * The piggy-bank icon's animated layers, both styles: Figma `pig_anima` 90:27944 has them only in the light art (the
+ * pig without its coin, the coin), so both styles draw them (docs/figma/pig-anima; the keyframes: PIGGY_ICON_MOTION).
+ */
+export const PIGGY_ICON_PIG = { file: 'piggy/entry_pig.webp' } as const;
+export const PIGGY_ICON_COIN = { file: 'piggy/entry_coin.webp' } as const;
+
 /** A decor burst drawn in a box squeezed by `sx` / `sy` (an instance resized out of square): its centre and stars move with it. */
 export function scaledDecorBurst(burst: ReadyUiSkinDecorBurst, sx: number, sy: number): ReadyUiSkinDecorBurst {
   const round = (value: number): number => Math.round(value * 100) / 100;
@@ -276,7 +283,11 @@ export const READY_UI_STYLE_1 = {
     piggyTutorialArt: { file: 'piggy/style1_tutorial_pig.webp' },
     /** `icon_pig_bank_dark` 67:32200 (250) and `btn_green_dark` at 220 × 100 under it (67:31366): the piggy-bank entry (host art). */
     iconPiggyBank: { file: 'level/style1_icon_piggy.webp' },
-    featurePill: { file: 'level/style1_feature_pill.webp' }
+    featurePill: { file: 'level/style1_feature_pill.webp' },
+    /** `pig_anima` 90:27944: the animated icon's layers (the spark = `pic_spark_1`, piggySpark's file). */
+    iconPiggyBankCoin: PIGGY_ICON_COIN,
+    iconPiggyBankPig: PIGGY_ICON_PIG,
+    iconPiggyBankSpark: { file: 'piggy/spark.webp' }
   },
   /** Figma's kit text: 4 units of OUTSIDE round stroke and a hard drop shadow 4 units down, both in the stroke colour. */
   text: { strokeOutside: 4, shadowY: 4 },

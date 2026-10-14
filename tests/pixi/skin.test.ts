@@ -135,7 +135,10 @@ describe('UI Skin V1 — Style 1 is a data package for Confirm, Lives, Settings,
     // row's and the main screen's feature column
     const hostArtOf = (view: 'moves' | 'levelMapScreen') => (READY_UI_SKIN_VIEW_ROLES[view] as readonly ReadyUiSkinRole[]).filter((role) => !requiredSkinRoles(READY_UI_STYLE_1, view).includes(role));
     const hostArt = [...hostArtOf('moves'), ...hostArtOf('levelMapScreen')];
-    expect(hostArt).toEqual(['boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill']);
+    expect(hostArt).toEqual([
+      'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill',
+      'iconPiggyBankCoin', 'iconPiggyBankPig', 'iconPiggyBankSpark'
+    ]);
     expect(ROLES.sort()).toEqual([...new Set([...READY_UI_STYLE_1.covers.flatMap((view) => requiredSkinRoles(READY_UI_STYLE_1, view)), ...hostArt])].sort());
     // one dense column (the language row included; the rows a show does not draw close up)
     expect(READY_UI_STYLE_1.windows.settings.map.window).toEqual({ width: 960, height: 907 });

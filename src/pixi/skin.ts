@@ -51,7 +51,8 @@ export const READY_UI_SKIN_WINDOW_ROLES = {
  * other roles are the main screen's feature column a host composes beside the map (no Core view draws them, never
  * required): `iconNoAds` (the No Ads entry), `iconQuests` (the daily-quests entry), `iconPiggyBank` (the piggy-bank
  * entry), `featureGlow` (the soft glow behind a feature icon), `featureSpark` and `featurePill` (the small button under
- * an entry carrying its count — the piggy bank's amount / FULL).
+ * an entry carrying its count — the piggy bank's amount / FULL), and the piggy-bank icon's animated layers
+ * `iconPiggyBankCoin` / `iconPiggyBankPig` / `iconPiggyBankSpark` (Figma `pig_anima`: PIGGY_ICON_MOTION).
  * ShopScreen draws its awning, title tape, pack cards (card + one pack art per slot) and × — `shopBackground` only when
  * its layout has a background picture (`background.art`). MovesView draws `movesPanel` alone; the other `moves` roles
  * are the gameplay row's art around the MOVES box that a host composes itself (no Core view draws them, never
@@ -63,7 +64,10 @@ export const READY_UI_SKIN_VIEW_ROLES = {
   hud: ['hudCapsule', 'hudHeart', 'hudCoin', 'hudPlus', 'hudGear', 'hudGearBack', 'hudStar'],
   levelMap: ['levelNodeNormal', 'levelNodeHard', 'levelLock', 'levelHardBadge', 'levelRail', 'levelCurrentGlow', 'levelStarGold', 'levelStarGoldL', 'levelStarGoldR', 'levelNodeLocked', 'levelMapBackground'],
   bottomNav: ['navPanel', 'navSelected', 'navLock', 'iconShop', 'iconHome'],
-  levelMapScreen: ['playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill'],
+  levelMapScreen: [
+    'playButton', 'iconShop', 'iconHome', 'iconNoAds', 'iconQuests', 'iconPiggyBank', 'featureGlow', 'featureSpark', 'featurePill',
+    'iconPiggyBankCoin', 'iconPiggyBankPig', 'iconPiggyBankSpark'
+  ],
   moves: ['movesPanel', 'boosterBack', 'levelEmblem', 'lockedSlotBack', 'lockedSlotIcon'],
   settingsButton: ['settingsButtonBack', 'settingsButtonIcon'],
   shopScreen: ['shopBackground', 'shopAwning', 'shopTitle', 'shopCard', 'shopPack1', 'shopPack2', 'shopPack3', 'shopPack4', 'shopPack5', 'shopPack6', 'shopClose']
